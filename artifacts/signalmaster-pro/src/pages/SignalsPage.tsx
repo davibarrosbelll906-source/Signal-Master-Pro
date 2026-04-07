@@ -339,120 +339,134 @@ export default function SignalsPage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="space-y-4"
+            className="space-y-5"
           >
-            {/* PAIR PICKER */}
-            <div className="glass-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
+            {/* ── PAIR PICKER ── */}
+            <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: 'rgba(12,12,24,0.7)', backdropFilter: 'blur(16px)' }}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--green)]/10 flex items-center justify-center">
+                    <Layers size={14} className="text-[var(--green)]" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white">Monitor Multi-Par</div>
+                    <div className="text-[10px] text-gray-600">Sinais disparam imediatamente ao carregar</div>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
-                  <Layers size={14} className="text-[var(--green)]" />
-                  <h3 className="text-sm font-bold text-white">Selecionar Pares para Monitorar</h3>
-                </div>
-                <span className="text-xs text-gray-500 tabular-nums">
-                  {watchedPairs.length}/{MAX_PAIRS} selecionados
-                </span>
-              </div>
-
-              {/* Crypto */}
-              <div>
-                <div className="text-[10px] font-bold text-yellow-400/70 uppercase tracking-widest mb-2">₿ Cripto</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {CRYPTO_ASSETS.map(a => {
-                    const sel = watchedPairs.includes(a);
-                    const full = !sel && watchedPairs.length >= MAX_PAIRS;
-                    return (
-                      <button
-                        key={a}
-                        onClick={() => togglePair(a)}
-                        disabled={full}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                          sel
-                            ? 'bg-yellow-400/15 text-yellow-400 border-yellow-400/30'
-                            : full
-                            ? 'bg-white/3 text-gray-700 border-white/5 cursor-not-allowed'
-                            : 'bg-white/5 text-gray-400 hover:text-white border-white/10 hover:border-white/20'
-                        }`}
-                      >
-                        {a.replace('USD', '')}
-                      </button>
-                    );
-                  })}
+                  {/* Slots indicator */}
+                  <div className="flex gap-1">
+                    {Array.from({ length: MAX_PAIRS }).map((_, i) => (
+                      <div key={i} className={`w-5 h-1.5 rounded-full transition-colors ${i < watchedPairs.length ? 'bg-[var(--green)]' : 'bg-white/10'}`} />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-gray-600 tabular-nums">{watchedPairs.length}/{MAX_PAIRS}</span>
                 </div>
               </div>
 
-              {/* Forex */}
-              <div>
-                <div className="text-[10px] font-bold text-blue-400/70 uppercase tracking-widest mb-2">💱 Forex</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {FOREX_ASSETS.map(a => {
-                    const sel = watchedPairs.includes(a);
-                    const full = !sel && watchedPairs.length >= MAX_PAIRS;
-                    return (
-                      <button
-                        key={a}
-                        onClick={() => togglePair(a)}
-                        disabled={full}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                          sel
-                            ? 'bg-blue-400/15 text-blue-400 border-blue-400/30'
-                            : full
-                            ? 'bg-white/3 text-gray-700 border-white/5 cursor-not-allowed'
-                            : 'bg-white/5 text-gray-400 hover:text-white border-white/10 hover:border-white/20'
-                        }`}
-                      >
-                        {a}
-                      </button>
-                    );
-                  })}
+              {/* Category sections */}
+              <div className="p-4 space-y-4">
+                {/* Cripto */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="text-yellow-400">₿</span>
+                    <span className="text-[10px] font-black text-yellow-400/80 uppercase tracking-widest">Cripto</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {CRYPTO_ASSETS.map(a => {
+                      const sel = watchedPairs.includes(a);
+                      const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                      const icon = { BTCUSD: '₿', ETHUSD: 'Ξ', SOLUSD: '◎', BNBUSD: '⬡', XRPUSD: '✕', ADAUSD: '₳', DOGEUSD: 'Ð', LTCUSD: 'Ł' }[a] || '•';
+                      return (
+                        <button key={a} onClick={() => togglePair(a)} disabled={full}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                            sel ? 'bg-yellow-400/12 text-yellow-300 border-yellow-400/25 shadow-sm shadow-yellow-400/10'
+                            : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
+                            : 'bg-white/4 text-gray-400 border-white/8 hover:bg-yellow-400/8 hover:text-yellow-400 hover:border-yellow-400/20'
+                          }`}>
+                          <span className="text-[11px]">{icon}</span>
+                          {a.replace('USD', '')}
+                          {sel && <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 ml-0.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Commodities */}
-              <div>
-                <div className="text-[10px] font-bold text-orange-400/70 uppercase tracking-widest mb-2">🏅 Commodities</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {COMMODITY_ASSETS.map(a => {
-                    const sel = watchedPairs.includes(a);
-                    const full = !sel && watchedPairs.length >= MAX_PAIRS;
-                    return (
-                      <button
-                        key={a}
-                        onClick={() => togglePair(a)}
-                        disabled={full}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                          sel
-                            ? 'bg-orange-400/15 text-orange-400 border-orange-400/30'
-                            : full
-                            ? 'bg-white/3 text-gray-700 border-white/5 cursor-not-allowed'
-                            : 'bg-white/5 text-gray-400 hover:text-white border-white/10 hover:border-white/20'
-                        }`}
-                      >
-                        {a}
-                      </button>
-                    );
-                  })}
+                {/* Forex */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="text-blue-400">💱</span>
+                    <span className="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">Forex</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {FOREX_ASSETS.map(a => {
+                      const sel = watchedPairs.includes(a);
+                      const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                      return (
+                        <button key={a} onClick={() => togglePair(a)} disabled={full}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                            sel ? 'bg-blue-400/12 text-blue-300 border-blue-400/25 shadow-sm shadow-blue-400/10'
+                            : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
+                            : 'bg-white/4 text-gray-400 border-white/8 hover:bg-blue-400/8 hover:text-blue-400 hover:border-blue-400/20'
+                          }`}>
+                          {a}
+                          {sel && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 ml-1.5 align-middle" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {watchedPairs.length >= MAX_PAIRS && (
-                <p className="text-[11px] text-yellow-400/70 text-center">
-                  Limite de {MAX_PAIRS} pares atingido. Remova um par para adicionar outro.
-                </p>
-              )}
+                {/* Commodities */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="text-orange-400">🏅</span>
+                    <span className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest">Commodities</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {COMMODITY_ASSETS.map(a => {
+                      const sel = watchedPairs.includes(a);
+                      const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                      return (
+                        <button key={a} onClick={() => togglePair(a)} disabled={full}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                            sel ? 'bg-orange-400/12 text-orange-300 border-orange-400/25 shadow-sm shadow-orange-400/10'
+                            : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
+                            : 'bg-white/4 text-gray-400 border-white/8 hover:bg-orange-400/8 hover:text-orange-400 hover:border-orange-400/20'
+                          }`}>
+                          {a}
+                          {sel && <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400 ml-1.5 align-middle" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {watchedPairs.length >= MAX_PAIRS && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-yellow-400/5 border border-yellow-400/10">
+                    <span className="text-yellow-400">⚠</span>
+                    <span className="text-[11px] text-yellow-400/80">Limite de {MAX_PAIRS} pares atingido. Remova um para adicionar outro.</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* MONITOR GRID */}
+            {/* ── MONITOR GRID ── */}
             {watchedPairs.length === 0 ? (
-              <div className="glass-card p-8 text-center">
-                <div className="text-gray-600 mb-2">Nenhum par selecionado</div>
-                <div className="text-gray-700 text-sm">Selecione de 1 a 5 pares acima para monitorar</div>
+              <div className="rounded-2xl border border-white/5 p-10 text-center" style={{ background: 'rgba(12,12,24,0.5)' }}>
+                <div className="text-3xl mb-3">📡</div>
+                <div className="text-gray-400 font-semibold mb-1">Nenhum par selecionado</div>
+                <div className="text-gray-700 text-xs">Selecione de 1 a {MAX_PAIRS} pares acima para começar a monitorar</div>
               </div>
             ) : (
               <div className={`grid gap-4 ${
-                watchedPairs.length === 1 ? 'grid-cols-1 max-w-sm' :
-                watchedPairs.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                watchedPairs.length === 1 ? 'grid-cols-1 max-w-xs' :
+                watchedPairs.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-xl' :
                 watchedPairs.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
-                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                watchedPairs.length === 4 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' :
+                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
               }`}>
                 <AnimatePresence>
                   {watchedPairs.map(a => (
