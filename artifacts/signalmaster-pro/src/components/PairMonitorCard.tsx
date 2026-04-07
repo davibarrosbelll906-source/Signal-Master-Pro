@@ -285,9 +285,9 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
       }`}
     >
       {/* ── Header ── */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`text-xs font-bold ${CATEGORY_COLOR[category]}`}>
               {ASSET_ICONS[asset] || asset.slice(0, 2)}
             </span>
@@ -297,10 +297,28 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
             <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold bg-white/5 ${CATEGORY_COLOR[category]}`}>
               {CATEGORY_LABEL[category]}
             </span>
+            {/* Quality + Score badge — shown when there's any signal */}
+            {(pendingSignal || signal) && (() => {
+              const s = pendingSignal || signal!;
+              return (
+                <>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black border ${
+                    s.quality === 'PREMIUM'
+                      ? 'text-yellow-300 border-yellow-400/40 bg-yellow-400/10'
+                      : s.quality === 'FORTE'
+                      ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10'
+                      : 'text-blue-300 border-blue-400/30 bg-blue-400/10'
+                  }`}>
+                    {s.quality}
+                  </span>
+                  <span className="text-[9px] font-black text-white/70 tabular-nums">{s.score}%</span>
+                </>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[var(--green)] animate-pulse' : 'bg-yellow-500'}`} />
-            <span className="text-[10px] text-gray-500">{statusText}</span>
+            <span className="text-[10px] text-gray-500 truncate">{statusText}</span>
           </div>
         </div>
         <button
@@ -397,18 +415,23 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
 
         ) : signal ? (
           <motion.div key="last" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-600">Último:</span>
-            <span className={`text-xs font-bold ${signal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+            className={`rounded-xl px-3 py-2 border flex items-center gap-2 ${
+              signal.direction === 'CALL'
+                ? 'bg-[var(--green)]/5 border-[var(--green)]/20'
+                : 'bg-[var(--red)]/5 border-[var(--red)]/20'
+            }`}>
+            <span className={`text-sm font-black ${signal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
               {signal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
             </span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-              signal.quality === 'PREMIUM' ? 'text-yellow-400 bg-yellow-400/10' : 'text-[var(--green)] bg-[var(--green)]/10'
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black border ${
+              signal.quality === 'PREMIUM'
+                ? 'text-yellow-300 border-yellow-400/40 bg-yellow-400/10'
+                : signal.quality === 'FORTE'
+                ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10'
+                : 'text-blue-300 border-blue-400/30 bg-blue-400/10'
             }`}>{signal.quality}</span>
-            {blockReason && (
-              <span className="text-[9px] text-gray-700 ml-auto truncate" title={blockReason}>🔒 {blockReason}</span>
-            )}
-            <span className="text-[10px] text-gray-600 ml-auto tabular-nums">
+            <span className="text-xs font-black text-white/60 tabular-nums">{signal.score}%</span>
+            <span className="text-[9px] text-gray-600 ml-auto tabular-nums">
               {new Date(signal.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </motion.div>
