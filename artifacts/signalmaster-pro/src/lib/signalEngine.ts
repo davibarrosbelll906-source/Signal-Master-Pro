@@ -918,30 +918,73 @@ export function updateMLWeights(signal: SignalResult, resultType: 'win' | 'loss'
 }
 
 // ─── SOUND ENGINE ──────────────────────────────────────────────────────────
+// Singleton AudioContext — reused across all sound calls to avoid autoplay block
 
-export function playSignalSound(type: string) {
+let _audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  return _audioCtx;
+}
+
+// Call once on a user-gesture (click) to unlock audio for the session
+export async function unlockAudio(): Promise<boolean> {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const configs: Record<string, number[][]> = {
-      forte: [[440, 0.0], [550, 0.15], [660, 0.30]],
-      premium: [[440, 0.0], [550, 0.15], [660, 0.30], [880, 0.45]],
-      crypto: [[800, 0.0], [1000, 0.20]],
-      win: [[523, 0.0], [659, 0.15], [784, 0.30]],
-      loss: [[400, 0.0], [350, 0.20], [300, 0.40]],
-      alert: [[800, 0.0]]
-    };
-    const notes = configs[type] || configs.forte;
-    notes.forEach(([freq, delay]) => {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') await ctx.resume();
+    // Play a silent buffer to fully unlock iOS/Safari
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+    return ctx.state === 'running';
+  } catch { return false; }
+}
+
+export function isAudioUnlocked(): boolean {
+  return _audioCtx !== null && _audioCtx.state === 'running';
+}
+
+function _doPlaySound(ctx: AudioContext, type: string) {
+  const SIGNAL_NOTES: Record<string, Array<[number, number, number]>> = {
+    // [frequency, startDelay, duration]
+    forte:   [[440, 0.00, 0.18], [550, 0.18, 0.18], [660, 0.36, 0.28]],
+    premium: [[440, 0.00, 0.14], [550, 0.14, 0.14], [660, 0.28, 0.14], [880, 0.42, 0.40], [1100, 0.60, 0.35]],
+    crypto:  [[880, 0.00, 0.12], [1100, 0.12, 0.12], [1320, 0.24, 0.30]],
+    win:     [[523, 0.00, 0.14], [659, 0.14, 0.14], [784, 0.28, 0.30]],
+    loss:    [[400, 0.00, 0.16], [350, 0.18, 0.16], [300, 0.36, 0.28]],
+    alert:   [[880, 0.00, 0.12], [880, 0.18, 0.12]],
+  };
+  const notes = SIGNAL_NOTES[type] ?? SIGNAL_NOTES.forte;
+  notes.forEach(([freq, delay, dur]) => {
+    try {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      osc.type = type === 'premium' ? 'sine' : 'sine';
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+      gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+      gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
       osc.start(ctx.currentTime + delay);
-      osc.stop(ctx.currentTime + delay + 0.35);
-    });
+      osc.stop(ctx.currentTime + delay + dur + 0.02);
+    } catch {}
+  });
+}
+
+export function playSignalSound(type: string) {
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') {
+      // Resume then play — works if user previously unlocked
+      ctx.resume().then(() => _doPlaySound(ctx, type)).catch(() => {});
+    } else {
+      _doPlaySound(ctx, type);
+    }
   } catch {}
 }
 

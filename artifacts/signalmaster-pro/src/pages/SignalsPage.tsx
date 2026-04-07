@@ -4,7 +4,8 @@ import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye }
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ASSET_CATEGORIES, CRYPTO_SYMBOLS, TV_SYMBOLS, BASE_PRICES,
-  getCurrentSession, runEngine, runEngineDiag, generateOUCandle, updateMLWeights, playSignalSound, vibrate,
+  getCurrentSession, runEngine, runEngineDiag, generateOUCandle, updateMLWeights,
+  playSignalSound, vibrate, unlockAudio, isAudioUnlocked,
   type Candle, type CandleBuffer, type SignalResult, type DiagResult
 } from "@/lib/signalEngine";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
@@ -45,6 +46,7 @@ export default function SignalsPage() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualAsset, setManualAsset] = useState('');
   const [manualDir, setManualDir] = useState<'CALL'|'PUT'>('CALL');
+  const [audioEnabled, setAudioEnabled] = useState(false);
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const wsRef = useRef<WebSocket | null>(null);
@@ -73,6 +75,13 @@ export default function SignalsPage() {
 
   // Load stats from localStorage
   useEffect(() => { refreshStats(); }, []);
+
+  // Sync audio unlocked state (poll every 2s in case user unlocks via other means)
+  useEffect(() => {
+    setAudioEnabled(isAudioUnlocked());
+    const id = setInterval(() => setAudioEnabled(isAudioUnlocked()), 2000);
+    return () => clearInterval(id);
+  }, []);
 
   // Connect Binance WebSocket for crypto
   const connectBinance = useCallback((sym: string) => {
@@ -313,7 +322,7 @@ export default function SignalsPage() {
             <span className="text-gray-400 text-xs">{engineStatus}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-3 text-xs text-gray-500">
           <span>{bufferSize} velas M1</span>
           {lastPrice && <span className="font-mono text-white">{lastPrice < 10 ? lastPrice.toFixed(5) : lastPrice < 1000 ? lastPrice.toFixed(4) : lastPrice.toFixed(2)}</span>}
           {priceChange !== 0 && (
@@ -321,6 +330,22 @@ export default function SignalsPage() {
               {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(3)}%
             </span>
           )}
+          {/* BOTÃO ATIVAR SOM */}
+          <button
+            onClick={async () => {
+              const ok = await unlockAudio();
+              setAudioEnabled(ok);
+              if (ok) playSignalSound('alert');
+            }}
+            title={audioEnabled ? 'Som ativo — clique para testar' : 'Clique para ativar notificações sonoras'}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all duration-200 ${
+              audioEnabled
+                ? 'border-[var(--green)] text-[var(--green)] bg-[var(--green)]/10'
+                : 'border-yellow-500 text-yellow-400 bg-yellow-500/10 animate-pulse'
+            }`}
+          >
+            {audioEnabled ? '🔔 Som ativo' : '🔇 Ativar som'}
+          </button>
         </div>
       </div>
 
