@@ -37,6 +37,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
 
+import DashboardHomePage from "@/pages/DashboardHomePage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -68,10 +69,10 @@ function Router() {
       <Route path="/forgot" component={ForgotPasswordPage} />
       <Route path="/projector" component={ProjectorPage} />
       
-      <Route path="/dashboard" component={() => <Redirect to="/dashboard/signals" />} />
       <Route path="/dashboard/:path*">
         <DashboardLayout>
           <Switch>
+            <Route path="/dashboard" component={DashboardHomePage} />
             <Route path="/dashboard/signals" component={SignalsPage} />
             <Route path="/dashboard/history" component={HistoryPage} />
             <Route path="/dashboard/analytics" component={AnalyticsPage} />
