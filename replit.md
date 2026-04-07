@@ -52,12 +52,45 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 | financeiro | fin123 | financeiro |
 | moderador | mod123 | moderador |
 
+### Pages (all fully functional with real data)
+- SignalsPage: real Binance REST+WS for crypto, OU simulation for forex/commodity
+- HistoryPage: localStorage history with filters and CSV export
+- AnalyticsPage: Recharts charts (session WR, equity curve, asset WR, indicator accuracy)
+- SettingsPage: all settings persisted to smpCfg7
+- AdminPage: full user CRUD from localStorage + plan management
+- AchievementsPage: 12 real achievements with progress tracking
+- BankPage: equity curve chart, bankroll simulator (Kelly/Soros/Martingale)
+- BacktestingPage: real OU+indicators, equity curve chart
+- DiaryPage: full localStorage persistence, mood tracking, expandable entries
+- ProfilePage: real stats from history, editable profile, avatar color picker
+- ScoreboardPage: real asset rankings from localStorage, session stats, podium
+- GoalsPage: create/track custom goals (winRate/ops/streak/wins) per period
+- RiskPage: full risk calculator (Kelly criterion, EV, ruin probability, max consecutive losses)
+- HeatmapPage: real hour×day heatmap from history, best/worst hour detection
+- CalendarPage: day-by-day results calendar with detail modal
+- LeaderboardPage: mix of real user stats + mock traders, podium, filters
+- NotificationsPage: auto-generated alerts from history + persistent localStorage
+- StrategiesPage: educational accordion with 6 strategies, logic/conditions/avoid
+- TeamPage: real users from localStorage (staff roles only)
+- TelegramPage: full config persistence (localStorage) + preview + toggle filters
+- AffiliatesPage: referral link generation, commission table, localStorage persistence
+- RevenuePage: real MRR from localStorage user list + plan prices + links/PIX config
+- ReportsPage: real CSV/JSON export + AI loss pattern analysis
+
 ### localStorage Keys
 - smpU7: users array
-- smpH7: signal history
+- smpH7: signal history (ts, result, asset, category, sess, direction, score)
 - smpCfg7: config
 - smpML7: ML weights per session/category context
-- smpAchievements7, smpDiary7, smpNotif7, smpGoals7, smpAff7, smpTickets7, smpCoupons7, smpSnapshots7, smpPix7
+- smpDiary7: diary entries
+- smpGoals7: goals
+- smpNotif7: notifications
+- smpAff7: affiliate data
+- smpLinks7: checkout links
+- smpPix7: PIX config
+- smpTelegram7: Telegram config
+- smpAvatarColor: avatar color index
+- smpAchievements7, smpTickets7, smpCoupons7, smpSnapshots7
 
 ### Key Dependencies
 - zustand: global state management
