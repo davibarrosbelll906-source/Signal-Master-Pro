@@ -4,11 +4,12 @@ import PairMonitorCard from "@/components/PairMonitorCard";
 import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ASSET_CATEGORIES, CRYPTO_SYMBOLS, TV_SYMBOLS, BASE_PRICES,
-  getCurrentSession, runEngine, runEngineDiag, generateOUCandle, updateMLWeights,
+  ASSET_CATEGORIES, TV_SYMBOLS,
+  getCurrentSession, runEngine, runEngineDiag, updateMLWeights,
   playSignalSound, vibrate, unlockAudio, isAudioUnlocked,
-  type Candle, type CandleBuffer, type SignalResult, type DiagResult
+  type CandleBuffer, type SignalResult, type DiagResult
 } from "@/lib/signalEngine";
+import { subscribeAsset } from "@/lib/assetDataManager";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
 const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
 const COMMODITY_ASSETS = ['XAUUSD', 'XAGUSD', 'USOIL'];
@@ -67,9 +68,6 @@ export default function SignalsPage() {
   const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
-  const wsRef = useRef<WebSocket | null>(null);
-  const ouTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const ouPriceRef = useRef<number>(1.0);
 
   const refreshStats = () => {
     try {
@@ -117,107 +115,27 @@ export default function SignalsPage() {
     });
   };
 
-  // Connect Binance WebSocket for crypto
-  const connectBinance = useCallback((sym: string) => {
-    if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
-    const binanceSym = CRYPTO_SYMBOLS[sym];
-    if (!binanceSym) return;
+  // Subscribe to shared asset data (one connection per asset, shared with Multi-Par cards)
+  const unsubRef = useRef<(() => void) | null>(null);
 
-    setIsConnected(false);
-    setEngineStatus('conectando Binance WebSocket...');
+  const connectAsset = useCallback((sym: string) => {
+    if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
     bufRef.current = { m1: [], m5: [], m15: [] };
     setBufferSize(0);
-
-    // Load 200 historical candles first via REST
-    fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSym.toUpperCase()}&interval=1m&limit=200`)
-      .then(r => r.json())
-      .then((data: any[]) => {
-        if (!Array.isArray(data)) return;
-        bufRef.current.m1 = data.map((k: any) => ({
-          t: k[0], o: parseFloat(k[1]), h: parseFloat(k[2]),
-          l: parseFloat(k[3]), c: parseFloat(k[4]), v: parseFloat(k[5])
-        }));
-        setBufferSize(bufRef.current.m1.length);
-        const last = bufRef.current.m1[bufRef.current.m1.length - 1];
-        const prev = bufRef.current.m1[bufRef.current.m1.length - 2];
-        setLastPrice(last.c);
-        setPriceChange(prev ? ((last.c - prev.c) / prev.c) * 100 : 0);
-        setEngineStatus(`${bufRef.current.m1.length} velas carregadas — aguardando segundo 48`);
-
-        // Now open WebSocket for live updates
-        const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSym}@kline_1m`);
-        wsRef.current = ws;
-        ws.onopen = () => setIsConnected(true);
-        ws.onclose = () => setIsConnected(false);
-        ws.onerror = () => {
-          setIsConnected(false);
-          setEngineStatus('erro WebSocket — reconectando...');
-        };
-        ws.onmessage = (e) => {
-          const msg = JSON.parse(e.data);
-          const k = msg.k;
-          const candle: Candle = {
-            t: k.t, o: parseFloat(k.o), h: parseFloat(k.h),
-            l: parseFloat(k.l), c: parseFloat(k.c), v: parseFloat(k.v)
-          };
-          setLastPrice(candle.c);
-          const buf = bufRef.current;
-          if (k.x) {
-            // Candle closed — append
-            buf.m1.push(candle);
-            if (buf.m1.length > 200) buf.m1.shift();
-          } else {
-            // Update current (last) candle
-            if (buf.m1.length > 0) {
-              buf.m1[buf.m1.length - 1] = candle;
-            }
-          }
-          setBufferSize(buf.m1.length);
-        };
-      })
-      .catch(() => {
-        setEngineStatus('erro ao carregar dados Binance');
-      });
-  }, []);
-
-  // Start O-U simulation for forex/commodity
-  const startOU = useCallback((sym: string) => {
-    if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
-    if (ouTimerRef.current) { clearInterval(ouTimerRef.current); ouTimerRef.current = null; }
-
     setIsConnected(false);
-    setEngineStatus('iniciando simulação...');
-    bufRef.current = { m1: [], m5: [], m15: [] };
-    setBufferSize(0);
-
-    const basePrice = BASE_PRICES[sym] || 1.0;
-    let price = basePrice;
-    ouPriceRef.current = price;
-
-    // Pre-generate 100 historical candles
-    const history: Candle[] = [];
-    for (let i = 0; i < 100; i++) {
-      const c = generateOUCandle(price, sym);
-      history.push(c);
-      price = c.c;
-    }
-    bufRef.current.m1 = history;
-    ouPriceRef.current = price;
-    setBufferSize(history.length);
-    setLastPrice(price);
-    setIsConnected(true);
-    setEngineStatus(`${history.length} velas simuladas — aguardando segundo 48`);
-
-    // Generate new candle every 60 seconds
-    ouTimerRef.current = setInterval(() => {
-      const c = generateOUCandle(ouPriceRef.current, sym);
-      ouPriceRef.current = c.c;
-      const buf = bufRef.current;
-      buf.m1.push(c);
-      if (buf.m1.length > 200) buf.m1.shift();
-      setBufferSize(buf.m1.length);
-      setLastPrice(c.c);
-    }, 60000);
+    setEngineStatus('conectando...');
+    const subId = `signals-page-${sym}`;
+    unsubRef.current = subscribeAsset(sym, subId, (buf, p, _dir, connected, bufSize) => {
+      bufRef.current = buf;
+      setLastPrice(p);
+      setIsConnected(connected);
+      setBufferSize(bufSize);
+      if (connected && bufSize >= 30) {
+        setEngineStatus(`${bufSize} velas carregadas — aguardando segundo :48`);
+      } else if (!connected) {
+        setEngineStatus('conectando...');
+      }
+    });
   }, []);
 
   // Handle asset change
@@ -227,20 +145,13 @@ export default function SignalsPage() {
     setPendingSignal(null);
     const cat = ASSET_CATEGORIES[newAsset] as 'crypto' | 'forex' | 'commodity';
     setCategory(cat);
-    if (cat === 'crypto') {
-      connectBinance(newAsset);
-    } else {
-      startOU(newAsset);
-    }
-  }, [connectBinance, startOU]);
+    connectAsset(newAsset);
+  }, [connectAsset]);
 
   // Initial load
   useEffect(() => {
-    startOU('EURUSD');
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-      if (ouTimerRef.current) clearInterval(ouTimerRef.current);
-    };
+    connectAsset('EURUSD');
+    return () => { if (unsubRef.current) unsubRef.current(); };
   }, []);
 
   // Helper: should the engine fire now given timeframe?

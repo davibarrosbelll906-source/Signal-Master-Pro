@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ASSET_CATEGORIES, CRYPTO_SYMBOLS, BASE_PRICES,
-  runEngine, runEngineDiag, generateOUCandle,
+  ASSET_CATEGORIES,
+  runEngine, runEngineDiag,
   playSignalSound, vibrate, updateMLWeights,
-  type Candle, type CandleBuffer, type SignalResult
+  type CandleBuffer, type SignalResult
 } from "@/lib/signalEngine";
+import { subscribeAsset } from "@/lib/assetDataManager";
 
 const ASSET_ICONS: Record<string, string> = {
   BTCUSD: '₿', ETHUSD: 'Ξ', SOLUSD: '◎', BNBUSD: '⬡', XRPUSD: '✕', ADAUSD: '₳',
@@ -41,133 +42,31 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
   const [lastRunTime, setLastRunTime] = useState<string | null>(null);
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
-  const wsRef = useRef<WebSocket | null>(null);
-  const ouTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const ouPriceRef = useRef<number>(1.0);
   const fireMinuteRef = useRef<number>(-1);
-  const prevPriceRef = useRef<number | null>(null);
-
   const category = ASSET_CATEGORIES[asset] as 'crypto' | 'forex' | 'commodity';
 
-  // ── Binance WebSocket ───────────────────────────────────────────────────
-  const connectBinance = useCallback((sym: string) => {
-    const binanceSym = CRYPTO_SYMBOLS[sym];
-    if (!binanceSym) return;
-    setStatusText('conectando Binance...');
-    setIsConnected(false);
-
-    fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSym.toUpperCase()}&interval=1m&limit=200`)
-      .then(r => r.json())
-      .then((data: any[]) => {
-        const candles: Candle[] = data.map((k: any) => ({
-          o: parseFloat(k[1]), h: parseFloat(k[2]), l: parseFloat(k[3]), c: parseFloat(k[4]),
-          v: parseFloat(k[5]), t: k[0]
-        }));
-        bufRef.current.m1 = candles;
-        setBufferSize(candles.length);
-        const last = candles[candles.length - 1];
-        setPrice(last.c);
-        prevPriceRef.current = last.c;
-        setIsConnected(true);
-        setStatusText(`${candles.length} velas prontas`);
-
-        const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSym.toLowerCase()}@kline_1m`);
-        wsRef.current = ws;
-        ws.onmessage = (ev) => {
-          try {
-            const msg = JSON.parse(ev.data);
-            const k = msg.k;
-            const candle: Candle = {
-              o: parseFloat(k.o), h: parseFloat(k.h), l: parseFloat(k.l), c: parseFloat(k.c),
-              v: parseFloat(k.v), t: k.t
-            };
-            const newPrice = candle.c;
-            if (prevPriceRef.current !== null) setPriceDir(newPrice >= prevPriceRef.current ? 'up' : 'down');
-            prevPriceRef.current = newPrice;
-            setPrice(newPrice);
-            const buf = bufRef.current;
-            if (k.x) { buf.m1.push(candle); if (buf.m1.length > 200) buf.m1.shift(); }
-            else if (buf.m1.length > 0) buf.m1[buf.m1.length - 1] = candle;
-            setBufferSize(buf.m1.length);
-          } catch {}
-        };
-        ws.onclose = () => { setIsConnected(false); setStatusText('reconectando...'); };
-        ws.onerror = () => setIsConnected(false);
-      })
-      .catch(() => setStatusText('erro Binance - usando simulação'));
-  }, []);
-
-  // ── Ornstein-Uhlenbeck simulation ───────────────────────────────────────
-  const startOU = useCallback((sym: string) => {
-    const basePrice = BASE_PRICES[sym] || 1.0;
-    let p = basePrice;
-
-    // Pre-generate 150 candles with a time offset per candle for variety
-    const history: Candle[] = [];
-    for (let i = 0; i < 150; i++) {
-      // Use fake past timestamps so each candle seed differs
-      const fakePast = Date.now() - (150 - i) * 60000;
-      const seed = fakePast % 1000000;
-      const r1 = Math.abs(Math.sin(seed * 9301 + 49297 + i * 1337) % 1) || 0.01;
-      const r2 = Math.abs(Math.sin(seed * 49297 + 233 + i * 7919) % 1) || 0.01;
-      const mu = BASE_PRICES[sym] || p;
-      const theta = 0.05;
-      const sigma = (sym === 'XAUUSD' ? 0.002 : sym === 'USOIL' ? 0.003 : 0.0003);
-      const dt = 1 / 1440;
-      const drift = theta * (mu - p) * dt;
-      const normal = Math.sqrt(-2 * Math.log(r1)) * Math.cos(2 * Math.PI * r2);
-      const close = p + drift + sigma * normal * Math.sqrt(dt) * 100;
-      const range = sigma * (0.8 + Math.abs(normal) * 0.5);
-      const open = p;
-      const high = Math.max(open, close) + range * 0.3;
-      const low = Math.min(open, close) - range * 0.3;
-      history.push({ o: open, h: high, l: low, c: close, v: 1000 + Math.abs(normal) * 500, t: fakePast });
-      p = close;
-    }
-    bufRef.current.m1 = history;
-    ouPriceRef.current = p;
-    setBufferSize(history.length);
-    setPrice(p);
-    prevPriceRef.current = p;
-    setIsConnected(true);
-    setStatusText(`${history.length} velas prontas`);
-
-    // Live candle every 60s
-    ouTimerRef.current = setInterval(() => {
-      const c = generateOUCandle(ouPriceRef.current, sym);
-      const newP = c.c;
-      setPriceDir(newP >= ouPriceRef.current ? 'up' : 'down');
-      ouPriceRef.current = newP;
-      const buf = bufRef.current;
-      buf.m1.push(c);
-      if (buf.m1.length > 200) buf.m1.shift();
-      setBufferSize(buf.m1.length);
-      setPrice(newP);
-    }, 60000);
-  }, []);
-
-  // ── Connect on mount / asset change ────────────────────────────────────
+  // ── Subscribe to shared asset data manager ───────────────────────────────
   useEffect(() => {
-    wsRef.current?.close();
-    if (ouTimerRef.current) clearInterval(ouTimerRef.current);
-    bufRef.current = { m1: [], m5: [], m15: [] };
-    setBufferSize(0);
-    setIsConnected(false);
     setSignal(null);
     setPendingSignal(null);
     setResultSaved(null);
     setBlockReason(null);
     setLastRunTime(null);
     fireMinuteRef.current = -1;
+    bufRef.current = { m1: [], m5: [], m15: [] };
 
-    if (category === 'crypto') connectBinance(asset);
-    else startOU(asset);
+    const id = `pair-card-${asset}-${Math.random()}`;
+    const unsub = subscribeAsset(asset, id, (buf, p, dir, connected, bufSize) => {
+      bufRef.current = buf;
+      setPrice(p);
+      if (dir) setPriceDir(dir);
+      setIsConnected(connected);
+      setBufferSize(bufSize);
+      setStatusText(connected ? `${bufSize} velas prontas` : 'conectando...');
+    });
 
-    return () => {
-      wsRef.current?.close();
-      if (ouTimerRef.current) clearInterval(ouTimerRef.current);
-    };
-  }, [asset, category, connectBinance, startOU]);
+    return unsub;
+  }, [asset]);
 
   // ── Timeframe helpers ─────────────────────────────────────────────────
   const shouldFireNow = (sec: number, min: number): boolean => {
@@ -189,7 +88,7 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
     return next - cur;
   };
 
-  // ── Own 1-second ticker — completely independent from parent ───────────
+  // ── 1-second ticker uses shared buffer ───────────────────────────────────
   useEffect(() => {
     const tick = setInterval(() => {
       const now = new Date();
@@ -197,45 +96,43 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
       const min = now.getMinutes();
       setSeconds(sec);
 
-      if (shouldFireNow(sec, min)) {
-        const thisMinute = Math.floor(Date.now() / 60000);
-        // For M5/M15, use a key that combines minute with interval bucket
-        const bucketKey = timeframe === 'M1' ? thisMinute
-          : timeframe === 'M5' ? Math.floor(min / 5) + thisMinute * 100
-          : Math.floor(min / 15) + thisMinute * 100;
-        if (fireMinuteRef.current === bucketKey) return;
-        fireMinuteRef.current = bucketKey;
+      if (!shouldFireNow(sec, min)) return;
 
-        const buf = bufRef.current;
-        if (buf.m1.length < 30) {
-          setStatusText(`aguardando dados (${buf.m1.length}/30)`);
-          return;
+      const thisMinute = Math.floor(Date.now() / 60000);
+      const bucketKey = timeframe === 'M1' ? thisMinute
+        : timeframe === 'M5' ? Math.floor(min / 5) + thisMinute * 100
+        : Math.floor(min / 15) + thisMinute * 100;
+      if (fireMinuteRef.current === bucketKey) return;
+      fireMinuteRef.current = bucketKey;
+
+      const buf = bufRef.current;
+      if (buf.m1.length < 30) {
+        setStatusText(`aguardando dados (${buf.m1.length}/30)`);
+        return;
+      }
+
+      setLastRunTime(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+      try {
+        const diag = runEngineDiag(buf, asset);
+        const result = runEngine(buf, asset);
+
+        if (result) {
+          setSignal(result);
+          setPendingSignal(result);
+          setResultSaved(null);
+          setBlockReason(null);
+          const soundType = result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte';
+          playSignalSound(soundType);
+          vibrate('forte');
+          setStatusText(`✦ ${result.quality}`);
+        } else {
+          const reason = diag?.blockedBy || 'condições insuficientes';
+          setBlockReason(reason);
+          setStatusText('sem sinal');
         }
-
-        setLastRunTime(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-
-        try {
-          // Run diag first to show block reason
-          const diag = runEngineDiag(buf, asset);
-          const result = runEngine(buf, asset);
-
-          if (result) {
-            setSignal(result);
-            setPendingSignal(result);
-            setResultSaved(null);
-            setBlockReason(null);
-            const soundType = result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte';
-            playSignalSound(soundType);
-            vibrate('forte');
-            setStatusText(`✦ ${result.quality}`);
-          } else {
-            const reason = diag?.blockedBy || 'condições insuficientes';
-            setBlockReason(reason);
-            setStatusText('sem sinal');
-          }
-        } catch (e) {
-          setStatusText('erro motor');
-        }
+      } catch {
+        setStatusText('erro motor');
       }
     }, 1000);
 
@@ -297,7 +194,6 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
             <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold bg-white/5 ${CATEGORY_COLOR[category]}`}>
               {CATEGORY_LABEL[category]}
             </span>
-            {/* Quality + Score badge — shown when there's any signal */}
             {(pendingSignal || signal) && (() => {
               const s = pendingSignal || signal!;
               return (
@@ -383,11 +279,13 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
                 {pendingSignal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
               </span>
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-                pendingSignal.quality === 'PREMIUM'
+                pendingSignal.quality === 'ELITE'
+                  ? 'text-white border-white/40 bg-white/10'
+                  : pendingSignal.quality === 'PREMIUM'
                   ? 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10'
                   : 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10'
               }`}>
-                {pendingSignal.quality}
+                {pendingSignal.quality === 'ELITE' ? '👑 ELITE' : pendingSignal.quality}
               </span>
               <span className="text-[10px] text-gray-500 ml-auto">{pendingSignal.score}%</span>
             </div>
