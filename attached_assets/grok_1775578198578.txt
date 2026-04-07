@@ -1,0 +1,88 @@
+# SignalMaster Pro v8.1 Ultimate - Prompt Completo para Lovable.dev
+
+Crie um aplicativo web completo chamado **SignalMaster Pro v8.1 Ultimate** — plataforma premium de sinais para opções binárias (Forex, Criptomoedas e Commodities).
+
+### Requisitos Principais
+- 100% frontend usando React 18 + TypeScript + Vite
+- Design ultra-premium dark mode com glassmorphism elevado
+- Todas as configurações do usuário devem ser salvas automaticamente no IndexedDB e restauradas ao abrir o app
+- Foco máximo em: aparência profissional, segurança e assertividade dos sinais
+- Projeto pronto para comercialização (Kiwify / Hotmart)
+
+### Stack Técnica
+- React 18 + TypeScript + Vite
+- Tailwind CSS v4
+- Framer Motion para animações premium
+- Zustand com persistência (IndexedDB)
+- Lucide React para ícones
+
+### Design System (Ultra Premium)
+- Fundo principal: #07070d
+- Cor primária: #00ff88 (verde neon)
+- Cor de danger: #ff3366
+- Glassmorphism: backdrop-blur-3xl, bordas rgba(255,255,255,0.08), background rgba(255,255,255,0.04)
+- Animações com Framer Motion: hover 3D, entrada em cascata, shimmer effect, score reveal
+- Temas: Midnight (padrão), Lava, Ocean, Matrix, Gold, Neon Void
+
+### Persistência Automática (Obrigatório)
+Todas as configurações devem ser salvas automaticamente e carregadas ao abrir o app:
+- Tema escolhido
+- Timeframe (M1 / M5 / M15)
+- Ativo favorito
+- Modo Multi-Par + pares selecionados
+- Score mínimo
+- Opção "Forte Only"
+- Som e vibração ativados/desativados
+- Sidebar colapsada ou não
+
+### Motor de Sinais v8.1 (Assertividade + Velocidade)
+- Cálculos matemáticos reais (EMA 9/21, RSI, etc.)
+- Confluence Engine inteligente com score 0-100
+- Qualidade dos sinais: FRACA, FORTE, PREMIUM, ELITE
+- Disparo automático no segundo :48 da vela
+- Regime de mercado (TRENDING / RANGING / CHOPPY)
+- Bonus por par específico (BTCUSDT tem bônus maior)
+- Simulação de candles realista
+- Não pode demorar para gerar o sinal
+
+### Página Principal (SignalsPage) - Deve ser impressionante
+- Header premium com logo e status "AO VIVO"
+- Card central grande com:
+  - Direção BUY/SELL em fonte gigantesca com cor correspondente
+  - Score grande (ex: 87%)
+  - Badge de qualidade (FRACA/FORTE/PREMIUM/ELITE)
+  - Contagem regressiva grande até o próximo sinal
+- Botões grandes e bonitos: ✅ WIN (verde) e ❌ LOSS (vermelho)
+- Feedback visual e motivacional após marcar WIN ou LOSS
+- Timer circular ou contagem regressiva clara
+
+### Estrutura de Pastas Esperada
+src/
+├── types/index.ts
+├── store/usePreferences.ts
+├── core/confluenceEngine.ts
+├── core/signalEngine.ts
+├── pages/SignalsPage.tsx
+├── App.tsx
+
+### Regras Importantes para Lovable
+- Código deve ser limpo, organizado e tipado
+- Todas as configurações devem persistir automaticamente
+- Aparência deve ser extremamente profissional e moderna (nível SaaS premium)
+- O sinal deve aparecer automaticamente a cada ~60 segundos (simulação)
+- Configurações salvas automaticamente ao alterar qualquer coisa
+- Projeto deve rodar imediatamente com "npm run dev"
+
+Agora gere todos os arquivos necessários na ordem correta, começando pela estrutura completa do projeto. Inclua todos os códigos completos para cada arquivo.
+
+Comece gerando:
+1. package.json
+2. tailwind.config.js
+3. src/types/index.ts
+4. src/store/usePreferences.ts
+5. src/core/confluenceEngine.ts
+6. src/core/signalEngine.ts
+7. src/pages/SignalsPage.tsx
+8. src/App.tsx
+
+Entregue um arquivo por vez com o caminho completo e o código entre ```tsx ou ```ts.
