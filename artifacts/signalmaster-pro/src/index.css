@@ -182,6 +182,126 @@
   border-radius: 16px;
 }
 
+/* ══════════════════════════════════════════
+   VISUAL THEMES
+   ══════════════════════════════════════════ */
+
+/* Default: Midnight (já é o :root) */
+
+/* LAVA — vermelho magma */
+.theme-lava {
+  --green: #ff4422;
+  --green-glow: rgba(255,68,34,0.15);
+  --green-dark: #cc3311;
+  --blue: #ff8855;
+  --bg-0: #0d0700;
+  --bg-1: #140a00;
+  --bg-2: #1c0f00;
+  --bg-3: #261500;
+  --primary: 15 100% 58%;
+  --sidebar-primary: 15 100% 58%;
+  --sidebar-ring: 15 100% 58%;
+  --ring: 15 100% 58%;
+  --chart-1: 15 100% 58%;
+}
+.theme-lava body, .theme-lava {
+  background: radial-gradient(ellipse at 20% 50%, rgba(255,68,34,0.07) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(180,30,10,0.06) 0%, transparent 50%),
+              #0d0700;
+}
+
+/* OCEAN — ciano marinho */
+.theme-ocean {
+  --green: #00d4ff;
+  --green-glow: rgba(0,212,255,0.15);
+  --green-dark: #009dcc;
+  --blue: #0055ff;
+  --bg-0: #00070d;
+  --bg-1: #000e18;
+  --bg-2: #001622;
+  --bg-3: #001f30;
+  --primary: 195 100% 50%;
+  --sidebar-primary: 195 100% 50%;
+  --sidebar-ring: 195 100% 50%;
+  --ring: 195 100% 50%;
+  --chart-1: 195 100% 50%;
+}
+.theme-ocean body, .theme-ocean {
+  background: radial-gradient(ellipse at 20% 50%, rgba(0,100,200,0.08) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.05) 0%, transparent 50%),
+              #00070d;
+}
+
+/* MATRIX — verde terminal */
+.theme-matrix {
+  --green: #00ff41;
+  --green-glow: rgba(0,255,65,0.18);
+  --green-dark: #00cc33;
+  --blue: #00aa22;
+  --bg-0: #000300;
+  --bg-1: #000800;
+  --bg-2: #000f00;
+  --bg-3: #001500;
+  --primary: 130 100% 50%;
+  --sidebar-primary: 130 100% 50%;
+  --sidebar-ring: 130 100% 50%;
+  --ring: 130 100% 50%;
+  --chart-1: 130 100% 50%;
+}
+.theme-matrix body, .theme-matrix {
+  background: radial-gradient(ellipse at 50% 50%, rgba(0,80,10,0.12) 0%, transparent 60%), #000300;
+}
+.theme-matrix .glass-card {
+  border-color: rgba(0,255,65,0.12);
+}
+
+/* GOLD — âmbar premium */
+.theme-gold {
+  --green: #ffd700;
+  --green-glow: rgba(255,215,0,0.15);
+  --green-dark: #ccaa00;
+  --blue: #ff9900;
+  --bg-0: #0a0800;
+  --bg-1: #130f00;
+  --bg-2: #1c1600;
+  --bg-3: #251d00;
+  --primary: 48 100% 50%;
+  --sidebar-primary: 48 100% 50%;
+  --sidebar-ring: 48 100% 50%;
+  --ring: 48 100% 50%;
+  --chart-1: 48 100% 50%;
+}
+.theme-gold body, .theme-gold {
+  background: radial-gradient(ellipse at 20% 50%, rgba(200,140,0,0.07) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(255,200,0,0.05) 0%, transparent 50%),
+              #0a0800;
+}
+
+/* NEON VOID — roxo cyberpunk */
+.theme-neon-void {
+  --green: #bf00ff;
+  --green-glow: rgba(191,0,255,0.18);
+  --green-dark: #8800cc;
+  --blue: #6600ff;
+  --bg-0: #06000d;
+  --bg-1: #0d0018;
+  --bg-2: #130022;
+  --bg-3: #1a002e;
+  --primary: 285 100% 50%;
+  --sidebar-primary: 285 100% 50%;
+  --sidebar-ring: 285 100% 50%;
+  --ring: 285 100% 50%;
+  --chart-1: 285 100% 50%;
+}
+.theme-neon-void body, .theme-neon-void {
+  background: radial-gradient(ellipse at 20% 50%, rgba(100,0,200,0.1) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(180,0,255,0.07) 0%, transparent 50%),
+              #06000d;
+}
+.theme-neon-void .glass-card {
+  border-color: rgba(191,0,255,0.12);
+}
+
 @keyframes cardEnter {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

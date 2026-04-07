@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Save, Bell, Shield, Palette, Sliders, RotateCcw, CheckCircle } from "lucide-react";
+import { applyTheme, type AppTheme } from "@/App";
 
 interface Config {
   minScore: number;
@@ -225,6 +226,51 @@ export default function SettingsPage() {
           </select>
         </Row>
       </Section>
+
+      {/* TEMAS VISUAIS */}
+      <div className="glass-card p-6">
+        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+          <span className="text-[var(--green)]"><Palette size={14} /></span>
+          Tema Visual
+        </h3>
+        {(() => {
+          const themes: { id: AppTheme; label: string; primary: string; bg: string; desc: string }[] = [
+            { id: 'midnight',  label: 'Midnight',  primary: '#00ff88', bg: '#07070d', desc: 'Verde neon clássico' },
+            { id: 'lava',      label: 'Lava',      primary: '#ff4422', bg: '#0d0700', desc: 'Vermelho magma' },
+            { id: 'ocean',     label: 'Ocean',     primary: '#00d4ff', bg: '#00070d', desc: 'Ciano marinho' },
+            { id: 'matrix',    label: 'Matrix',    primary: '#00ff41', bg: '#000300', desc: 'Verde terminal' },
+            { id: 'gold',      label: 'Gold',      primary: '#ffd700', bg: '#0a0800', desc: 'Âmbar premium' },
+            { id: 'neon-void', label: 'Neon Void', primary: '#bf00ff', bg: '#06000d', desc: 'Roxo cyberpunk' },
+          ];
+          const [activeTheme, setActiveTheme] = useState<AppTheme>(
+            () => (localStorage.getItem('smpTheme') as AppTheme) || 'midnight'
+          );
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {themes.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { applyTheme(t.id); setActiveTheme(t.id); }}
+                  className={`relative p-4 rounded-2xl border-2 transition-all duration-200 text-left group hover:scale-[1.02] active:scale-[0.98] ${
+                    activeTheme === t.id
+                      ? 'border-[var(--green)] shadow-lg shadow-[var(--green)]/20'
+                      : 'border-white/10 hover:border-white/20'
+                  }`}
+                  style={{ background: t.bg }}
+                >
+                  {activeTheme === t.id && (
+                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
+                      style={{ background: t.primary, color: '#000' }}>✓</div>
+                  )}
+                  <div className="w-8 h-8 rounded-full mb-3 shadow-lg" style={{ background: t.primary, boxShadow: `0 0 12px ${t.primary}60` }} />
+                  <div className="text-sm font-black text-white">{t.label}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Exibição */}
       <Section title="Exibição do Painel" icon={<Palette size={14} />}>

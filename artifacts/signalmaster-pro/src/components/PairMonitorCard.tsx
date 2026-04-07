@@ -303,13 +303,15 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
               return (
                 <>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black border ${
-                    s.quality === 'PREMIUM'
+                    s.quality === 'ELITE'
+                      ? 'text-white border-white/40 bg-white/10'
+                      : s.quality === 'PREMIUM'
                       ? 'text-yellow-300 border-yellow-400/40 bg-yellow-400/10'
                       : s.quality === 'FORTE'
                       ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10'
                       : 'text-blue-300 border-blue-400/30 bg-blue-400/10'
                   }`}>
-                    {s.quality}
+                    {s.quality === 'ELITE' ? '👑' : s.quality}
                   </span>
                   <span className="text-[9px] font-black text-white/70 tabular-nums">{s.score}%</span>
                 </>
@@ -424,12 +426,14 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
               {signal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
             </span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black border ${
-              signal.quality === 'PREMIUM'
+              signal.quality === 'ELITE'
+                ? 'text-white border-white/40 bg-white/10'
+                : signal.quality === 'PREMIUM'
                 ? 'text-yellow-300 border-yellow-400/40 bg-yellow-400/10'
                 : signal.quality === 'FORTE'
                 ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10'
                 : 'text-blue-300 border-blue-400/30 bg-blue-400/10'
-            }`}>{signal.quality}</span>
+            }`}>{signal.quality === 'ELITE' ? '👑 ELITE' : signal.quality}</span>
             <span className="text-xs font-black text-white/60 tabular-nums">{signal.score}%</span>
             <span className="text-[9px] text-gray-600 ml-auto tabular-nums">
               {new Date(signal.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

@@ -21,10 +21,17 @@ const ASSET_ICONS: Record<string, string> = {
 };
 
 const QUALITY_COLORS: Record<string, string> = {
+  ELITE:   'text-white border-white/40 bg-gradient-to-r from-yellow-400/20 via-white/10 to-yellow-400/20',
   PREMIUM: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
-  FORTE: 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10',
-  MÉDIO: 'text-blue-400 border-blue-400/30 bg-blue-400/10',
-  FRACO: 'text-gray-400 border-gray-400/30 bg-gray-400/10',
+  FORTE:   'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10',
+  MÉDIO:   'text-blue-400 border-blue-400/30 bg-blue-400/10',
+  FRACO:   'text-gray-400 border-gray-400/30 bg-gray-400/10',
+};
+
+const REGIME_CONFIG = {
+  TRENDING: { label: 'TENDÊNCIA', icon: '📈', color: 'text-[var(--green)] bg-[var(--green)]/10 border-[var(--green)]/25', tip: 'Mercado em tendência — condição ideal para sinais' },
+  RANGING:  { label: 'LATERAL',   icon: '↔️', color: 'text-blue-400 bg-blue-400/10 border-blue-400/25',             tip: 'Mercado lateral — aguarde confirmação antes de entrar' },
+  CHOPPY:   { label: 'CAÓTICO',   icon: '⚡', color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/25',         tip: 'Mercado instável — evite entrar neste momento' },
 };
 
 export default function SignalsPage() {
@@ -743,7 +750,8 @@ export default function SignalsPage() {
                 <div className="text-right">
                   <div className="text-xs text-gray-600 mb-0.5">Score</div>
                   <div className={`font-black text-xl ${
-                    lastDiag.score >= 82 ? 'text-yellow-400' :
+                    lastDiag.score >= 92 ? 'text-white font-black' :
+                    lastDiag.score >= 83 ? 'text-yellow-400' :
                     lastDiag.score >= 74 ? 'text-[var(--green)]' :
                     lastDiag.score >= 68 ? 'text-[var(--blue)]' : 'text-gray-400'
                   }`}>{lastDiag.score}%</div>
@@ -751,6 +759,7 @@ export default function SignalsPage() {
                 <div className="text-right">
                   <div className="text-xs text-gray-600 mb-0.5">Qualidade</div>
                   <div className={`font-bold text-sm ${
+                    lastDiag.quality === 'ELITE' ? 'text-white' :
                     lastDiag.quality === 'PREMIUM' ? 'text-yellow-400' :
                     lastDiag.quality === 'FORTE' ? 'text-[var(--green)]' :
                     lastDiag.quality === 'MÉDIO' ? 'text-[var(--blue)]' : 'text-gray-500'
@@ -902,8 +911,17 @@ export default function SignalsPage() {
                     </div>
                   </div>
                   <div className={`px-3 py-1 rounded-full text-xs font-bold border ${QUALITY_COLORS[signal.quality] || ''}`}>
-                    {signal.quality === 'PREMIUM' ? '💎' : signal.quality === 'FORTE' ? '🟢' : '🟡'} {signal.quality}
+                    {signal.quality === 'ELITE' ? '👑' : signal.quality === 'PREMIUM' ? '💎' : signal.quality === 'FORTE' ? '🟢' : '🟡'} {signal.quality}
                   </div>
+                  {/* Market Regime Badge */}
+                  {signal.marketRegime && (() => {
+                    const rc = REGIME_CONFIG[signal.marketRegime];
+                    return (
+                      <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${rc.color}`} title={rc.tip}>
+                        {rc.icon} {rc.label}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Direction */}

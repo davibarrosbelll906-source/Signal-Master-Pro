@@ -113,9 +113,21 @@ function Router() {
   );
 }
 
+export type AppTheme = 'midnight' | 'lava' | 'ocean' | 'matrix' | 'gold' | 'neon-void';
+
+export function applyTheme(theme: AppTheme) {
+  const root = document.documentElement;
+  root.classList.remove('theme-lava', 'theme-ocean', 'theme-matrix', 'theme-gold', 'theme-neon-void');
+  if (theme !== 'midnight') root.classList.add(`theme-${theme}`);
+  localStorage.setItem('smpTheme', theme);
+}
+
 function App() {
   useEffect(() => {
     initStore();
+    // Restore saved theme
+    const saved = (localStorage.getItem('smpTheme') || 'midnight') as AppTheme;
+    applyTheme(saved);
   }, []);
 
   return (

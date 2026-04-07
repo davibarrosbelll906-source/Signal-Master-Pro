@@ -42,10 +42,13 @@ export interface CandleBuffer {
   m15: Candle[];
 }
 
+export type MarketRegime = 'TRENDING' | 'RANGING' | 'CHOPPY';
+
 export interface SignalResult {
   direction: 'CALL' | 'PUT';
   score: number;
-  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM';
+  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE';
+  marketRegime: MarketRegime;
   adx: number;
   rsi: number;
   entropy: number;
@@ -460,6 +463,42 @@ function calcMACDMomentum(closes: number[]): 'growing' | 'shrinking' {
   return Math.abs(curr) > Math.abs(prev) ? 'growing' : 'shrinking';
 }
 
+// ─── MARKET REGIME DETECTOR ────────────────────────────────────────────────
+
+export function detectMarketRegime(
+  highs: number[], lows: number[], closes: number[]
+): MarketRegime {
+  if (closes.length < 20) return 'RANGING';
+
+  const adx = calcADX(highs, lows, closes, 14);
+  const atr = calcATR(highs, lows, closes, 14);
+  const lastClose = closes[closes.length - 1];
+  const atrPct = lastClose > 0 ? (atr / lastClose) * 100 : 0;
+
+  // Bollinger band width as choppiness proxy
+  const bb = calcBollinger(closes, 20);
+  const bbWidth = bb.mean > 0 ? (bb.upper - bb.lower) / bb.mean : 0;
+
+  // Choppiness Index approximation using ATR vs range
+  const highestH = Math.max(...highs.slice(-14));
+  const lowestL = Math.min(...lows.slice(-14));
+  const totalRange = highestH - lowestL || 0.0001;
+  const atrSum = closes.slice(-14).reduce((acc, _, i, arr) => {
+    if (i === 0) return acc;
+    const tr = Math.max(
+      highs[highs.length - 14 + i] - lows[lows.length - 14 + i],
+      Math.abs(highs[highs.length - 14 + i] - closes[closes.length - 14 + i - 1]),
+      Math.abs(lows[lows.length - 14 + i] - closes[closes.length - 14 + i - 1])
+    );
+    return acc + tr;
+  }, 0);
+  const chopIndex = atrSum > 0 ? (Math.log10(atrSum / totalRange) / Math.log10(14)) * 100 : 50;
+
+  if (adx >= 28 && chopIndex < 61.8) return 'TRENDING';
+  if (chopIndex >= 61.8 || (atrPct < 0.05 && bbWidth < 0.008)) return 'CHOPPY';
+  return 'RANGING';
+}
+
 // ─── MAIN ENGINE ───────────────────────────────────────────────────────────
 
 export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null {
@@ -612,9 +651,13 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
 
   const score = Math.round(rawScore * 100);
 
-  // — Quality —
+  // — Market Regime —
+  const marketRegime = detectMarketRegime(highs, lows, closes);
+
+  // — Quality (5 levels: FRACO → ELITE) —
   let quality: SignalResult['quality'] = 'EVITAR';
-  if (score >= 82) quality = 'PREMIUM';
+  if (score >= 92) quality = 'ELITE';
+  else if (score >= 83) quality = 'PREMIUM';
   else if (score >= 74) quality = 'FORTE';
   else if (score >= 68) quality = 'MÉDIO';
   else if (score >= 62) quality = 'FRACO';
@@ -679,6 +722,7 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
     direction,
     score,
     quality,
+    marketRegime,
     adx: Math.round(adx),
     rsi: Math.round(rsi),
     entropy: Math.round(entropy * 100),
