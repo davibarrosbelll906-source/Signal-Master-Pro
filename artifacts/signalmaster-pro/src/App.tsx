@@ -36,27 +36,36 @@ import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
-
 import DashboardHomePage from "@/pages/DashboardHomePage";
+
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const currentUser = useAppStore(s => s.currentUser);
-  
+
   if (!currentUser) return <Redirect to="/login" />;
 
   return (
     <div className="flex h-screen bg-[var(--bg-0)] overflow-hidden text-white">
       <Sidebar />
       <main className="flex-1 overflow-auto relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(0,255,136,0.03),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(68,136,255,0.03),transparent_50%)] pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(0,255,136,0.03),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(68,136,255,0.03),transparent_50%)] pointer-events-none" />
         <div className="relative z-10 p-6 md:p-8">
           {children}
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrap a page in DashboardLayout with auth guard
+function D({ component: Page }: { component: React.ComponentType }) {
+  return (
+    <DashboardLayout>
+      <Page />
+    </DashboardLayout>
   );
 }
 
@@ -67,39 +76,38 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/forgot" component={ForgotPasswordPage} />
+
+      {/* Dashboard routes — each has its own flat route for reliable matching */}
+      <Route path="/dashboard" component={() => <D component={DashboardHomePage} />} />
+      <Route path="/dashboard/signals" component={() => <D component={SignalsPage} />} />
+      <Route path="/dashboard/history" component={() => <D component={HistoryPage} />} />
+      <Route path="/dashboard/analytics" component={() => <D component={AnalyticsPage} />} />
+      <Route path="/dashboard/heatmap" component={() => <D component={HeatmapPage} />} />
+      <Route path="/dashboard/backtesting" component={() => <D component={BacktestingPage} />} />
+      <Route path="/dashboard/scoreboard" component={() => <D component={ScoreboardPage} />} />
+      <Route path="/dashboard/diary" component={() => <D component={DiaryPage} />} />
+      <Route path="/dashboard/bank" component={() => <D component={BankPage} />} />
+      <Route path="/dashboard/goals" component={() => <D component={GoalsPage} />} />
+      <Route path="/dashboard/risk" component={() => <D component={RiskPage} />} />
+      <Route path="/dashboard/reports" component={() => <D component={ReportsPage} />} />
+      <Route path="/dashboard/calendar" component={() => <D component={CalendarPage} />} />
+      <Route path="/dashboard/revenue" component={() => <D component={RevenuePage} />} />
+      <Route path="/dashboard/team" component={() => <D component={TeamPage} />} />
+      <Route path="/dashboard/affiliates" component={() => <D component={AffiliatesPage} />} />
+      <Route path="/dashboard/leaderboard" component={() => <D component={LeaderboardPage} />} />
+      <Route path="/dashboard/strategies" component={() => <D component={StrategiesPage} />} />
+      <Route path="/dashboard/achievements" component={() => <D component={AchievementsPage} />} />
+      <Route path="/dashboard/telegram" component={() => <D component={TelegramPage} />} />
+      <Route path="/dashboard/notifications" component={() => <D component={NotificationsPage} />} />
+      <Route path="/dashboard/profile" component={() => <D component={ProfilePage} />} />
+      <Route path="/dashboard/settings" component={() => <D component={SettingsPage} />} />
+      <Route path="/dashboard/admin" component={() => <D component={AdminPage} />} />
+
+      {/* Projector — full screen overlay, rendered inside dashboard layout so auth is enforced */}
+      <Route path="/dashboard/projector" component={() => <D component={ProjectorPage} />} />
+      {/* Legacy route kept for backward compat */}
       <Route path="/projector" component={ProjectorPage} />
-      
-      <Route path="/dashboard/:path*">
-        <DashboardLayout>
-          <Switch>
-            <Route path="/dashboard" component={DashboardHomePage} />
-            <Route path="/dashboard/signals" component={SignalsPage} />
-            <Route path="/dashboard/history" component={HistoryPage} />
-            <Route path="/dashboard/analytics" component={AnalyticsPage} />
-            <Route path="/dashboard/heatmap" component={HeatmapPage} />
-            <Route path="/dashboard/backtesting" component={BacktestingPage} />
-            <Route path="/dashboard/scoreboard" component={ScoreboardPage} />
-            <Route path="/dashboard/diary" component={DiaryPage} />
-            <Route path="/dashboard/bank" component={BankPage} />
-            <Route path="/dashboard/goals" component={GoalsPage} />
-            <Route path="/dashboard/risk" component={RiskPage} />
-            <Route path="/dashboard/reports" component={ReportsPage} />
-            <Route path="/dashboard/calendar" component={CalendarPage} />
-            <Route path="/dashboard/revenue" component={RevenuePage} />
-            <Route path="/dashboard/team" component={TeamPage} />
-            <Route path="/dashboard/affiliates" component={AffiliatesPage} />
-            <Route path="/dashboard/leaderboard" component={LeaderboardPage} />
-            <Route path="/dashboard/strategies" component={StrategiesPage} />
-            <Route path="/dashboard/achievements" component={AchievementsPage} />
-            <Route path="/dashboard/telegram" component={TelegramPage} />
-            <Route path="/dashboard/notifications" component={NotificationsPage} />
-            <Route path="/dashboard/profile" component={ProfilePage} />
-            <Route path="/dashboard/settings" component={SettingsPage} />
-            <Route path="/dashboard/admin" component={AdminPage} />
-            <Route component={NotFound} />
-          </Switch>
-        </DashboardLayout>
-      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
