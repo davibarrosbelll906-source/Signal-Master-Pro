@@ -534,6 +534,148 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   };
 }
 
+// ─── DIAGNOSTIC ENGINE (returns analysis even when blocked) ────────────────
+
+export interface DiagResult {
+  direction: 'CALL' | 'PUT';
+  score: number;
+  quality: string;
+  adx: number;
+  rsi: number;
+  entropy: number;
+  consensus: number;
+  confirmed: number;
+  blockedBy: string | null;
+  votes: Record<string, string>;
+  passed: boolean;
+}
+
+export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | null {
+  const m1 = buf.m1;
+  if (m1.length < 30) return null;
+
+  const closes = m1.map(c => c.c);
+  const highs = m1.map(c => c.h);
+  const lows = m1.map(c => c.l);
+  const volumes = m1.map(c => c.v);
+  const category = ASSET_CATEGORIES[asset] || 'forex';
+  const sess = getCurrentSession();
+
+  const ema9 = calcEMA(closes, 9);
+  const ema21 = calcEMA(closes, 21);
+  const ema50 = calcEMA(closes, 50);
+  const rsi = calcRSI(closes, 14);
+  const macd = calcMACD(closes);
+  const bb = calcBollinger(closes, 20);
+  const stoch = calcStoch(highs, lows, closes, 14);
+  const adx = calcADX(highs, lows, closes, 14);
+  const atr = calcATR(highs, lows, closes, 14);
+  const obv = calcOBV(closes, volumes);
+  const candle = detectCandlePattern(m1);
+  const entropy = calcEntropy(m1.slice(-20));
+
+  const m5closes = deriveM5(m1).map(c => c.c);
+  const m5ema9 = calcEMA(m5closes, 9);
+  const m5ema21 = calcEMA(m5closes, 21);
+  const htfBull = m5ema9.length > 0 && m5ema21.length > 0 &&
+    m5ema9[m5ema9.length - 1] > m5ema21[m5ema21.length - 1];
+
+  const lastClose = closes[closes.length - 1];
+  const lastEma9 = ema9[ema9.length - 1] ?? lastClose;
+  const lastEma21 = ema21[ema21.length - 1] ?? lastClose;
+  const lastEma50 = ema50[ema50.length - 1] ?? lastClose;
+
+  const votes: Record<string, string> = {};
+  const emaBull = lastEma9 > lastEma21 && lastEma21 > lastEma50 && lastClose > lastEma9;
+  const emaBear = lastEma9 < lastEma21 && lastEma21 < lastEma50 && lastClose < lastEma9;
+  votes.ema = emaBull ? 'CALL' : emaBear ? 'PUT' : 'NEUTRAL';
+  votes.htf = htfBull ? 'CALL' : 'PUT';
+  votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 50 ? 'CALL' : 'PUT';
+  votes.macd = macd.hist > 0 ? 'CALL' : 'PUT';
+  votes.bb = bb.pct < 0.2 ? 'CALL' : bb.pct > 0.8 ? 'PUT' : 'NEUTRAL';
+  votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
+  votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
+  const avgVol = volumes.slice(-20, -1).reduce((a, b) => a + b, 0) / 19 || 1;
+  const lastVol = volumes[volumes.length - 1];
+  votes.volume = lastVol > avgVol * 1.2 ? (lastClose > closes[closes.length - 2] ? 'CALL' : 'PUT') : 'NEUTRAL';
+  votes.obv = obv > 0 ? 'CALL' : 'PUT';
+
+  let mlWeights = { ...BASE_WEIGHTS };
+  try {
+    const ml = JSON.parse(localStorage.getItem('smpML7') || '{}');
+    const ctx = `${sess}_${category}`;
+    if (ml[ctx]) mlWeights = { ...BASE_WEIGHTS, ...ml[ctx] };
+  } catch {}
+
+  const callVotes = Object.entries(votes).filter(([, v]) => v === 'CALL');
+  const putVotes = Object.entries(votes).filter(([, v]) => v === 'PUT');
+  const callScore = callVotes.reduce((s, [k]) => s + (mlWeights[k] || 0), 0);
+  const putScore = putVotes.reduce((s, [k]) => s + (mlWeights[k] || 0), 0);
+  const total = callScore + putScore || 1;
+  const direction: 'CALL' | 'PUT' = callScore >= putScore ? 'CALL' : 'PUT';
+  let rawScore = Math.max(callScore, putScore) / total;
+  rawScore = Math.min(0.95, Math.max(0.35, rawScore + getSessionBonus(sess, category)));
+  if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.04);
+  else if (adx < 18) rawScore = Math.max(0.35, rawScore - 0.05);
+  if (rsi > 80 || rsi < 20) rawScore = Math.max(0.35, rawScore - 0.06);
+  if (entropy > 0.6) rawScore = Math.max(0.35, rawScore - 0.08);
+  const atrPct = lastClose > 0 ? atr / lastClose : 0;
+  if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
+  const score = Math.round(rawScore * 100);
+
+  let quality = 'EVITAR';
+  if (score >= 82) quality = 'PREMIUM';
+  else if (score >= 74) quality = 'FORTE';
+  else if (score >= 68) quality = 'MÉDIO';
+  else if (score >= 62) quality = 'FRACO';
+
+  const cfg = (() => { try { return JSON.parse(localStorage.getItem('smpCfg7') || '{}'); } catch { return {}; } })();
+  const minScore = cfg.minScore ?? 65;
+  const forteOnly = cfg.forteOnly ?? true;
+
+  const variations = [
+    {}, { ema: 0.10, rsi: -0.05, macd: -0.05 },
+    { rsi: 0.10, stoch: 0.05, ema: -0.15 },
+    { volume: 0.15, obv: 0.10, candle: -0.25 },
+    { rsi: -0.10, macd: -0.10, candle: 0.20 }
+  ];
+  let consensusCount = 0;
+  for (const v of variations) {
+    const w: Record<string, number> = { ...mlWeights };
+    for (const [k, d] of Object.entries(v)) {
+      if (w[k] !== undefined) w[k] = Math.max(0.01, w[k] + d);
+    }
+    const t = Object.values(w).reduce((a, b) => a + b, 0);
+    Object.keys(w).forEach(k => (w[k] /= t));
+    const cs = callVotes.reduce((s, [k]) => s + (w[k] || 0), 0);
+    const ps = putVotes.reduce((s, [k]) => s + (w[k] || 0), 0);
+    if ((direction === 'CALL' ? cs >= ps : ps > cs)) consensusCount++;
+  }
+
+  const main5 = ['ema', 'htf', 'rsi', 'macd', 'volume'];
+  const confirmed = main5.filter(k => votes[k] === direction).length;
+  const mins = new Date().getMinutes();
+
+  let blockedBy: string | null = null;
+  if (mins === 59 || mins === 0) blockedBy = 'Horário morto (min :00 ou :59)';
+  else if (adx < 18) blockedBy = `ADX fraco (${Math.round(adx)} < 18) — mercado lateral`;
+  else if (entropy > 0.65) blockedBy = `Entropia alta (${Math.round(entropy * 100)}%) — mercado aleatório`;
+  else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/5 indicadores principais)`;
+  else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
+  else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
+  else if (score < minScore) blockedBy = `Score abaixo do mínimo (${score}% < ${minScore}%)`;
+  else if (forteOnly && quality !== 'FORTE' && quality !== 'PREMIUM') blockedBy = `Qualidade ${quality} bloqueada — "Apenas FORTE+" ativo`;
+
+  return {
+    direction, score, quality,
+    adx: Math.round(adx), rsi: Math.round(rsi),
+    entropy: Math.round(entropy * 100),
+    consensus: consensusCount, confirmed,
+    blockedBy, votes,
+    passed: blockedBy === null
+  };
+}
+
 // ─── ORNSTEIN-UHLENBECK FOREX/COMMODITY SIMULATOR ──────────────────────────
 
 export function generateOUCandle(lastPrice: number, asset: string): Candle {

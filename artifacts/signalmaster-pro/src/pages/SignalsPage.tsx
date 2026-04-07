@@ -4,8 +4,8 @@ import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye }
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ASSET_CATEGORIES, CRYPTO_SYMBOLS, TV_SYMBOLS, BASE_PRICES,
-  getCurrentSession, runEngine, generateOUCandle, updateMLWeights, playSignalSound, vibrate,
-  type Candle, type CandleBuffer, type SignalResult
+  getCurrentSession, runEngine, runEngineDiag, generateOUCandle, updateMLWeights, playSignalSound, vibrate,
+  type Candle, type CandleBuffer, type SignalResult, type DiagResult
 } from "@/lib/signalEngine";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
 const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
@@ -39,6 +39,8 @@ export default function SignalsPage() {
   const [losses, setLosses] = useState(0);
   const [streak, setStreak] = useState(0);
   const [engineStatus, setEngineStatus] = useState('aguardando dados...');
+  const [lastDiag, setLastDiag] = useState<DiagResult | null>(null);
+  const [lastDiagTime, setLastDiagTime] = useState<Date | null>(null);
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const wsRef = useRef<WebSocket | null>(null);
@@ -207,6 +209,13 @@ export default function SignalsPage() {
         }
         setEngineStatus('calculando indicadores...');
         try {
+          // Run diagnostic first (always returns result)
+          const diag = runEngineDiag(buf, asset);
+          if (diag) {
+            setLastDiag(diag);
+            setLastDiagTime(new Date());
+          }
+
           const result = runEngine(buf, asset);
           if (result) {
             setSignal(result);
@@ -216,7 +225,7 @@ export default function SignalsPage() {
             vibrate('forte');
             setEngineStatus(`sinal ${result.quality} emitido — marque WIN ou LOSS`);
           } else {
-            setEngineStatus('sinal bloqueado — aguardando próximo ciclo');
+            setEngineStatus(diag?.blockedBy ? `bloqueado: ${diag.blockedBy}` : 'sinal bloqueado — aguardando próximo ciclo');
           }
         } catch (err) {
           setEngineStatus('erro no motor — verificando dados');
@@ -365,11 +374,82 @@ export default function SignalsPage() {
             <div className="text-xs text-gray-600 text-center">Sinal emite no segundo 48</div>
           </div>
 
+          {/* LAST ANALYSIS DIAGNOSTIC */}
+          {lastDiag && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`glass-card p-4 space-y-3 border ${lastDiag.passed ? 'border-[var(--green)]/30' : 'border-orange-500/20'}`}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Última Análise</h3>
+                <span className="text-[10px] text-gray-600">
+                  {lastDiagTime?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+
+              {/* Score + direction */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-gray-600 mb-0.5">Direção</div>
+                  <div className={`font-black text-lg ${lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                    {lastDiag.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-gray-600 mb-0.5">Score</div>
+                  <div className={`font-black text-xl ${
+                    lastDiag.score >= 82 ? 'text-yellow-400' :
+                    lastDiag.score >= 74 ? 'text-[var(--green)]' :
+                    lastDiag.score >= 68 ? 'text-[var(--blue)]' : 'text-gray-400'
+                  }`}>{lastDiag.score}%</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-gray-600 mb-0.5">Qualidade</div>
+                  <div className={`font-bold text-sm ${
+                    lastDiag.quality === 'PREMIUM' ? 'text-yellow-400' :
+                    lastDiag.quality === 'FORTE' ? 'text-[var(--green)]' :
+                    lastDiag.quality === 'MÉDIO' ? 'text-[var(--blue)]' : 'text-gray-500'
+                  }`}>{lastDiag.quality}</div>
+                </div>
+              </div>
+
+              {/* Mini stats row */}
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                <div className="bg-white/5 rounded-lg p-1.5">
+                  <div className="text-[10px] text-gray-600">ADX</div>
+                  <div className={`text-sm font-bold ${lastDiag.adx >= 25 ? 'text-[var(--green)]' : lastDiag.adx >= 18 ? 'text-yellow-400' : 'text-[var(--red)]'}`}>{lastDiag.adx}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-1.5">
+                  <div className="text-[10px] text-gray-600">Consenso</div>
+                  <div className={`text-sm font-bold ${lastDiag.consensus >= 4 ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>{lastDiag.consensus}/5</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-1.5">
+                  <div className="text-[10px] text-gray-600">Confirmados</div>
+                  <div className={`text-sm font-bold ${lastDiag.confirmed >= 3 ? 'text-[var(--green)]' : 'text-yellow-400'}`}>{lastDiag.confirmed}/5</div>
+                </div>
+              </div>
+
+              {/* Blocked reason */}
+              {lastDiag.blockedBy ? (
+                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/15">
+                  <span className="text-orange-400 text-xs shrink-0">⚠</span>
+                  <span className="text-xs text-orange-300 leading-relaxed">{lastDiag.blockedBy}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--green)]/10 border border-[var(--green)]/20">
+                  <span className="text-[var(--green)] text-xs">✓</span>
+                  <span className="text-xs text-[var(--green)] font-bold">Sinal aprovado e emitido</span>
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {/* INDICATORS MINI */}
-          {signal && (
-            <div className="glass-card p-4 space-y-2">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Indicadores</h3>
-              {Object.entries(signal.votes).map(([ind, vote]) => (
+          {(signal || lastDiag) && (
+            <div className="glass-card p-4 space-y-1.5">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Votos dos Indicadores</h3>
+              {Object.entries((signal || lastDiag)!.votes).map(([ind, vote]) => (
                 <div key={ind} className="flex items-center justify-between text-xs">
                   <span className="text-gray-500 uppercase">{ind}</span>
                   <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
@@ -381,6 +461,13 @@ export default function SignalsPage() {
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {!lastDiag && (
+            <div className="glass-card p-4 text-center">
+              <div className="text-gray-600 text-xs mb-1">Aguardando primeira análise</div>
+              <div className="text-gray-700 text-[10px]">O motor analisa a cada segundo :48</div>
             </div>
           )}
         </div>
