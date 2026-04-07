@@ -4,7 +4,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAppStore, initStore } from "@/lib/store";
 import { useEffect } from "react";
+import { AnimatePresence } from "framer-motion";
 import { Sidebar } from "@/components/Sidebar";
+import { usePinLock, PinLockScreen } from "@/components/PinLock";
 
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
@@ -44,11 +46,15 @@ const queryClient = new QueryClient();
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const currentUser = useAppStore(s => s.currentUser);
+  const { locked, setLocked } = usePinLock();
 
   if (!currentUser) return <Redirect to="/login" />;
 
   return (
     <div className="flex h-screen bg-[var(--bg-0)] overflow-hidden text-white">
+      <AnimatePresence>
+        {locked && <PinLockScreen onUnlock={() => setLocked(false)} />}
+      </AnimatePresence>
       <Sidebar />
       <main className="flex-1 overflow-auto relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(0,255,136,0.03),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(68,136,255,0.03),transparent_50%)] pointer-events-none" />

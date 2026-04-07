@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Copy, CheckCheck } from "lucide-react";
 import {
   ASSET_CATEGORIES,
   runEngine, runEngineDiag,
@@ -40,6 +41,7 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
   const [seconds, setSeconds] = useState(new Date().getSeconds());
   const [blockReason, setBlockReason] = useState<string | null>(null);
   const [lastRunTime, setLastRunTime] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const fireMinuteRef = useRef<number>(-1);
@@ -303,6 +305,17 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
                   border border-[var(--red)]/25 transition-all active:scale-95"
               >❌ LOSS</button>
             </div>
+            <button
+              onClick={() => {
+                const s = pendingSignal;
+                if (!s) return;
+                const txt = `📊 ${asset} — ${s.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}\nQualidade: ${s.quality} | Score: ${s.score}%\nTimeframe: ${timeframe} | ${new Date(s.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}\n— SignalMaster Pro`;
+                navigator.clipboard.writeText(txt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }).catch(() => {});
+              }}
+              className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${copied ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/5' : 'text-gray-500 border-white/8 bg-white/3 hover:text-white'}`}
+            >
+              {copied ? <><CheckCheck size={10} /> Copiado!</> : <><Copy size={10} /> Copiar sinal</>}
+            </button>
           </motion.div>
 
         ) : resultSaved ? (

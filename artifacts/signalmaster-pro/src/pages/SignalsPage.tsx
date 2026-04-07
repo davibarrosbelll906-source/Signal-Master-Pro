@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import TradingViewWidget from "@/components/TradingViewWidget";
 import PairMonitorCard from "@/components/PairMonitorCard";
-import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye, Layers } from "lucide-react";
+import ManagementPanel from "@/components/ManagementPanel";
+import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye, Layers, Copy, CheckCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ASSET_CATEGORIES, TV_SYMBOLS,
@@ -56,6 +57,7 @@ export default function SignalsPage() {
   const [manualAsset, setManualAsset] = useState('');
   const [manualDir, setManualDir] = useState<'CALL'|'PUT'>('CALL');
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [timeframe, setTimeframe] = useState<'M1' | 'M5' | 'M15'>(() => {
     return (localStorage.getItem('smpTimeframe') as 'M1' | 'M5' | 'M15') || 'M1';
   });
@@ -575,6 +577,9 @@ export default function SignalsPage() {
             </AnimatePresence>
           </div>
 
+          {/* MANAGEMENT PANEL */}
+          <ManagementPanel wins={wins} losses={losses} />
+
           {/* TIMEFRAME + COUNTDOWN */}
           <div className="glass-card p-5 flex flex-col items-center space-y-3">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Timeframe</h3>
@@ -848,6 +853,23 @@ export default function SignalsPage() {
                     {signal.direction === 'CALL' ? <TrendingUp size={16} className="text-[var(--green)]" /> : <TrendingDown size={16} className="text-[var(--red)]" />}
                     Operar no próximo minuto
                   </div>
+                  {/* Copy Signal Button */}
+                  <button
+                    onClick={() => {
+                      const txt = `📊 SINAL SIGNALMASTER PRO\n${signal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'} — ${signal.asset}\nQualidade: ${signal.quality}\nScore: ${signal.score}%\nTimeframe: ${timeframe}\nHora: ${new Date(signal.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}`;
+                      navigator.clipboard.writeText(txt).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2500);
+                      }).catch(() => {});
+                    }}
+                    className={`mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                      copied
+                        ? 'bg-[var(--green)]/15 text-[var(--green)] border-[var(--green)]/30'
+                        : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+                    }`}
+                  >
+                    {copied ? <><CheckCheck size={12} /> Copiado!</> : <><Copy size={12} /> Copiar Sinal</>}
+                  </button>
                 </div>
 
                 {/* Score bar */}

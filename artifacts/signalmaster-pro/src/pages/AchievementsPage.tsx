@@ -132,6 +132,79 @@ const ACHIEVEMENTS: Achievement[] = [
     },
     rarity: 'lendário',
   },
+  // ── New achievements ────────────────────────────────────────────────────
+  {
+    id: 'first_week', title: 'Primeira Semana', desc: 'Opere por 5 dias diferentes',
+    icon: <Calendar />, color: 'text-blue-400',
+    check: h => new Set(h.map(e => new Date(e.ts).toDateString())).size >= 5,
+    progress: h => ({ current: Math.min(new Set(h.map(e => new Date(e.ts).toDateString())).size, 5), target: 5 }),
+    rarity: 'comum',
+  },
+  {
+    id: 'elite_signal', title: 'Sinal de Elite', desc: 'Registre 5 sinais de qualidade ELITE',
+    icon: <Diamond />, color: 'text-white',
+    check: h => h.filter(e => e.quality === 'ELITE').length >= 5,
+    progress: h => ({ current: Math.min(h.filter(e => e.quality === 'ELITE').length, 5), target: 5 }),
+    rarity: 'épico',
+  },
+  {
+    id: 'morning_trader', title: 'Trader Madrugador', desc: 'Faça 10 WINs na sessão de Londres',
+    icon: <TrendingUp />, color: 'text-blue-300',
+    check: h => h.filter(e => e.sess === 'london' && e.result === 'win').length >= 10,
+    progress: h => ({ current: Math.min(h.filter(e => e.sess === 'london' && e.result === 'win').length, 10), target: 10 }),
+    rarity: 'raro',
+  },
+  {
+    id: 'night_owl', title: 'Coruja Noturna', desc: 'Faça 10 WINs na sessão da Ásia',
+    icon: <Star />, color: 'text-purple-300',
+    check: h => h.filter(e => e.sess === 'asia' && e.result === 'win').length >= 10,
+    progress: h => ({ current: Math.min(h.filter(e => e.sess === 'asia' && e.result === 'win').length, 10), target: 10 }),
+    rarity: 'raro',
+  },
+  {
+    id: 'crypto_king', title: 'Rei das Criptos', desc: '20 WINs em ativos Crypto',
+    icon: <Brain />, color: 'text-yellow-300',
+    check: h => h.filter(e => e.category === 'crypto' && e.result === 'win').length >= 20,
+    progress: h => ({ current: Math.min(h.filter(e => e.category === 'crypto' && e.result === 'win').length, 20), target: 20 }),
+    rarity: 'épico',
+  },
+  {
+    id: 'forex_master', title: 'Mestre do Forex', desc: '20 WINs em pares Forex',
+    icon: <TrendingUp />, color: 'text-[var(--blue)]',
+    check: h => h.filter(e => e.category === 'forex' && e.result === 'win').length >= 20,
+    progress: h => ({ current: Math.min(h.filter(e => e.category === 'forex' && e.result === 'win').length, 20), target: 20 }),
+    rarity: 'épico',
+  },
+  {
+    id: 'green_month', title: 'Mês Verde', desc: 'Termine o mês com mais wins que losses',
+    icon: <Award />, color: 'text-[var(--green)]',
+    check: h => {
+      const month = new Date().getMonth();
+      const year = new Date().getFullYear();
+      const m = h.filter(e => { const d = new Date(e.ts); return d.getMonth() === month && d.getFullYear() === year; });
+      return m.filter(e => e.result === 'win').length > m.filter(e => e.result === 'loss').length && m.length >= 10;
+    },
+    rarity: 'épico',
+  },
+  {
+    id: 'iron_discipline', title: 'Disciplina de Ferro', desc: 'Nunca ultrapasse 3 losses seguidos em 30 ops',
+    icon: <Shield />, color: 'text-cyan-300',
+    check: h => {
+      if (h.length < 30) return false;
+      const last30 = h.slice(-30);
+      let streak = 0;
+      for (const e of last30) { e.result === 'loss' ? streak++ : (streak = 0); if (streak >= 3) return false; }
+      return true;
+    },
+    rarity: 'lendário',
+  },
+  {
+    id: 'grand_master', title: 'Grande Mestre', desc: 'Complete 500 operações registradas',
+    icon: <Trophy />, color: 'text-yellow-300',
+    check: h => h.length >= 500,
+    progress: h => ({ current: Math.min(h.length, 500), target: 500 }),
+    rarity: 'lendário',
+  },
 ];
 
 const RARITY_COLORS: Record<string, string> = {

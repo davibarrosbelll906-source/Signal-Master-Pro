@@ -53,12 +53,12 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 | moderador | mod123 | moderador |
 
 ### Pages (all fully functional with real data)
-- SignalsPage: real Binance REST+WS for crypto, OU simulation for forex/commodity
+- SignalsPage: real Binance REST+WS for crypto, OU simulation for forex/commodity; ManagementPanel (banca/entrada/meta/stop config + progress bars + full-screen goal/stop notifications); Copy Signal button (copies to clipboard with quality/score/timeframe); PIN lock via usePinLock hook (5-min inactivity)
 - HistoryPage: localStorage history with filters and CSV export
-- AnalyticsPage: Recharts charts (session WR, equity curve, asset WR, indicator accuracy)
+- AnalyticsPage: Recharts charts (session WR, equity curve, asset WR, indicator accuracy, hour-by-hour Win Rate with best hour detection)
 - SettingsPage: all settings persisted to smpCfg7
 - AdminPage: full user CRUD from localStorage + plan management
-- AchievementsPage: 12 real achievements with progress tracking
+- AchievementsPage: 21 real achievements with progress tracking (including Primeira Semana, Elite Signal, Morning/Night sessions, Crypto King, Forex Master, Green Month, Iron Discipline, Grand Master)
 - BankPage: equity curve chart, bankroll simulator (Kelly/Soros/Martingale)
 - BacktestingPage: real OU+indicators, equity curve chart
 - DiaryPage: full localStorage persistence, mood tracking, expandable entries
@@ -67,7 +67,7 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - GoalsPage: create/track custom goals (winRate/ops/streak/wins) per period
 - RiskPage: full risk calculator (Kelly criterion, EV, ruin probability, max consecutive losses)
 - HeatmapPage: real hour×day heatmap from history, best/worst hour detection
-- CalendarPage: day-by-day results calendar with detail modal
+- CalendarPage: dual-tab — trading calendar (monthly grid, W/L per day) + economic calendar (today's high/medium/low impact events with countdown, upcoming events for the week)
 - LeaderboardPage: mix of real user stats + mock traders, podium, filters
 - NotificationsPage: auto-generated alerts from history + persistent localStorage
 - StrategiesPage: educational accordion with 6 strategies, logic/conditions/avoid
@@ -91,6 +91,8 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - smpTelegram7: Telegram config
 - smpAvatarColor: avatar color index
 - smpAchievements7, smpTickets7, smpCoupons7, smpSnapshots7
+- smpMgmt7: management panel config (banca, entrada, payout, metaWins, stopLosses)
+- smpPin7: PIN hash, smpPinEnabled7: '1' if PIN active
 
 ### Key Dependencies
 - zustand: global state management

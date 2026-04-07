@@ -127,6 +127,23 @@ export default function AnalyticsPage() {
 
   const pieColors = [COLORS.green, COLORS.blue, COLORS.gold, COLORS.purple, COLORS.orange];
 
+  // Hour-by-hour win rate
+  const hourMap: Record<number, { w: number; total: number }> = {};
+  data.forEach(h => {
+    const hr = new Date(h.ts).getHours();
+    if (!hourMap[hr]) hourMap[hr] = { w: 0, total: 0 };
+    hourMap[hr].total++;
+    if (h.result === 'win') hourMap[hr].w++;
+  });
+  const hourData = Array.from({ length: 24 }, (_, i) => ({
+    hour: `${String(i).padStart(2,'0')}h`,
+    winRate: hourMap[i] ? Math.round((hourMap[i].w / hourMap[i].total) * 100) : null,
+    ops: hourMap[i]?.total ?? 0,
+  })).filter(d => d.ops > 0);
+
+  // Best hour text
+  const bestHour = hourData.reduce((best, d) => (!best || (d.winRate ?? 0) > (best.winRate ?? 0) ? d : best), null as typeof hourData[0] | null);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -284,6 +301,36 @@ export default function AnalyticsPage() {
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
                 </PieChart>
               </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Win Rate por Hora do Dia */}
+          {hourData.length > 0 && (
+            <div className="glass-card p-6 lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Win Rate por Hora do Dia</h3>
+                {bestHour && (
+                  <div className="text-xs text-[var(--green)] font-bold bg-[var(--green)]/10 px-3 py-1 rounded-full border border-[var(--green)]/20">
+                    🏆 Melhor hora: {bestHour.hour} ({bestHour.winRate}% WR)
+                  </div>
+                )}
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={hourData} barCategoryGap="15%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="hour" stroke="#555" tick={{ fontSize: 10, fill: '#aaa' }} />
+                  <YAxis stroke="#555" tick={{ fontSize: 11, fill: '#aaa' }} domain={[0, 100]} unit="%" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, n: any, p: any) => [`${v}% (${p.payload.ops} ops)`, 'Win Rate']} />
+                  <Bar dataKey="winRate" radius={[4, 4, 0, 0]}>
+                    {hourData.map((d, i) => (
+                      <Cell key={i} fill={(d.winRate ?? 0) >= 70 ? COLORS.green : (d.winRate ?? 0) >= 55 ? COLORS.blue : COLORS.red} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="text-[11px] text-gray-600 mt-2">
+                Identifique os horários em que você performa melhor e concentre suas operações nesses períodos.
+              </p>
             </div>
           )}
         </div>

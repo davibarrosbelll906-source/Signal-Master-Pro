@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Save, Bell, Shield, Palette, Sliders, RotateCcw, CheckCircle } from "lucide-react";
 import { applyTheme, type AppTheme } from "@/App";
+import { PinSetup } from "@/components/PinLock";
 
 interface Config {
   minScore: number;
@@ -278,6 +279,12 @@ export default function SettingsPage() {
         <Row label="Mostrar Entropia Shannon" desc="Índice de aleatoriedade do mercado"><Toggle value={cfg.showEntropy} onChange={v => set('showEntropy', v)} /></Row>
         <Row label="Mostrar detector MM Trap" desc="Alerta de armadilha do formador de mercado"><Toggle value={cfg.showMMTrap} onChange={v => set('showMMTrap', v)} /></Row>
         <Row label="Mostrar DNA de Candle" desc="Fingerprint e histórico de padrões"><Toggle value={cfg.showDNA} onChange={v => set('showDNA', v)} /></Row>
+      </Section>
+
+      {/* PIN Security */}
+      <Section title="Segurança" icon={<Shield size={14} />}>
+        <div className="text-xs text-gray-500 mb-3">Configure um PIN para bloquear automaticamente o app após 5 minutos de inatividade.</div>
+        <PinSetup onClose={() => {}} />
       </Section>
 
       {/* Reset dados */}
