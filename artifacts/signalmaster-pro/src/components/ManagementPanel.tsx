@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings2, X, TrendingUp, TrendingDown, DollarSign, Target, ShieldAlert, ChevronDown, ChevronUp, Percent } from "lucide-react";
+import { X, DollarSign, Target, ShieldAlert, ChevronDown, ChevronUp, Percent, RotateCcw } from "lucide-react";
 
 interface MgmtConfig {
   banca: number;
@@ -106,9 +106,10 @@ function NotifOverlay({ type, onClose }: NotifOverlayProps) {
 interface Props {
   wins: number;
   losses: number;
+  onResult?: (type: 'win' | 'loss') => void;
 }
 
-export default function ManagementPanel({ wins, losses }: Props) {
+export default function ManagementPanel({ wins, losses, onResult }: Props) {
   const [cfg, setCfg] = useState<MgmtConfig>(() => {
     try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem('smpMgmt7') || '{}') }; } catch { return DEFAULT_CFG; }
   });
@@ -157,6 +158,50 @@ export default function ManagementPanel({ wins, losses }: Props) {
     const t = setInterval(check, 60000);
     return () => clearInterval(t);
   }, []);
+
+  const [btnFlash, setBtnFlash] = useState<'win' | 'loss' | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleManualResult = useCallback((type: 'win' | 'loss') => {
+    // Save a simplified entry to history
+    try {
+      const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
+      const entR = cfg.entradaPct ? (cfg.banca * cfg.entrada) / 100 : cfg.entrada;
+      hist.push({
+        id: Date.now(),
+        ts: Date.now(),
+        asset: 'MANUAL',
+        direction: type === 'win' ? 'CALL' : 'PUT',
+        score: 0,
+        quality: '—',
+        result: type,
+        category: 'forex',
+        sess: (() => {
+          const h = new Date().getUTCHours();
+          if (h >= 6 && h < 12) return 'londres';
+          if (h >= 12 && h < 17) return 'ny';
+          return 'asia';
+        })(),
+        entrada: entR,
+        manual: true,
+      });
+      localStorage.setItem('smpH7', JSON.stringify(hist));
+    } catch {}
+    setBtnFlash(type);
+    setTimeout(() => setBtnFlash(null), 800);
+    onResult?.(type);
+  }, [cfg, onResult]);
+
+  const handleResetDay = useCallback(() => {
+    try {
+      const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
+      const today = new Date().toDateString();
+      const filtered = hist.filter((h: any) => new Date(h.ts).toDateString() !== today);
+      localStorage.setItem('smpH7', JSON.stringify(filtered));
+    } catch {}
+    setShowResetConfirm(false);
+    onResult?.('win'); // trigger refresh
+  }, [onResult]);
 
   const entradaR = cfg.entradaPct ? (cfg.banca * cfg.entrada) / 100 : cfg.entrada;
   const payoutR = entradaR * (cfg.payout / 100);
@@ -365,6 +410,77 @@ export default function ManagementPanel({ wins, losses }: Props) {
               {goalReached ? '🏆 Meta atingida! Encerre o dia e proteja os lucros.' : '🛑 Stop atingido! Pare de operar por hoje.'}
             </motion.div>
           )}
+
+          {/* ── WIN / LOSS quick register ── */}
+          <div className="space-y-2 pt-1">
+            <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold text-center">Registrar Resultado</div>
+            <div className="grid grid-cols-2 gap-2">
+              <motion.button
+                whileTap={{ scale: 0.93 }}
+                onClick={() => handleManualResult('win')}
+                className={`relative py-3 rounded-xl font-black text-sm flex flex-col items-center gap-0.5 border transition-all overflow-hidden ${
+                  btnFlash === 'win'
+                    ? 'bg-[var(--green)] text-black border-[var(--green)] shadow-[0_0_20px_rgba(0,255,136,0.4)]'
+                    : 'bg-[var(--green)]/10 text-[var(--green)] border-[var(--green)]/25 hover:bg-[var(--green)]/20 hover:shadow-[0_0_12px_rgba(0,255,136,0.15)]'
+                }`}
+              >
+                <span className="text-lg leading-none">{btnFlash === 'win' ? '✅' : '▲'}</span>
+                <span className="text-xs">WIN</span>
+              </motion.button>
+
+              <motion.button
+                whileTap={{ scale: 0.93 }}
+                onClick={() => handleManualResult('loss')}
+                className={`relative py-3 rounded-xl font-black text-sm flex flex-col items-center gap-0.5 border transition-all overflow-hidden ${
+                  btnFlash === 'loss'
+                    ? 'bg-[var(--red)] text-white border-[var(--red)] shadow-[0_0_20px_rgba(255,68,102,0.4)]'
+                    : 'bg-[var(--red)]/10 text-[var(--red)] border-[var(--red)]/25 hover:bg-[var(--red)]/20 hover:shadow-[0_0_12px_rgba(255,68,102,0.15)]'
+                }`}
+              >
+                <span className="text-lg leading-none">{btnFlash === 'loss' ? '❌' : '▼'}</span>
+                <span className="text-xs">LOSS</span>
+              </motion.button>
+            </div>
+
+            {/* Reset day */}
+            <AnimatePresence>
+              {showResetConfirm ? (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-orange-500/8 border border-orange-500/20 rounded-xl p-3 space-y-2">
+                    <div className="text-[10px] text-orange-400 font-bold text-center">⚠ Zerar resultados de hoje?</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        onClick={handleResetDay}
+                        className="py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/25 text-xs font-bold hover:bg-orange-500/25 transition"
+                      >
+                        Sim, zerar
+                      </button>
+                      <button
+                        onClick={() => setShowResetConfirm(false)}
+                        className="py-1.5 rounded-lg bg-white/5 text-gray-400 border border-white/10 text-xs font-bold hover:bg-white/10 transition"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onClick={() => setShowResetConfirm(true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] text-gray-600 hover:text-gray-400 border border-white/5 bg-white/3 hover:bg-white/5 transition"
+                >
+                  <RotateCcw size={9} /> Zerar resultados de hoje
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </>

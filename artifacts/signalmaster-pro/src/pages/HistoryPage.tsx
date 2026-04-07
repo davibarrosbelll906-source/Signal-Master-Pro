@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calendar, Filter, Download, X, TrendingUp, TrendingDown, Search } from "lucide-react";
+import { Calendar, Download, X, TrendingUp, TrendingDown, Search, Trash2 } from "lucide-react";
 
 interface HistoryEntry {
   id: number;
@@ -29,6 +29,7 @@ export default function HistoryPage() {
   const [filterRes, setFilterRes] = useState<'all' | 'win' | 'loss'>('all');
   const [filterCat, setFilterCat] = useState<'all' | 'crypto' | 'forex' | 'commodity'>('all');
   const [filterDate, setFilterDate] = useState<'today' | '7d' | '30d' | 'all'>('today');
+  const [confirmClear, setConfirmClear] = useState<'idle' | 'today' | 'all'>('idle');
 
   useEffect(() => {
     try {
@@ -61,6 +62,21 @@ export default function HistoryPage() {
   const wr = total > 0 ? ((wins / total) * 100).toFixed(1) : '—';
   const avgScore = total > 0 ? (filtered.reduce((a, e) => a + (e.score || 0), 0) / total).toFixed(1) : '—';
 
+  const clearHistory = (mode: 'today' | 'all') => {
+    try {
+      if (mode === 'all') {
+        localStorage.removeItem('smpH7');
+        setAll([]);
+      } else {
+        const today = new Date().toDateString();
+        const filtered = all.filter(e => new Date(e.ts).toDateString() !== today);
+        localStorage.setItem('smpH7', JSON.stringify(filtered));
+        setAll(filtered);
+      }
+    } catch {}
+    setConfirmClear('idle');
+  };
+
   const exportCSV = () => {
     const header = 'Data,Horário,Ativo,Direção,Score,Qualidade,Resultado,Categoria,Sessão\n';
     const rows = filtered.map(e => {
@@ -77,8 +93,11 @@ export default function HistoryPage() {
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Histórico de Sinais</h1>
-        <div className="flex gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Histórico de Sinais</h1>
+          <p className="text-xs text-gray-600 mt-0.5">{all.length} registro{all.length !== 1 ? 's' : ''} no total</p>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
           <button
             onClick={exportCSV}
             disabled={filtered.length === 0}
@@ -86,6 +105,40 @@ export default function HistoryPage() {
           >
             <Download size={14} /> Exportar CSV
           </button>
+
+          {/* Clear today */}
+          {confirmClear === 'today' ? (
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-orange-500/10 border border-orange-500/25 rounded-lg">
+              <span className="text-xs text-orange-400 font-bold">Apagar registros de hoje?</span>
+              <button onClick={() => clearHistory('today')} className="text-xs font-black text-orange-400 hover:text-orange-300 px-2 py-0.5 bg-orange-500/20 rounded transition">Sim</button>
+              <button onClick={() => setConfirmClear('idle')} className="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded transition">Não</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear('today')}
+              disabled={all.length === 0}
+              className="flex items-center gap-2 px-3 py-2 bg-orange-500/5 border border-orange-500/15 rounded-lg hover:bg-orange-500/10 text-sm text-orange-400/70 hover:text-orange-400 transition disabled:opacity-30"
+            >
+              <Trash2 size={14} /> Zerar hoje
+            </button>
+          )}
+
+          {/* Clear all */}
+          {confirmClear === 'all' ? (
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/25 rounded-lg">
+              <span className="text-xs text-red-400 font-bold">Apagar TODO o histórico?</span>
+              <button onClick={() => clearHistory('all')} className="text-xs font-black text-red-400 hover:text-red-300 px-2 py-0.5 bg-red-500/20 rounded transition">Sim, apagar tudo</button>
+              <button onClick={() => setConfirmClear('idle')} className="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded transition">Cancelar</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear('all')}
+              disabled={all.length === 0}
+              className="flex items-center gap-2 px-3 py-2 bg-red-500/5 border border-red-500/15 rounded-lg hover:bg-red-500/10 text-sm text-red-400/70 hover:text-red-400 transition disabled:opacity-30"
+            >
+              <Trash2 size={14} /> Limpar tudo
+            </button>
+          )}
         </div>
       </div>
 

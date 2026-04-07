@@ -592,7 +592,7 @@ export default function SignalsPage() {
           </div>
 
           {/* MANAGEMENT PANEL */}
-          <ManagementPanel wins={wins} losses={losses} />
+          <ManagementPanel wins={wins} losses={losses} onResult={() => refreshStats()} />
 
           {/* TIMEFRAME + COUNTDOWN */}
           <div className="glass-card p-5 flex flex-col items-center space-y-3">
