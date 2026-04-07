@@ -1,8 +1,10 @@
+import { useLocation } from "wouter";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight, Activity, TrendingUp, ShieldCheck, Cpu, Brain, BarChart2,
-  Zap, Trophy, Users, Check, Star, ChevronDown, ChevronUp, Globe
+  Zap, Trophy, Users, Check, Star, ChevronDown, ChevronUp, Globe,
+  X, User, Phone, Mail, Loader2
 } from "lucide-react";
 import { useState } from "react";
 
@@ -47,13 +49,233 @@ const testimonials = [
   { name: 'Diego A.', city: 'Fortaleza', wr: '81%', ops: 1203, text: 'Analista há 4 anos. A implementação do Multi-Universe Consensus e DNA de Candle é a mais sofisticada que vi em ferramenta para trader de varejo.' },
 ];
 
+// ─── LEAD CAPTURE MODAL ───────────────────────────────────────────────────────
+interface LeadModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function LeadModal({ onClose, onSuccess }: LeadModalProps) {
+  const [nome, setNome] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const formatWpp = (v: string) => {
+    const digits = v.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!nome.trim() || nome.trim().length < 2) e.nome = 'Informe seu nome completo';
+    const digits = whatsapp.replace(/\D/g, '');
+    if (digits.length < 10) e.whatsapp = 'WhatsApp inválido';
+    if (!email.includes('@') || !email.includes('.')) e.email = 'E-mail inválido';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 900));
+
+    const lead = { nome: nome.trim(), whatsapp: whatsapp.replace(/\D/g, ''), email: email.trim().toLowerCase(), ts: Date.now() };
+    try {
+      const leads = JSON.parse(localStorage.getItem('smpLeads') || '[]');
+      leads.unshift(lead);
+      localStorage.setItem('smpLeads', JSON.stringify(leads));
+    } catch {}
+
+    setLoading(false);
+    setSubmitted(true);
+    setTimeout(onSuccess, 1800);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 32, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.96 }}
+        transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+        className="w-full max-w-md glass-card p-8 relative border border-[var(--green)]/20 shadow-[0_0_60px_rgba(0,255,136,0.08)]"
+      >
+        {/* Close */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-500 hover:text-white transition"
+        >
+          <X size={14} />
+        </button>
+
+        <AnimatePresence mode="wait">
+          {!submitted ? (
+            <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {/* Header */}
+              <div className="mb-6 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--green)]/15 border border-[var(--green)]/25 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🚀</span>
+                </div>
+                <h2 className="text-xl font-black text-white mb-1">Acesso Grátis por 3 Dias</h2>
+                <p className="text-sm text-gray-400">Preencha os dados abaixo para liberar seu acesso ao <span className="text-[var(--green)] font-bold">SignalMaster Pro v7</span></p>
+              </div>
+
+              {/* Social proof mini */}
+              <div className="flex items-center justify-center gap-3 mb-6 py-3 rounded-xl bg-white/3 border border-white/5">
+                <div className="flex -space-x-2">
+                  {['R','J','D','K','M'].map((l, i) => (
+                    <div key={i} className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--green)]/60 to-[var(--blue)]/60 border-2 border-[#07070d] flex items-center justify-center text-[10px] font-bold text-white">{l}</div>
+                  ))}
+                </div>
+                <div className="text-xs text-gray-400"><span className="text-white font-bold">1.200+ traders</span> já usam a plataforma</div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Nome */}
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Nome Completo</label>
+                  <div className="relative">
+                    <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="text"
+                      value={nome}
+                      onChange={e => { setNome(e.target.value); setErrors(ev => ({ ...ev, nome: '' })); }}
+                      placeholder="Seu nome"
+                      className={`w-full bg-white/5 border rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[var(--green)]/50 transition ${errors.nome ? 'border-[var(--red)]/60' : 'border-white/10'}`}
+                    />
+                  </div>
+                  {errors.nome && <p className="text-[var(--red)] text-xs mt-1">{errors.nome}</p>}
+                </div>
+
+                {/* WhatsApp */}
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1.5">WhatsApp</label>
+                  <div className="relative">
+                    <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="tel"
+                      value={whatsapp}
+                      onChange={e => { setWhatsapp(formatWpp(e.target.value)); setErrors(ev => ({ ...ev, whatsapp: '' })); }}
+                      placeholder="(11) 99999-9999"
+                      className={`w-full bg-white/5 border rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[var(--green)]/50 transition ${errors.whatsapp ? 'border-[var(--red)]/60' : 'border-white/10'}`}
+                    />
+                  </div>
+                  {errors.whatsapp && <p className="text-[var(--red)] text-xs mt-1">{errors.whatsapp}</p>}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1.5">E-mail</label>
+                  <div className="relative">
+                    <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => { setEmail(e.target.value); setErrors(ev => ({ ...ev, email: '' })); }}
+                      placeholder="seu@email.com"
+                      className={`w-full bg-white/5 border rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[var(--green)]/50 transition ${errors.email ? 'border-[var(--red)]/60' : 'border-white/10'}`}
+                    />
+                  </div>
+                  {errors.email && <p className="text-[var(--red)] text-xs mt-1">{errors.email}</p>}
+                </div>
+
+                {/* CTA */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 rounded-xl bg-[var(--green)] text-black font-black text-base hover:opacity-95 active:scale-[0.98] transition-all shadow-[0_0_25px_rgba(0,255,136,0.25)] flex items-center justify-center gap-2 mt-2 disabled:opacity-60"
+                >
+                  {loading ? (
+                    <><Loader2 size={16} className="animate-spin" /> Liberando acesso...</>
+                  ) : (
+                    <><ArrowRight size={16} /> Quero Meu Acesso Grátis</>
+                  )}
+                </button>
+
+                <p className="text-[10px] text-gray-600 text-center leading-relaxed">
+                  Ao continuar você concorda com nossos termos de uso. Sem spam. Seus dados são privados e protegidos.
+                </p>
+              </form>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-4"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', damping: 15, stiffness: 200, delay: 0.1 }}
+                className="w-20 h-20 rounded-full bg-[var(--green)]/15 border-2 border-[var(--green)]/40 flex items-center justify-center mx-auto mb-5 shadow-[0_0_30px_rgba(0,255,136,0.2)]"
+              >
+                <span className="text-4xl">✅</span>
+              </motion.div>
+              <h3 className="text-xl font-black text-white mb-2">Acesso Liberado!</h3>
+              <p className="text-sm text-gray-400 mb-1">Redirecionando para criar sua conta...</p>
+              <div className="mt-4 flex justify-center">
+                <div className="w-8 h-1 bg-[var(--green)]/30 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-[var(--green)] rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: '100%' }}
+                    transition={{ duration: 1.6, ease: 'linear' }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── LANDING PAGE ─────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [, navigate] = useLocation();
+
+  const openModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowLeadModal(true);
+  };
+
+  const handleLeadSuccess = () => {
+    setShowLeadModal(false);
+    navigate('/register');
+  };
 
   return (
     <div className="min-h-screen bg-[#07070d] text-white overflow-x-hidden relative">
       {/* Bg gradients */}
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(68,136,255,0.07)_0%,transparent_50%),radial-gradient(ellipse_at_80%_80%,rgba(0,255,136,0.04)_0%,transparent_50%),radial-gradient(ellipse_at_60%_10%,rgba(170,68,255,0.05)_0%,transparent_50%)] pointer-events-none" />
+
+      {/* LEAD MODAL */}
+      <AnimatePresence>
+        {showLeadModal && (
+          <LeadModal
+            onClose={() => setShowLeadModal(false)}
+            onSuccess={handleLeadSuccess}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#07070d]/80 backdrop-blur-xl">
@@ -73,9 +295,12 @@ export default function LandingPage() {
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-sm text-gray-400 hover:text-white transition hidden sm:block">Entrar</Link>
-            <Link href="/register" className="px-5 py-2 rounded-full bg-[var(--green)] text-black font-bold text-sm hover:opacity-90 transition shadow-[0_0_15px_rgba(0,255,136,0.2)]">
+            <button
+              onClick={openModal}
+              className="px-5 py-2 rounded-full bg-[var(--green)] text-black font-bold text-sm hover:opacity-90 transition shadow-[0_0_15px_rgba(0,255,136,0.2)]"
+            >
               Teste Grátis →
-            </Link>
+            </button>
           </div>
         </div>
       </header>
@@ -103,13 +328,13 @@ export default function LandingPage() {
               A plataforma mais avançada de sinais para opções binárias. 5 motores de IA, dados ao vivo da Binance, e mais de 20 ferramentas de análise profissional.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              <Link
-                href="/register"
+              <button
+                onClick={openModal}
                 className="px-8 py-4 rounded-2xl bg-[var(--green)] text-black font-black text-lg hover:opacity-95 transition shadow-[0_0_30px_rgba(0,255,136,0.25)] flex items-center justify-center gap-2 group"
               >
                 🚀 Começar Teste Grátis — 3 Dias
                 <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
+              </button>
               <Link
                 href="/login"
                 className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition font-semibold text-lg flex items-center justify-center"
@@ -284,8 +509,8 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    href="/register"
+                  <button
+                    onClick={openModal}
                     className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
                       i === 1
                         ? 'bg-[var(--blue)] text-white hover:opacity-90 shadow-[0_0_20px_rgba(68,136,255,0.2)]'
@@ -295,7 +520,7 @@ export default function LandingPage() {
                     }`}
                   >
                     Começar Teste Grátis <ArrowRight size={14} />
-                  </Link>
+                  </button>
                 </motion.div>
               ))}
             </div>
@@ -335,7 +560,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* CTA */}
+        {/* CTA FINAL */}
         <section className="container mx-auto px-4 pb-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -347,12 +572,12 @@ export default function LandingPage() {
             <h2 className="text-3xl font-black text-white mb-4">Pronto para operar com precisão?</h2>
             <p className="text-gray-400 mb-8">Junte-se a mais de 1.200 traders que já usam o SignalMaster Pro v7 Ultimate.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/register"
+              <button
+                onClick={openModal}
                 className="px-8 py-4 rounded-2xl bg-[var(--green)] text-black font-black text-lg hover:opacity-95 transition shadow-[0_0_30px_rgba(0,255,136,0.2)] flex items-center justify-center gap-2 group"
               >
                 Criar Conta Grátis <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
+              </button>
               <Link
                 href="/login"
                 className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition font-semibold text-lg flex items-center justify-center"
@@ -376,7 +601,7 @@ export default function LandingPage() {
           </div>
           <div className="flex gap-4">
             <Link href="/login" className="hover:text-white transition">Login</Link>
-            <Link href="/register" className="hover:text-white transition">Cadastro</Link>
+            <button onClick={openModal} className="hover:text-white transition">Cadastro</button>
           </div>
         </div>
       </footer>

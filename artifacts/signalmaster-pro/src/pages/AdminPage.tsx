@@ -1,7 +1,14 @@
 import { useState, useEffect } from "react";
 import { useAppStore, type User } from "@/lib/store";
 import { Redirect } from "wouter";
-import { Users, Shield, Trash2, Edit2, Plus, Save, X, BarChart2, Crown, TrendingUp } from "lucide-react";
+import { Users, Shield, Trash2, Edit2, Plus, Save, X, BarChart2, Crown, TrendingUp, Mail, Phone, Download, UserPlus } from "lucide-react";
+
+interface Lead {
+  nome: string;
+  whatsapp: string;
+  email: string;
+  ts: number;
+}
 
 interface UserWithStats extends User {
   wins?: number;
@@ -36,13 +43,13 @@ export default function AdminPage() {
   const [histStats, setHistStats] = useState<Record<string, { wins: number; losses: number }>>({});
   const [links, setLinks] = useState({ pro: '', premium: '', basico: '' });
   const [linksSaved, setLinksSaved] = useState(false);
+  const [leads, setLeads] = useState<Lead[]>([]);
 
   useEffect(() => {
     try { setUsers(JSON.parse(localStorage.getItem('smpU7') || '[]')); } catch {}
     try {
       const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
       const stats: Record<string, { wins: number; losses: number }> = {};
-      // Currently only tracks the logged-in user's history, but show aggregate per-session
       stats['_global'] = {
         wins: hist.filter((h: any) => h.result === 'win').length,
         losses: hist.filter((h: any) => h.result === 'loss').length,
@@ -50,7 +57,26 @@ export default function AdminPage() {
       setHistStats(stats);
     } catch {}
     try { setLinks(JSON.parse(localStorage.getItem('smpLinks7') || '{"pro":"","premium":"","basico":""}')) } catch {}
+    try { setLeads(JSON.parse(localStorage.getItem('smpLeads') || '[]')); } catch {}
   }, []);
+
+  const deleteLead = (ts: number) => {
+    const updated = leads.filter(l => l.ts !== ts);
+    setLeads(updated);
+    localStorage.setItem('smpLeads', JSON.stringify(updated));
+  };
+
+  const exportLeadsCSV = () => {
+    if (leads.length === 0) return;
+    const header = 'Nome,WhatsApp,Email,Data';
+    const rows = leads.map(l => `"${l.nome}","${l.whatsapp}","${l.email}","${new Date(l.ts).toLocaleString('pt-BR')}"`);
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `leads-signalmaster-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const saveUsers = (updated: User[]) => {
     setUsers(updated);
@@ -101,7 +127,7 @@ export default function AdminPage() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="glass-card p-5 text-center">
           <div className="text-xs text-gray-500 mb-1">Usuários</div>
           <div className="text-3xl font-black text-white">{users.length}</div>
@@ -109,6 +135,10 @@ export default function AdminPage() {
         <div className="glass-card p-5 text-center">
           <div className="text-xs text-gray-500 mb-1">Premium</div>
           <div className="text-3xl font-black text-yellow-400">{users.filter(u => u.plan === 'premium').length}</div>
+        </div>
+        <div className="glass-card p-5 text-center border border-[var(--green)]/15">
+          <div className="text-xs text-[var(--green)] font-bold mb-1">Leads</div>
+          <div className="text-3xl font-black text-[var(--green)]">{leads.length}</div>
         </div>
         <div className="glass-card p-5 text-center">
           <div className="text-xs text-gray-500 mb-1">Sinais Totais</div>
@@ -289,6 +319,86 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* LEADS CAPTURADOS */}
+      <div className="glass-card overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-white/5">
+          <h3 className="font-bold text-white flex items-center gap-2">
+            <UserPlus size={16} className="text-[var(--green)]" />
+            Leads Capturados
+            <span className="px-2 py-0.5 bg-[var(--green)]/10 text-[var(--green)] border border-[var(--green)]/20 rounded-full text-xs font-bold">{leads.length}</span>
+          </h3>
+          <button
+            onClick={exportLeadsCSV}
+            disabled={leads.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--blue)]/10 text-[var(--blue)] border border-[var(--blue)]/30 rounded-lg text-xs font-bold hover:bg-[var(--blue)]/20 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Download size={13} /> Exportar CSV
+          </button>
+        </div>
+
+        {leads.length === 0 ? (
+          <div className="p-12 text-center">
+            <UserPlus size={32} className="text-gray-700 mx-auto mb-3" />
+            <div className="text-gray-500 text-sm">Nenhum lead capturado ainda.</div>
+            <div className="text-gray-600 text-xs mt-1">Leads aparecem aqui quando alguém preenche o formulário da landing page.</div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-black/20 border-b border-white/5 text-xs uppercase text-gray-500">
+                  <th className="p-4">Nome</th>
+                  <th className="p-4">WhatsApp</th>
+                  <th className="p-4">E-mail</th>
+                  <th className="p-4">Data</th>
+                  <th className="p-4 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {leads.map((lead) => (
+                  <tr key={lead.ts} className="hover:bg-white/3 transition">
+                    <td className="p-4">
+                      <div className="font-medium text-white text-sm">{lead.nome}</div>
+                    </td>
+                    <td className="p-4">
+                      <a
+                        href={`https://wa.me/55${lead.whatsapp}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 text-[var(--green)] text-sm hover:opacity-80 transition"
+                      >
+                        <Phone size={12} />
+                        {lead.whatsapp.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
+                      </a>
+                    </td>
+                    <td className="p-4">
+                      <a
+                        href={`mailto:${lead.email}`}
+                        className="flex items-center gap-1.5 text-[var(--blue)] text-sm hover:opacity-80 transition"
+                      >
+                        <Mail size={12} />
+                        {lead.email}
+                      </a>
+                    </td>
+                    <td className="p-4">
+                      <div className="text-xs text-gray-500">{new Date(lead.ts).toLocaleString('pt-BR')}</div>
+                    </td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => deleteLead(lead.ts)}
+                        className="p-1.5 bg-[var(--red)]/10 hover:bg-[var(--red)]/20 rounded text-[var(--red)] transition"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
