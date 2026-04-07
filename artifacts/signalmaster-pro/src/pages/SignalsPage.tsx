@@ -48,6 +48,9 @@ export default function SignalsPage() {
   const [manualAsset, setManualAsset] = useState('');
   const [manualDir, setManualDir] = useState<'CALL'|'PUT'>('CALL');
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [timeframe, setTimeframe] = useState<'M1' | 'M5' | 'M15'>(() => {
+    return (localStorage.getItem('smpTimeframe') as 'M1' | 'M5' | 'M15') || 'M1';
+  });
   const [multiPairMode, setMultiPairMode] = useState(false);
   const [watchedPairs, setWatchedPairs] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('smpWatchedPairs') || '["EURUSD","BTCUSD"]'); } catch { return ['EURUSD', 'BTCUSD']; }
@@ -90,6 +93,9 @@ export default function SignalsPage() {
     const id = setInterval(() => setAudioEnabled(isAudioUnlocked()), 2000);
     return () => clearInterval(id);
   }, []);
+
+  // Persist timeframe
+  useEffect(() => { localStorage.setItem('smpTimeframe', timeframe); }, [timeframe]);
 
   // Persist watched pairs
   useEffect(() => {
@@ -230,14 +236,36 @@ export default function SignalsPage() {
     };
   }, []);
 
-  // 1-second tick — emit signal at second 48
+  // Helper: should the engine fire now given timeframe?
+  const shouldFireNow = (sec: number, min: number, tf: 'M1' | 'M5' | 'M15'): boolean => {
+    if (sec !== 48) return false;
+    if (tf === 'M1') return true;
+    if (tf === 'M5') return min % 5 === 0;
+    if (tf === 'M15') return min % 15 === 0;
+    return false;
+  };
+
+  // Helper: seconds until next signal for given timeframe
+  const getSecsToNext = (min: number, sec: number, tf: 'M1' | 'M5' | 'M15'): number => {
+    if (tf === 'M1') return sec <= 48 ? 48 - sec : 60 - sec + 48;
+    const interval = tf === 'M5' ? 5 : 15;
+    const intervalSecs = interval * 60;
+    const cur = min * 60 + sec;
+    let n = Math.floor(cur / intervalSecs);
+    let next = n * intervalSecs + 48;
+    if (next <= cur) { n++; next = n * intervalSecs + 48; }
+    return next - cur;
+  };
+
+  // 1-second tick — emit signal based on selected timeframe
   useEffect(() => {
     const tick = setInterval(() => {
       const now = new Date();
       const sec = now.getSeconds();
+      const min = now.getMinutes();
       setSeconds(sec);
 
-      if (sec === 48) {
+      if (shouldFireNow(sec, min, timeframe)) {
         const buf = bufRef.current;
         if (buf.m1.length < 30) {
           setEngineStatus(`aguardando dados... (${buf.m1.length}/30 velas)`);
@@ -245,12 +273,8 @@ export default function SignalsPage() {
         }
         setEngineStatus('calculando indicadores...');
         try {
-          // Run diagnostic first (always returns result)
           const diag = runEngineDiag(buf, asset);
-          if (diag) {
-            setLastDiag(diag);
-            setLastDiagTime(new Date());
-          }
+          if (diag) { setLastDiag(diag); setLastDiagTime(new Date()); }
 
           const result = runEngine(buf, asset);
           if (result) {
@@ -259,17 +283,17 @@ export default function SignalsPage() {
             const soundType = result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte';
             playSignalSound(soundType);
             vibrate('forte');
-            setEngineStatus(`sinal ${result.quality} emitido — marque WIN ou LOSS`);
+            setEngineStatus(`sinal ${result.quality} ${timeframe} emitido — marque WIN ou LOSS`);
           } else {
-            setEngineStatus(diag?.blockedBy ? `bloqueado: ${diag.blockedBy}` : 'sinal bloqueado — aguardando próximo ciclo');
+            setEngineStatus(diag?.blockedBy ? `bloqueado: ${diag.blockedBy}` : 'sem sinal — aguardando próximo ciclo');
           }
-        } catch (err) {
+        } catch {
           setEngineStatus('erro no motor — verificando dados');
         }
       }
     }, 1000);
     return () => clearInterval(tick);
-  }, [asset, category]);
+  }, [asset, category, timeframe]);
 
   // WIN/LOSS handlers
   const handleResult = (type: 'win' | 'loss') => {
@@ -314,8 +338,13 @@ export default function SignalsPage() {
 
   const total = wins + losses;
   const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
-  const timeToNext = seconds <= 48 ? 48 - seconds : 60 - seconds + 48;
-  const progressPct = (seconds / 60) * 100;
+
+  // Timeframe-aware countdown
+  const nowMin = new Date().getMinutes();
+  const timeToNext = getSecsToNext(nowMin, seconds, timeframe);
+  const tfTotalSecs = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : 900;
+  const progressPct = Math.max(0, Math.min(100, ((tfTotalSecs - timeToNext) / tfTotalSecs) * 100));
+  const isFiring = seconds === 48 && shouldFireNow(seconds, nowMin, timeframe);
 
   const sess = getCurrentSession();
   const sessLabels: Record<string, string> = {
@@ -510,6 +539,7 @@ export default function SignalsPage() {
                     <PairMonitorCard
                       key={a}
                       asset={a}
+                      timeframe={timeframe}
                       onRemove={() => togglePair(a)}
                     />
                   ))}
@@ -627,15 +657,41 @@ export default function SignalsPage() {
             </AnimatePresence>
           </div>
 
-          {/* COUNTDOWN */}
-          <div className="glass-card p-5 flex flex-col items-center">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Próximo Sinal</h3>
-            <div className="relative w-24 h-24 mb-3">
+          {/* TIMEFRAME + COUNTDOWN */}
+          <div className="glass-card p-5 flex flex-col items-center space-y-3">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Timeframe</h3>
+
+            {/* TIMEFRAME SELECTOR */}
+            <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl w-full">
+              {(['M1', 'M5', 'M15'] as const).map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => { setTimeframe(tf); setSignal(null); setPendingSignal(null); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all duration-200 ${
+                    timeframe === tf
+                      ? 'bg-[var(--green)] text-black shadow-[0_0_12px_rgba(0,255,136,0.3)]'
+                      : 'text-gray-500 hover:text-white'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+
+            {/* TF description */}
+            <div className="text-[10px] text-gray-600 text-center">
+              {timeframe === 'M1' && 'Sinal a cada minuto — alta frequência'}
+              {timeframe === 'M5' && 'Sinal a cada 5 min — mais confiável'}
+              {timeframe === 'M15' && 'Sinal a cada 15 min — máxima confiança'}
+            </div>
+
+            {/* COUNTDOWN RING */}
+            <div className="relative w-24 h-24">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
                 <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
                 <circle
                   cx="48" cy="48" r="40" fill="none"
-                  stroke={seconds === 48 ? 'var(--green)' : 'var(--blue)'}
+                  stroke={isFiring ? 'var(--green)' : timeframe === 'M15' ? '#f59e0b' : timeframe === 'M5' ? '#3b82f6' : 'var(--blue)'}
                   strokeWidth="6" strokeLinecap="round"
                   strokeDasharray="251.3"
                   strokeDashoffset={251.3 * (1 - progressPct / 100)}
@@ -643,13 +699,23 @@ export default function SignalsPage() {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-2xl font-bold font-mono tabular-nums text-white">
-                  {String(Math.floor(timeToNext / 60)).padStart(2, '0')}:{String(timeToNext % 60).padStart(2, '0')}
-                </div>
-                <div className="text-[9px] text-gray-500 uppercase tracking-widest">seg {seconds}s</div>
+                {isFiring ? (
+                  <div className="text-xs font-black text-[var(--green)] animate-pulse text-center">⚡<br/>ANALISANDO</div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold font-mono tabular-nums text-white">
+                      {String(Math.floor(timeToNext / 60)).padStart(2, '0')}:{String(timeToNext % 60).padStart(2, '0')}
+                    </div>
+                    <div className="text-[9px] text-gray-500 uppercase tracking-widest">{timeframe}</div>
+                  </>
+                )}
               </div>
             </div>
-            <div className="text-xs text-gray-600 text-center">Sinal emite no segundo 48</div>
+            <div className="text-[10px] text-gray-700 text-center">
+              {timeframe === 'M1' && 'Próximo: :{48}s de cada minuto'}
+              {timeframe === 'M5' && 'Próximo: min :00/:05/:10... seg :48'}
+              {timeframe === 'M15' && 'Próximo: min :00/:15/:30/:45 seg :48'}
+            </div>
           </div>
 
           {/* LAST ANALYSIS DIAGNOSTIC */}

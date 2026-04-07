@@ -23,10 +23,11 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 interface Props {
   asset: string;
+  timeframe?: 'M1' | 'M5' | 'M15';
   onRemove: () => void;
 }
 
-export default function PairMonitorCard({ asset, onRemove }: Props) {
+export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: Props) {
   const [signal, setSignal] = useState<SignalResult | null>(null);
   const [pendingSignal, setPendingSignal] = useState<SignalResult | null>(null);
   const [price, setPrice] = useState<number | null>(null);
@@ -168,17 +169,42 @@ export default function PairMonitorCard({ asset, onRemove }: Props) {
     };
   }, [asset, category, connectBinance, startOU]);
 
+  // ── Timeframe helpers ─────────────────────────────────────────────────
+  const shouldFireNow = (sec: number, min: number): boolean => {
+    if (sec !== 48) return false;
+    if (timeframe === 'M1') return true;
+    if (timeframe === 'M5') return min % 5 === 0;
+    if (timeframe === 'M15') return min % 15 === 0;
+    return false;
+  };
+
+  const getSecsToNext = (min: number, sec: number): number => {
+    if (timeframe === 'M1') return sec <= 48 ? 48 - sec : 60 - sec + 48;
+    const interval = timeframe === 'M5' ? 5 : 15;
+    const intervalSecs = interval * 60;
+    const cur = min * 60 + sec;
+    let n = Math.floor(cur / intervalSecs);
+    let next = n * intervalSecs + 48;
+    if (next <= cur) { n++; next = n * intervalSecs + 48; }
+    return next - cur;
+  };
+
   // ── Own 1-second ticker — completely independent from parent ───────────
   useEffect(() => {
     const tick = setInterval(() => {
       const now = new Date();
       const sec = now.getSeconds();
+      const min = now.getMinutes();
       setSeconds(sec);
 
-      if (sec === 48) {
+      if (shouldFireNow(sec, min)) {
         const thisMinute = Math.floor(Date.now() / 60000);
-        if (fireMinuteRef.current === thisMinute) return;
-        fireMinuteRef.current = thisMinute;
+        // For M5/M15, use a key that combines minute with interval bucket
+        const bucketKey = timeframe === 'M1' ? thisMinute
+          : timeframe === 'M5' ? Math.floor(min / 5) + thisMinute * 100
+          : Math.floor(min / 15) + thisMinute * 100;
+        if (fireMinuteRef.current === bucketKey) return;
+        fireMinuteRef.current = bucketKey;
 
         const buf = bufRef.current;
         if (buf.m1.length < 30) {
@@ -214,7 +240,7 @@ export default function PairMonitorCard({ asset, onRemove }: Props) {
     }, 1000);
 
     return () => clearInterval(tick);
-  }, [asset, category]);
+  }, [asset, category, timeframe]);
 
   // ── WIN/LOSS ─────────────────────────────────────────────────────────────
   const handleResult = (type: 'win' | 'loss') => {
@@ -236,8 +262,12 @@ export default function PairMonitorCard({ asset, onRemove }: Props) {
   const fmtPrice = (p: number) =>
     p < 10 ? p.toFixed(5) : p < 1000 ? p.toFixed(4) : p.toFixed(2);
 
-  const progressPct = Math.min((seconds / 59) * 100, 100);
-  const secsToNext = seconds <= 48 ? 48 - seconds : 60 - seconds + 48;
+  const curMin = new Date().getMinutes();
+  const secsToNext = getSecsToNext(curMin, seconds);
+  const tfTotalSecs = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : 900;
+  const progressPct = Math.max(0, Math.min(100, ((tfTotalSecs - secsToNext) / tfTotalSecs) * 100));
+  const isFiring = shouldFireNow(seconds, curMin);
+  const TF_COLORS: Record<string, string> = { M1: 'bg-blue-500/50', M5: 'bg-blue-400/70', M15: 'bg-amber-500/70' };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -299,9 +329,15 @@ export default function PairMonitorCard({ asset, onRemove }: Props) {
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-gray-600">
-            {seconds === 48
-              ? <span className="text-[var(--green)] font-bold animate-pulse">⚡ Analisando...</span>
-              : <span>Próxima análise: <span className="font-mono tabular-nums text-gray-400">{secsToNext}s</span></span>
+            {isFiring
+              ? <span className="text-[var(--green)] font-bold animate-pulse">⚡ Analisando {timeframe}...</span>
+              : <span>
+                  Próximo{' '}
+                  <span className={`font-bold text-[10px] ${timeframe === 'M15' ? 'text-amber-400' : timeframe === 'M5' ? 'text-blue-400' : 'text-blue-300'}`}>{timeframe}</span>
+                  {' '}em <span className="font-mono tabular-nums text-gray-400">
+                    {secsToNext >= 60 ? `${Math.floor(secsToNext/60)}m${secsToNext%60 > 0 ? String(secsToNext%60).padStart(2,'0')+'s' : ''}` : `${secsToNext}s`}
+                  </span>
+                </span>
             }
           </span>
           {lastRunTime && (
@@ -310,10 +346,10 @@ export default function PairMonitorCard({ asset, onRemove }: Props) {
         </div>
         <div className="h-1 bg-white/5 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-900 ${
-              seconds === 48 ? 'bg-[var(--green)] w-full' : 'bg-blue-500/50'
+            className={`h-full rounded-full transition-all duration-1000 ${
+              isFiring ? 'bg-[var(--green)]' : TF_COLORS[timeframe]
             }`}
-            style={{ width: seconds === 48 ? '100%' : `${progressPct}%` }}
+            style={{ width: isFiring ? '100%' : `${progressPct}%` }}
           />
         </div>
       </div>
