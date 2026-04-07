@@ -70,8 +70,16 @@ export interface FingerprintPoint {
 }
 
 export const BASE_WEIGHTS: Record<string, number> = {
-  ema: 0.22, htf: 0.20, rsi: 0.18, macd: 0.18,
-  bb: 0.10, stoch: 0.10, candle: 0.10, volume: 0.08, obv: 0.08
+  // Timeframe confluence
+  ema: 0.20, htf: 0.15, m15: 0.12,
+  // Momentum
+  rsi: 0.13, rsidiv: 0.14, macd: 0.13,
+  // Oscillators + structure
+  bb: 0.09, bsq: 0.10, stoch: 0.09,
+  // S/R + candle
+  sr: 0.12, candle: 0.09,
+  // Volume
+  volume: 0.07, obv: 0.07
 };
 
 // ─── INDICATORS ────────────────────────────────────────────────────────────
@@ -324,19 +332,132 @@ export function getCurrentSession(): string {
   return 'asia';
 }
 
-function getSessionBonus(sess: string, category: string): number {
+// Granular pair×session quality matrix
+function getPairSessionBonus(sess: string, category: string, asset: string): number {
+  const matrix: Record<string, Record<string, number>> = {
+    EURUSD: { london: 0.18, overlap: 0.22, ny: 0.14, asia: -0.15 },
+    GBPUSD: { london: 0.18, overlap: 0.20, ny: 0.13, asia: -0.16 },
+    GBPJPY: { london: 0.16, overlap: 0.22, ny: 0.12, asia: -0.06 },
+    USDJPY: { london: 0.10, overlap: 0.18, ny: 0.16, asia: 0.02 },
+    AUDUSD: { london: 0.08, overlap: 0.16, ny: 0.10, asia: 0.06 },
+    USDCAD: { london: 0.10, overlap: 0.18, ny: 0.16, asia: -0.12 },
+    NZDUSD: { london: 0.06, overlap: 0.14, ny: 0.08, asia: 0.04 },
+    EURGBP: { london: 0.15, overlap: 0.18, ny: 0.08, asia: -0.18 },
+    XAUUSD: { london: 0.16, overlap: 0.21, ny: 0.18, asia: -0.09 },
+    XAGUSD: { london: 0.12, overlap: 0.18, ny: 0.16, asia: -0.12 },
+    USOIL:  { london: 0.10, overlap: 0.18, ny: 0.18, asia: -0.12 },
+    BTCUSD: { london: 0.10, overlap: 0.22, ny: 0.20, asia: 0.05 },
+    ETHUSD: { london: 0.10, overlap: 0.20, ny: 0.18, asia: 0.04 },
+    SOLUSD: { london: 0.08, overlap: 0.20, ny: 0.18, asia: 0.02 },
+    BNBUSD: { london: 0.08, overlap: 0.18, ny: 0.16, asia: 0.02 },
+    XRPUSD: { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+  };
+  if (matrix[asset]?.[sess] !== undefined) return matrix[asset][sess];
   if (category === 'crypto') {
-    if (sess === 'overlap') return 0.20;
-    if (sess === 'ny') return 0.15;
-    if (sess === 'london') return 0.08;
-    if (sess === 'asia') return -0.12;
-    return -0.05;
+    if (sess === 'overlap') return 0.18; if (sess === 'ny') return 0.14;
+    if (sess === 'london') return 0.08; return -0.10;
   }
-  if (sess === 'overlap') return 0.20;
-  if (sess === 'ny') return 0.15;
-  if (sess === 'london') return 0.12;
-  if (sess === 'asia') return -0.08;
-  return -0.05;
+  if (sess === 'overlap') return 0.18; if (sess === 'ny') return 0.14;
+  if (sess === 'london') return 0.12; return -0.10;
+}
+
+// ─── NEW HIGH-PRECISION INDICATORS ─────────────────────────────────────────
+
+// Detect RSI Divergence: most reliable reversal signal
+function detectRSIDivergence(closes: number[], highs: number[], lows: number[]): 'bullish' | 'bearish' | null {
+  if (closes.length < 30) return null;
+  const half = 10;
+  const rsi1 = calcRSI(closes.slice(-30, -half), 14);
+  const rsi2 = calcRSI(closes.slice(-half), 14);
+  const priceLow1 = Math.min(...lows.slice(-30, -half));
+  const priceLow2 = Math.min(...lows.slice(-half));
+  const priceHigh1 = Math.max(...highs.slice(-30, -half));
+  const priceHigh2 = Math.max(...highs.slice(-half));
+  // Bullish divergence: price lower low, RSI higher low — reversal up
+  if (priceLow2 < priceLow1 * 0.9997 && rsi2 > rsi1 + 4 && rsi2 < 48) return 'bullish';
+  // Bearish divergence: price higher high, RSI lower high — reversal down
+  if (priceHigh2 > priceHigh1 * 1.0003 && rsi2 < rsi1 - 4 && rsi2 > 52) return 'bearish';
+  return null;
+}
+
+// OBV recent trend (direction of money flow in last N bars)
+function calcOBVTrend(closes: number[], volumes: number[], lookback = 12): 'up' | 'down' | 'flat' {
+  if (closes.length < lookback + 1) return 'flat';
+  let obv = 0;
+  const obvSeries: number[] = [0];
+  for (let i = 1; i < closes.length; i++) {
+    obv += closes[i] > closes[i - 1] ? volumes[i] : closes[i] < closes[i - 1] ? -volumes[i] : 0;
+    obvSeries.push(obv);
+  }
+  const recent = obvSeries.slice(-lookback);
+  const slope = recent[recent.length - 1] - recent[0];
+  const maxAbs = Math.max(...recent.map(Math.abs)) || 1;
+  const norm = slope / maxAbs;
+  if (norm > 0.06) return 'up';
+  if (norm < -0.06) return 'down';
+  return 'flat';
+}
+
+// Bollinger Band Squeeze: contraction → expansion = breakout
+function detectBBSqueeze(closes: number[]): { squeeze: boolean; breakout: 'up' | 'down' | null } {
+  if (closes.length < 40) return { squeeze: false, breakout: null };
+  const calcBW = (data: number[]) => {
+    const b = calcBollinger(data, 20);
+    return b.mean > 0 ? (b.upper - b.lower) / b.mean : 0;
+  };
+  const histBW = calcBW(closes.slice(-40, -5));
+  const currBW = calcBW(closes.slice(-20));
+  if (currBW >= histBW * 0.68) return { squeeze: false, breakout: null };
+  // Squeeze detected → find breakout direction from last 3 closes
+  const bb = calcBollinger(closes, 20);
+  const last = closes[closes.length - 1];
+  const breakout: 'up' | 'down' = last > bb.mean ? 'up' : 'down';
+  return { squeeze: true, breakout };
+}
+
+// S/R Swing Level detector: price near a key pivot = high-confidence bounce
+function detectSRBounce(highs: number[], lows: number[], closes: number[]): { nearSupport: boolean; nearResistance: boolean } {
+  if (closes.length < 20) return { nearSupport: false, nearResistance: false };
+  const lookback = Math.min(50, closes.length - 3);
+  const h = highs.slice(-lookback, -3);
+  const l = lows.slice(-lookback, -3);
+  const price = closes[closes.length - 1];
+  const atr = calcATR(highs.slice(-20), lows.slice(-20), closes.slice(-20), 14);
+  const tol = atr * 1.8;
+  const swingHighs: number[] = [];
+  const swingLows: number[] = [];
+  for (let i = 1; i < h.length - 1; i++) {
+    if (h[i] > h[i - 1] && h[i] > h[i + 1]) swingHighs.push(h[i]);
+    if (l[i] < l[i - 1] && l[i] < l[i + 1]) swingLows.push(l[i]);
+  }
+  return {
+    nearSupport: swingLows.some(sl => Math.abs(price - sl) <= tol && price >= sl - tol),
+    nearResistance: swingHighs.some(sh => Math.abs(price - sh) <= tol && price <= sh + tol)
+  };
+}
+
+// EMA Retest: price touched EMA21 in last 3 bars and bounced in signal direction
+function detectEMARetest(closes: number[], ema21: number[], direction: 'CALL' | 'PUT'): boolean {
+  if (closes.length < 5 || ema21.length < 5) return false;
+  for (let i = 2; i <= 4; i++) {
+    const c = closes[closes.length - i];
+    const e = ema21[ema21.length - i];
+    if (!e) continue;
+    if (Math.abs(c - e) / e < 0.0012) {
+      const lastC = closes[closes.length - 1];
+      if (direction === 'CALL' && lastC > c) return true;
+      if (direction === 'PUT' && lastC < c) return true;
+    }
+  }
+  return false;
+}
+
+// MACD Histogram momentum: is it accelerating (stronger) or decelerating?
+function calcMACDMomentum(closes: number[]): 'growing' | 'shrinking' {
+  if (closes.length < 36) return 'growing';
+  const curr = calcMACD(closes).hist;
+  const prev = calcMACD(closes.slice(0, -1)).hist;
+  return Math.abs(curr) > Math.abs(prev) ? 'growing' : 'shrinking';
 }
 
 // ─── MAIN ENGINE ───────────────────────────────────────────────────────────
@@ -362,7 +483,6 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const stoch = calcStoch(highs, lows, closes, 14);
   const adx = calcADX(highs, lows, closes, 14);
   const atr = calcATR(highs, lows, closes, 14);
-  const obv = calcOBV(closes, volumes);
   const candle = detectCandlePattern(m1);
   const entropy = calcEntropy(m1.slice(-20));
 
@@ -373,45 +493,72 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const htfBull = m5ema9.length > 0 && m5ema21.length > 0 &&
     m5ema9[m5ema9.length - 1] > m5ema21[m5ema21.length - 1];
 
+  // HTF (M15) — third timeframe confluence
+  const m15closes = deriveM15(m1).map(c => c.c);
+  const m15ema9 = calcEMA(m15closes, 9);
+  const m15ema21 = calcEMA(m15closes, 21);
+  const m15Bull = m15ema9.length > 0 && m15ema21.length > 0 &&
+    m15ema9[m15ema9.length - 1] > m15ema21[m15ema21.length - 1];
+
   const lastClose = closes[closes.length - 1];
   const lastEma9 = ema9[ema9.length - 1] ?? lastClose;
   const lastEma21 = ema21[ema21.length - 1] ?? lastClose;
   const lastEma50 = ema50[ema50.length - 1] ?? lastClose;
 
-  // — Votes (each +1 = CALL, -1 = PUT) —
+  // New indicator computations
+  const rsidiv = detectRSIDivergence(closes, highs, lows);
+  const obvTrend = calcOBVTrend(closes, volumes, 12);
+  const bbSqueeze = detectBBSqueeze(closes);
+  const srBounce = detectSRBounce(highs, lows, closes);
+  const emaRetest = detectEMARetest(closes, ema21, htfBull ? 'CALL' : 'PUT');
+  const macdMomentum = calcMACDMomentum(closes);
+
+  // — Votes (each vote = CALL | PUT | NEUTRAL) —
   const votes: Record<string, string> = {};
 
-  // EMA trend
+  // EMA triple stack alignment
   const emaBull = lastEma9 > lastEma21 && lastEma21 > lastEma50 && lastClose > lastEma9;
   const emaBear = lastEma9 < lastEma21 && lastEma21 < lastEma50 && lastClose < lastEma9;
   votes.ema = emaBull ? 'CALL' : emaBear ? 'PUT' : 'NEUTRAL';
 
-  // HTF
+  // M5 HTF
   votes.htf = htfBull ? 'CALL' : 'PUT';
 
-  // RSI
-  votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 50 ? 'CALL' : 'PUT';
+  // M15 HTF (third timeframe)
+  votes.m15 = m15closes.length >= 8 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL';
 
-  // MACD
+  // RSI with NEUTRAL dead zone (40-60 = no clear momentum)
+  votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL';
+
+  // RSI Divergence — high-confidence reversal signal
+  votes.rsidiv = rsidiv === 'bullish' ? 'CALL' : rsidiv === 'bearish' ? 'PUT' : 'NEUTRAL';
+
+  // MACD (direction driven by histogram sign, boosted externally via momentum bonus)
   votes.macd = macd.hist > 0 ? 'CALL' : 'PUT';
 
-  // Bollinger
+  // Bollinger Band position
   votes.bb = bb.pct < 0.2 ? 'CALL' : bb.pct > 0.8 ? 'PUT' : 'NEUTRAL';
 
-  // Stochastic
+  // Bollinger Squeeze breakout
+  votes.bsq = bbSqueeze.squeeze && bbSqueeze.breakout === 'up' ? 'CALL'
+            : bbSqueeze.squeeze && bbSqueeze.breakout === 'down' ? 'PUT' : 'NEUTRAL';
+
+  // Stochastic with dead zone
   votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
+
+  // Support/Resistance bounce
+  votes.sr = srBounce.nearSupport ? 'CALL' : srBounce.nearResistance ? 'PUT' : 'NEUTRAL';
 
   // Candle pattern
   votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
 
-  // Volume
+  // Volume confirmation
   const avgVol = volumes.slice(-20, -1).reduce((a, b) => a + b, 0) / 19 || 1;
   const lastVol = volumes[volumes.length - 1];
   votes.volume = lastVol > avgVol * 1.2 ? (lastClose > closes[closes.length - 2] ? 'CALL' : 'PUT') : 'NEUTRAL';
 
-  // OBV trend (compare to EMA of OBV approximation)
-  const obvDir = obv > 0 ? 'CALL' : 'PUT';
-  votes.obv = obvDir;
+  // OBV trend (recent money flow direction)
+  votes.obv = obvTrend === 'up' ? 'CALL' : obvTrend === 'down' ? 'PUT' : 'NEUTRAL';
 
   // — Weighted score —
   let mlWeights = { ...BASE_WEIGHTS };
@@ -430,23 +577,37 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const direction: 'CALL' | 'PUT' = callScore >= putScore ? 'CALL' : 'PUT';
   let rawScore = Math.max(callScore, putScore) / total;
 
-  // Session bonus
-  rawScore = Math.min(0.95, Math.max(0.35, rawScore + getSessionBonus(sess, category)));
+  // Pair × session bonus (granular)
+  rawScore = Math.min(0.95, Math.max(0.35, rawScore + getPairSessionBonus(sess, category, asset)));
 
-  // ADX bonus
-  if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.04);
-  else if (adx < 18) rawScore = Math.max(0.35, rawScore - 0.05);
+  // ADX bonus / penalty
+  if (adx >= 30) rawScore = Math.min(0.95, rawScore + 0.05);
+  else if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.03);
+  else if (adx < 18) rawScore = Math.max(0.35, rawScore - 0.06);
 
-  // RSI extreme penalty
-  if (rsi > 80 || rsi < 20) rawScore = Math.max(0.35, rawScore - 0.06);
+  // RSI extreme penalty (price too extended)
+  if (rsi > 82 || rsi < 18) rawScore = Math.max(0.35, rawScore - 0.07);
+
+  // RSI Divergence bonus — very reliable setup
+  if (rsidiv !== null) rawScore = Math.min(0.95, rawScore + 0.08);
+
+  // BB Squeeze breakout bonus
+  if (bbSqueeze.squeeze) rawScore = Math.min(0.95, rawScore + 0.06);
+
+  // S/R bounce bonus
+  if (srBounce.nearSupport || srBounce.nearResistance) rawScore = Math.min(0.95, rawScore + 0.05);
+
+  // EMA Retest bounce bonus
+  if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
+
+  // MACD momentum growing bonus
+  if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
 
   // Entropy penalty
   if (entropy > 0.6) rawScore = Math.max(0.35, rawScore - 0.08);
 
-  // ATR adaptive
-  const avgATR = atr;
-  const price = lastClose;
-  const atrPct = price > 0 ? avgATR / price : 0;
+  // ATR adaptive (crypto volatility penalty)
+  const atrPct = lastClose > 0 ? atr / lastClose : 0;
   if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
 
   const score = Math.round(rawScore * 100);
@@ -474,21 +635,21 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const mins = new Date().getMinutes();
   if (mins === 59 || mins === 0) return null;
 
-  // Main 5 indicators must have ≥3 confirmations
-  const main5 = ['ema', 'htf', 'rsi', 'macd', 'volume'];
+  // Core 6 indicators must have ≥3 confirmations (includes new high-precision ones)
+  const main5 = ['ema', 'htf', 'm15', 'rsi', 'macd', 'rsidiv'];
   const confirms = main5.filter(k => votes[k] === direction).length;
   if (confirms < 3) return null;
 
   // Entropy block
   if (entropy > 0.65) return null;
 
-  // — Consensus (5 universes) —
+  // — Consensus (5 universes with updated weight sets) —
   const variations = [
     {},
-    { ema: 0.10, rsi: -0.05, macd: -0.05 },
-    { rsi: 0.10, stoch: 0.05, ema: -0.15 },
-    { volume: 0.15, obv: 0.10, candle: -0.25 },
-    { rsi: -0.10, macd: -0.10, candle: 0.20 }
+    { ema: 0.08, rsidiv: -0.05, macd: -0.03, m15: 0.05 },
+    { rsidiv: 0.10, stoch: 0.05, ema: -0.10, sr: 0.05 },
+    { volume: 0.10, obv: 0.08, bsq: 0.08, candle: -0.15 },
+    { rsidiv: -0.08, macd: -0.08, candle: 0.15, sr: 0.10 }
   ];
 
   let consensusCount = 0;
@@ -548,6 +709,7 @@ export interface DiagResult {
   blockedBy: string | null;
   votes: Record<string, string>;
   passed: boolean;
+  extras?: string[];
 }
 
 export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | null {
@@ -570,7 +732,6 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   const stoch = calcStoch(highs, lows, closes, 14);
   const adx = calcADX(highs, lows, closes, 14);
   const atr = calcATR(highs, lows, closes, 14);
-  const obv = calcOBV(closes, volumes);
   const candle = detectCandlePattern(m1);
   const entropy = calcEntropy(m1.slice(-20));
 
@@ -580,25 +741,43 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   const htfBull = m5ema9.length > 0 && m5ema21.length > 0 &&
     m5ema9[m5ema9.length - 1] > m5ema21[m5ema21.length - 1];
 
+  const m15closes = deriveM15(m1).map(c => c.c);
+  const m15ema9 = calcEMA(m15closes, 9);
+  const m15ema21 = calcEMA(m15closes, 21);
+  const m15Bull = m15ema9.length > 0 && m15ema21.length > 0 &&
+    m15ema9[m15ema9.length - 1] > m15ema21[m15ema21.length - 1];
+
   const lastClose = closes[closes.length - 1];
   const lastEma9 = ema9[ema9.length - 1] ?? lastClose;
   const lastEma21 = ema21[ema21.length - 1] ?? lastClose;
   const lastEma50 = ema50[ema50.length - 1] ?? lastClose;
+
+  const rsidiv = detectRSIDivergence(closes, highs, lows);
+  const obvTrend = calcOBVTrend(closes, volumes, 12);
+  const bbSqueeze = detectBBSqueeze(closes);
+  const srBounce = detectSRBounce(highs, lows, closes);
+  const emaRetest = detectEMARetest(closes, ema21, htfBull ? 'CALL' : 'PUT');
+  const macdMomentum = calcMACDMomentum(closes);
 
   const votes: Record<string, string> = {};
   const emaBull = lastEma9 > lastEma21 && lastEma21 > lastEma50 && lastClose > lastEma9;
   const emaBear = lastEma9 < lastEma21 && lastEma21 < lastEma50 && lastClose < lastEma9;
   votes.ema = emaBull ? 'CALL' : emaBear ? 'PUT' : 'NEUTRAL';
   votes.htf = htfBull ? 'CALL' : 'PUT';
-  votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 50 ? 'CALL' : 'PUT';
+  votes.m15 = m15closes.length >= 8 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL';
+  votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL';
+  votes.rsidiv = rsidiv === 'bullish' ? 'CALL' : rsidiv === 'bearish' ? 'PUT' : 'NEUTRAL';
   votes.macd = macd.hist > 0 ? 'CALL' : 'PUT';
   votes.bb = bb.pct < 0.2 ? 'CALL' : bb.pct > 0.8 ? 'PUT' : 'NEUTRAL';
+  votes.bsq = bbSqueeze.squeeze && bbSqueeze.breakout === 'up' ? 'CALL'
+            : bbSqueeze.squeeze && bbSqueeze.breakout === 'down' ? 'PUT' : 'NEUTRAL';
   votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
+  votes.sr = srBounce.nearSupport ? 'CALL' : srBounce.nearResistance ? 'PUT' : 'NEUTRAL';
   votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
   const avgVol = volumes.slice(-20, -1).reduce((a, b) => a + b, 0) / 19 || 1;
-  const lastVol = volumes[volumes.length - 1];
-  votes.volume = lastVol > avgVol * 1.2 ? (lastClose > closes[closes.length - 2] ? 'CALL' : 'PUT') : 'NEUTRAL';
-  votes.obv = obv > 0 ? 'CALL' : 'PUT';
+  votes.volume = volumes[volumes.length - 1] > avgVol * 1.2
+    ? (lastClose > closes[closes.length - 2] ? 'CALL' : 'PUT') : 'NEUTRAL';
+  votes.obv = obvTrend === 'up' ? 'CALL' : obvTrend === 'down' ? 'PUT' : 'NEUTRAL';
 
   let mlWeights = { ...BASE_WEIGHTS };
   try {
@@ -614,10 +793,16 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   const total = callScore + putScore || 1;
   const direction: 'CALL' | 'PUT' = callScore >= putScore ? 'CALL' : 'PUT';
   let rawScore = Math.max(callScore, putScore) / total;
-  rawScore = Math.min(0.95, Math.max(0.35, rawScore + getSessionBonus(sess, category)));
-  if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.04);
-  else if (adx < 18) rawScore = Math.max(0.35, rawScore - 0.05);
-  if (rsi > 80 || rsi < 20) rawScore = Math.max(0.35, rawScore - 0.06);
+  rawScore = Math.min(0.95, Math.max(0.35, rawScore + getPairSessionBonus(sess, category, asset)));
+  if (adx >= 30) rawScore = Math.min(0.95, rawScore + 0.05);
+  else if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.03);
+  else if (adx < 18) rawScore = Math.max(0.35, rawScore - 0.06);
+  if (rsi > 82 || rsi < 18) rawScore = Math.max(0.35, rawScore - 0.07);
+  if (rsidiv !== null) rawScore = Math.min(0.95, rawScore + 0.08);
+  if (bbSqueeze.squeeze) rawScore = Math.min(0.95, rawScore + 0.06);
+  if (srBounce.nearSupport || srBounce.nearResistance) rawScore = Math.min(0.95, rawScore + 0.05);
+  if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
+  if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
   if (entropy > 0.6) rawScore = Math.max(0.35, rawScore - 0.08);
   const atrPct = lastClose > 0 ? atr / lastClose : 0;
   if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
@@ -634,10 +819,11 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   const forteOnly = cfg.forteOnly ?? true;
 
   const variations = [
-    {}, { ema: 0.10, rsi: -0.05, macd: -0.05 },
-    { rsi: 0.10, stoch: 0.05, ema: -0.15 },
-    { volume: 0.15, obv: 0.10, candle: -0.25 },
-    { rsi: -0.10, macd: -0.10, candle: 0.20 }
+    {},
+    { ema: 0.08, rsidiv: -0.05, macd: -0.03, m15: 0.05 },
+    { rsidiv: 0.10, stoch: 0.05, ema: -0.10, sr: 0.05 },
+    { volume: 0.10, obv: 0.08, bsq: 0.08, candle: -0.15 },
+    { rsidiv: -0.08, macd: -0.08, candle: 0.15, sr: 0.10 }
   ];
   let consensusCount = 0;
   for (const v of variations) {
@@ -652,15 +838,24 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
     if ((direction === 'CALL' ? cs >= ps : ps > cs)) consensusCount++;
   }
 
-  const main5 = ['ema', 'htf', 'rsi', 'macd', 'volume'];
-  const confirmed = main5.filter(k => votes[k] === direction).length;
+  const mainCriteria = ['ema', 'htf', 'm15', 'rsi', 'macd', 'rsidiv'];
+  const confirmed = mainCriteria.filter(k => votes[k] === direction).length;
   const mins = new Date().getMinutes();
+
+  // Informative extras for diagnostic panel
+  const extras: string[] = [];
+  if (rsidiv !== null) extras.push(`Divergência RSI ${rsidiv === 'bullish' ? 'altista' : 'baixista'} detectada ✓`);
+  if (bbSqueeze.squeeze) extras.push(`BB Squeeze com rompimento ${bbSqueeze.breakout === 'up' ? 'altista' : 'baixista'} ✓`);
+  if (srBounce.nearSupport) extras.push('Preço próximo a suporte chave ✓');
+  if (srBounce.nearResistance) extras.push('Preço próximo a resistência chave ✓');
+  if (emaRetest) extras.push('Reteste da EMA21 confirmado ✓');
+  if (macdMomentum === 'growing') extras.push('Histograma MACD acelerando ✓');
 
   let blockedBy: string | null = null;
   if (mins === 59 || mins === 0) blockedBy = 'Horário morto (min :00 ou :59)';
   else if (adx < 18) blockedBy = `ADX fraco (${Math.round(adx)} < 18) — mercado lateral`;
   else if (entropy > 0.65) blockedBy = `Entropia alta (${Math.round(entropy * 100)}%) — mercado aleatório`;
-  else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/5 indicadores principais)`;
+  else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
   else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
   else if (score < minScore) blockedBy = `Score abaixo do mínimo (${score}% < ${minScore}%)`;
@@ -672,7 +867,8 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
     entropy: Math.round(entropy * 100),
     consensus: consensusCount, confirmed,
     blockedBy, votes,
-    passed: blockedBy === null
+    passed: blockedBy === null,
+    extras
   };
 }
 

@@ -430,6 +430,18 @@ export default function SignalsPage() {
                 </div>
               </div>
 
+              {/* Extras (confirmed patterns) */}
+              {lastDiag.extras && lastDiag.extras.length > 0 && (
+                <div className="space-y-1">
+                  {lastDiag.extras.map((e, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+                      <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                      {e}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Blocked reason */}
               {lastDiag.blockedBy ? (
                 <div className="flex items-start gap-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/15">
@@ -445,24 +457,33 @@ export default function SignalsPage() {
             </motion.div>
           )}
 
-          {/* INDICATORS MINI */}
-          {(signal || lastDiag) && (
-            <div className="glass-card p-4 space-y-1.5">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Votos dos Indicadores</h3>
-              {Object.entries((signal || lastDiag)!.votes).map(([ind, vote]) => (
-                <div key={ind} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500 uppercase">{ind}</span>
-                  <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                    vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
-                    vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
-                    'text-gray-500 bg-white/5'
-                  }`}>
-                    {vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* INDICATORS MINI — readable names */}
+          {(signal || lastDiag) && (() => {
+            const VOTE_LABELS: Record<string, string> = {
+              ema: 'EMA Stack (M1)', htf: 'HTF M5', m15: 'HTF M15',
+              rsi: 'RSI', rsidiv: 'RSI Divergência',
+              macd: 'MACD', bb: 'Bollinger %B', bsq: 'BB Squeeze',
+              stoch: 'Estocástico', sr: 'Suporte/Resistência',
+              candle: 'Candle Pattern', volume: 'Volume', obv: 'OBV Fluxo'
+            };
+            return (
+              <div className="glass-card p-4 space-y-1.5">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Votos dos Indicadores</h3>
+                {Object.entries((signal || lastDiag)!.votes).map(([ind, vote]) => (
+                  <div key={ind} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">{VOTE_LABELS[ind] || ind.toUpperCase()}</span>
+                    <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                      vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
+                      vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
+                      'text-gray-500 bg-white/5'
+                    }`}>
+                      {vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {!lastDiag && (
             <div className="glass-card p-4 text-center">
