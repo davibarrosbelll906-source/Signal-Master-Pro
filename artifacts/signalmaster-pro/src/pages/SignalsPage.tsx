@@ -510,12 +510,7 @@ export default function SignalsPage() {
                     <PairMonitorCard
                       key={a}
                       asset={a}
-                      seconds={seconds}
                       onRemove={() => togglePair(a)}
-                      onSignalFired={(asset, sig) => {
-                        // Update scoreboard after signal fires in multi-par mode
-                        refreshStats();
-                      }}
                     />
                   ))}
                 </AnimatePresence>
