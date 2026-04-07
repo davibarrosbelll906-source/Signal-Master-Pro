@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import TradingViewWidget from "@/components/TradingViewWidget";
-import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye } from "lucide-react";
+import PairMonitorCard from "@/components/PairMonitorCard";
+import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ASSET_CATEGORIES, CRYPTO_SYMBOLS, TV_SYMBOLS, BASE_PRICES,
@@ -47,6 +48,13 @@ export default function SignalsPage() {
   const [manualAsset, setManualAsset] = useState('');
   const [manualDir, setManualDir] = useState<'CALL'|'PUT'>('CALL');
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [multiPairMode, setMultiPairMode] = useState(false);
+  const [watchedPairs, setWatchedPairs] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('smpWatchedPairs') || '["EURUSD","BTCUSD"]'); } catch { return ['EURUSD', 'BTCUSD']; }
+  });
+
+  const MAX_PAIRS = 5;
+  const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const wsRef = useRef<WebSocket | null>(null);
@@ -82,6 +90,19 @@ export default function SignalsPage() {
     const id = setInterval(() => setAudioEnabled(isAudioUnlocked()), 2000);
     return () => clearInterval(id);
   }, []);
+
+  // Persist watched pairs
+  useEffect(() => {
+    localStorage.setItem('smpWatchedPairs', JSON.stringify(watchedPairs));
+  }, [watchedPairs]);
+
+  const togglePair = (a: string) => {
+    setWatchedPairs(prev => {
+      if (prev.includes(a)) return prev.filter(p => p !== a);
+      if (prev.length >= MAX_PAIRS) return prev;
+      return [...prev, a];
+    });
+  };
 
   // Connect Binance WebSocket for crypto
   const connectBinance = useCallback((sym: string) => {
@@ -330,6 +351,19 @@ export default function SignalsPage() {
               {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(3)}%
             </span>
           )}
+          {/* TOGGLE MODO MULTI-PAR */}
+          <button
+            onClick={() => setMultiPairMode(v => !v)}
+            title="Monitorar múltiplos pares ao mesmo tempo"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all duration-200 ${
+              multiPairMode
+                ? 'border-[var(--green)] text-[var(--green)] bg-[var(--green)]/10'
+                : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5'
+            }`}
+          >
+            <Layers size={10} />
+            {multiPairMode ? `Multi-Par (${watchedPairs.length})` : 'Multi-Par'}
+          </button>
           {/* BOTÃO ATIVAR SOM */}
           <button
             onClick={async () => {
@@ -349,7 +383,150 @@ export default function SignalsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+      {/* ─── MODO MULTI-PAR ─────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {multiPairMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-4"
+          >
+            {/* PAIR PICKER */}
+            <div className="glass-card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers size={14} className="text-[var(--green)]" />
+                  <h3 className="text-sm font-bold text-white">Selecionar Pares para Monitorar</h3>
+                </div>
+                <span className="text-xs text-gray-500 tabular-nums">
+                  {watchedPairs.length}/{MAX_PAIRS} selecionados
+                </span>
+              </div>
+
+              {/* Crypto */}
+              <div>
+                <div className="text-[10px] font-bold text-yellow-400/70 uppercase tracking-widest mb-2">₿ Cripto</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {CRYPTO_ASSETS.map(a => {
+                    const sel = watchedPairs.includes(a);
+                    const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => togglePair(a)}
+                        disabled={full}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                          sel
+                            ? 'bg-yellow-400/15 text-yellow-400 border-yellow-400/30'
+                            : full
+                            ? 'bg-white/3 text-gray-700 border-white/5 cursor-not-allowed'
+                            : 'bg-white/5 text-gray-400 hover:text-white border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        {a.replace('USD', '')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Forex */}
+              <div>
+                <div className="text-[10px] font-bold text-blue-400/70 uppercase tracking-widest mb-2">💱 Forex</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {FOREX_ASSETS.map(a => {
+                    const sel = watchedPairs.includes(a);
+                    const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => togglePair(a)}
+                        disabled={full}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                          sel
+                            ? 'bg-blue-400/15 text-blue-400 border-blue-400/30'
+                            : full
+                            ? 'bg-white/3 text-gray-700 border-white/5 cursor-not-allowed'
+                            : 'bg-white/5 text-gray-400 hover:text-white border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        {a}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Commodities */}
+              <div>
+                <div className="text-[10px] font-bold text-orange-400/70 uppercase tracking-widest mb-2">🏅 Commodities</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {COMMODITY_ASSETS.map(a => {
+                    const sel = watchedPairs.includes(a);
+                    const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => togglePair(a)}
+                        disabled={full}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                          sel
+                            ? 'bg-orange-400/15 text-orange-400 border-orange-400/30'
+                            : full
+                            ? 'bg-white/3 text-gray-700 border-white/5 cursor-not-allowed'
+                            : 'bg-white/5 text-gray-400 hover:text-white border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        {a}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {watchedPairs.length >= MAX_PAIRS && (
+                <p className="text-[11px] text-yellow-400/70 text-center">
+                  Limite de {MAX_PAIRS} pares atingido. Remova um par para adicionar outro.
+                </p>
+              )}
+            </div>
+
+            {/* MONITOR GRID */}
+            {watchedPairs.length === 0 ? (
+              <div className="glass-card p-8 text-center">
+                <div className="text-gray-600 mb-2">Nenhum par selecionado</div>
+                <div className="text-gray-700 text-sm">Selecione de 1 a 5 pares acima para monitorar</div>
+              </div>
+            ) : (
+              <div className={`grid gap-4 ${
+                watchedPairs.length === 1 ? 'grid-cols-1 max-w-sm' :
+                watchedPairs.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                watchedPairs.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
+                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+              }`}>
+                <AnimatePresence>
+                  {watchedPairs.map(a => (
+                    <PairMonitorCard
+                      key={a}
+                      asset={a}
+                      seconds={seconds}
+                      onRemove={() => togglePair(a)}
+                      onSignalFired={(asset, sig) => {
+                        // Update scoreboard after signal fires in multi-par mode
+                        refreshStats();
+                      }}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MODO SINGLE (layout original) ─────────────────────────────────── */}
+      {!multiPairMode && <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
 
         {/* LEFT PANEL */}
         <div className="xl:col-span-1 space-y-4">
@@ -852,12 +1029,12 @@ export default function SignalsPage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
-      {/* TRADINGVIEW CHART */}
-      <div className="glass-card p-1">
+      {/* TRADINGVIEW CHART — só no modo single */}
+      {!multiPairMode && <div className="glass-card p-1">
         <TradingViewWidget symbol={TV_SYMBOLS[asset] || `FX:${asset}`} height={380} />
-      </div>
+      </div>}
 
       {/* MINI TRADE HISTORY */}
       {recentTrades.length > 0 && (
@@ -891,9 +1068,9 @@ export default function SignalsPage() {
         </div>
       )}
 
-      {/* ─── FLOATING WIN/LOSS BAR (appears when signal is pending) ─── */}
+      {/* ─── FLOATING WIN/LOSS BAR (apenas no modo single) ─── */}
       <AnimatePresence>
-        {pendingSignal && (
+        {pendingSignal && !multiPairMode && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
