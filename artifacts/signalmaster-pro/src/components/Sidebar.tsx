@@ -5,7 +5,7 @@ import {
   Activity, History, BarChart2, Map, Beaker, Trophy, BookOpen, Goal,
   ShieldAlert, Wallet, PieChart, Video, Calendar, DollarSign, Users,
   Link as LinkIcon, Award, Send, Bell, User, Settings, LogOut, Home,
-  Menu, X, ChevronDown, ChevronRight, Flame, Brain
+  Menu, X, ChevronDown, ChevronRight, Brain
 } from "lucide-react";
 import { getCurrentSession } from "@/lib/signalEngine";
 
@@ -15,6 +15,14 @@ const SESSION_INFO: Record<string, { label: string; emoji: string; color: string
   ny: { label: 'Nova York', emoji: '🇺🇸', color: 'text-purple-400' },
   asia: { label: 'Ásia', emoji: '🌏', color: 'text-yellow-400' },
 };
+
+const AVATAR_COLORS = [
+  'from-[var(--green)] to-[var(--blue)]',
+  'from-purple-500 to-pink-500',
+  'from-orange-500 to-red-500',
+  'from-cyan-500 to-blue-500',
+  'from-yellow-500 to-orange-500',
+];
 
 export function Sidebar() {
   const [location] = useLocation();
@@ -37,13 +45,11 @@ export function Sidebar() {
     } catch {}
   }, [location]);
 
-  // Close mobile on nav
   useEffect(() => { setMobileOpen(false); }, [location]);
 
   const sess = getCurrentSession();
   const sessInfo = SESSION_INFO[sess] || { label: 'Off', emoji: '🌙', color: 'text-gray-500' };
 
-  // Today stats
   const todayStats = (() => {
     try {
       const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
@@ -56,7 +62,6 @@ export function Sidebar() {
     } catch { return { w: 0, l: 0, wr: null }; }
   })();
 
-  // Streak
   const streak = (() => {
     try {
       const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
@@ -73,17 +78,12 @@ export function Sidebar() {
 
   const initial = (currentUser?.name || currentUser?.user || 'U')[0].toUpperCase();
   const avatarColor = parseInt(localStorage.getItem('smpAvatarColor') || '0');
-  const AVATAR_COLORS = [
-    'from-[var(--green)] to-[var(--blue)]',
-    'from-purple-500 to-pink-500',
-    'from-orange-500 to-red-500',
-    'from-cyan-500 to-blue-500',
-    'from-yellow-500 to-orange-500',
-  ];
 
   const toggleGroup = (title: string) => {
     setCollapsed(p => ({ ...p, [title]: !p[title] }));
   };
+
+  const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'financeiro' || currentUser?.role === 'gerente';
 
   const groups = [
     {
@@ -121,7 +121,6 @@ export function Sidebar() {
     {
       title: "Conta",
       links: [
-        { href: "/dashboard/telegram", label: "Telegram", icon: Send },
         {
           href: "/dashboard/notifications",
           label: "Notificações",
@@ -134,39 +133,84 @@ export function Sidebar() {
     }
   ];
 
-  if (currentUser?.role === 'admin' || currentUser?.role === 'financeiro' || currentUser?.role === 'gerente') {
-    groups.push({
-      title: "Admin",
-      links: [
-        { href: "/dashboard/revenue", label: "Receita", icon: DollarSign },
-        { href: "/dashboard/team", label: "Equipe", icon: Users },
-        { href: "/dashboard/affiliates", label: "Afiliados", icon: LinkIcon },
-        { href: "/dashboard/admin", label: "Painel Admin", icon: Settings },
-      ].filter(l => {
-        if (currentUser.role === 'financeiro' && l.label !== 'Receita') return false;
-        if (currentUser.role === 'gerente' && l.label === 'Painel Admin') return false;
-        return true;
-      }) as any
+  if (isStaff) {
+    const adminLinks = [
+      { href: "/dashboard/telegram", label: "Telegram Bot", icon: Send },
+      { href: "/dashboard/revenue", label: "Receita", icon: DollarSign },
+      { href: "/dashboard/team", label: "Equipe", icon: Users },
+      { href: "/dashboard/affiliates", label: "Afiliados", icon: LinkIcon },
+      { href: "/dashboard/admin", label: "Painel Admin", icon: Settings },
+    ].filter(l => {
+      if (currentUser?.role === 'financeiro') return l.label === 'Receita';
+      if (currentUser?.role === 'gerente') return l.label !== 'Painel Admin';
+      return true;
     });
+    groups.push({ title: "Admin", links: adminLinks as any });
   }
 
-  const SidebarContent = () => (
+  // Build nav JSX as a plain variable (not a child component) to prevent scroll reset on re-render
+  const navJsx = (
+    <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin">
+      {groups.map((g) => {
+        const isCollapsed = collapsed[g.title];
+        return (
+          <div key={g.title} className="mb-1">
+            <button
+              onClick={() => toggleGroup(g.title)}
+              className="w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:text-gray-400 transition"
+            >
+              {g.title}
+              {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+            </button>
+            {!isCollapsed && (
+              <div className="space-y-0.5">
+                {g.links.map((link: any) => {
+                  const Icon = link.icon;
+                  const active = location === link.href || (link.href === '/dashboard' && location === '/dashboard/home');
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg transition text-sm group relative ${
+                        active
+                          ? 'bg-[var(--green)]/10 text-[var(--green)] font-bold border border-[var(--green)]/20'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Icon size={15} className={active ? 'text-[var(--green)]' : 'text-gray-500 group-hover:text-gray-300 transition'} />
+                      <span className="truncate flex-1">{link.label}</span>
+                      {link.badge && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[var(--red)] text-white rounded-full min-w-[18px] text-center">
+                          {link.badge > 9 ? '9+' : link.badge}
+                        </span>
+                      )}
+                      {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[var(--green)] rounded-r-full" />}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+
+  const headerJsx = (showClose = false) => (
     <>
-      {/* Logo */}
       <div className="p-4 flex items-center gap-2.5 border-b border-white/10 shrink-0">
         <div className="w-8 h-8 rounded-lg bg-[var(--green)] text-black font-black flex items-center justify-center animate-signal-pulse text-sm">S</div>
         <div>
           <div className="font-bold text-sm leading-tight">SignalMaster Pro</div>
           <div className="text-[10px] text-[var(--green)] font-bold tracking-wider">v7 ULTIMATE</div>
         </div>
-        {mobileOpen && (
+        {showClose && (
           <button onClick={() => setMobileOpen(false)} className="ml-auto p-1 text-gray-500 hover:text-white transition">
             <X size={16} />
           </button>
         )}
       </div>
 
-      {/* User card */}
       <div className="p-4 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3 mb-3">
           <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${AVATAR_COLORS[avatarColor]} flex items-center justify-center font-black text-white shrink-0`}>
@@ -182,8 +226,6 @@ export function Sidebar() {
             </div>
           </div>
         </div>
-
-        {/* Today mini-stats */}
         <div className="grid grid-cols-3 gap-1 text-center">
           <div className="bg-white/5 rounded-lg p-1.5">
             <div className="text-[10px] text-gray-600">Hoje</div>
@@ -207,83 +249,38 @@ export function Sidebar() {
           </div>
         </div>
       </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin">
-        {groups.map((g) => {
-          const isCollapsed = collapsed[g.title];
-          return (
-            <div key={g.title} className="mb-1">
-              <button
-                onClick={() => toggleGroup(g.title)}
-                className="w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest hover:text-gray-400 transition"
-              >
-                {g.title}
-                {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-              </button>
-              {!isCollapsed && (
-                <div className="space-y-0.5">
-                  {g.links.map((link: any) => {
-                    const Icon = link.icon;
-                    const active = location === link.href || (link.href === '/dashboard' && location === '/dashboard/home');
-                    return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition text-sm group relative ${
-                          active
-                            ? 'bg-[var(--green)]/10 text-[var(--green)] font-bold border border-[var(--green)]/20'
-                            : 'text-gray-400 hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        <Icon size={15} className={active ? 'text-[var(--green)]' : 'text-gray-500 group-hover:text-gray-300 transition'} />
-                        <span className="truncate flex-1">{link.label}</span>
-                        {link.badge && (
-                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[var(--red)] text-white rounded-full min-w-[18px] text-center">
-                            {link.badge > 9 ? '9+' : link.badge}
-                          </span>
-                        )}
-                        {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[var(--green)] rounded-r-full" />}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Bottom: session + clock + logout */}
-      <div className="p-3 border-t border-white/10 space-y-2 shrink-0">
-        {/* Live session */}
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-sm ${sessInfo.color}`}>
-          <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-          <span className="text-xs font-bold">{sessInfo.emoji} {sessInfo.label}</span>
-          <span className="ml-auto text-xs text-gray-500 font-mono tabular-nums">
-            {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
-        </div>
-
-        <button
-          onClick={logout}
-          className="flex items-center gap-3 px-3 py-2 w-full text-left text-gray-500 hover:text-[var(--red)] hover:bg-[var(--red)]/5 rounded-lg transition text-sm"
-        >
-          <LogOut size={15} />
-          Sair da conta
-        </button>
-      </div>
     </>
+  );
+
+  const footerJsx = (
+    <div className="p-3 border-t border-white/10 space-y-2 shrink-0">
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-sm ${sessInfo.color}`}>
+        <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+        <span className="text-xs font-bold">{sessInfo.emoji} {sessInfo.label}</span>
+        <span className="ml-auto text-xs text-gray-500 font-mono tabular-nums">
+          {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </span>
+      </div>
+      <button
+        onClick={logout}
+        className="flex items-center gap-3 px-3 py-2 w-full text-left text-gray-500 hover:text-[var(--red)] hover:bg-[var(--red)]/5 rounded-lg transition text-sm"
+      >
+        <LogOut size={15} />
+        Sair da conta
+      </button>
+    </div>
   );
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="w-60 border-r border-white/10 bg-[var(--bg-1)] hidden md:flex flex-col h-full shrink-0">
-        <SidebarContent />
+        {headerJsx(false)}
+        {navJsx}
+        {footerJsx}
       </aside>
 
-      {/* Mobile hamburger button */}
+      {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
         className="md:hidden fixed top-4 left-4 z-50 p-2 bg-[var(--bg-1)] border border-white/10 rounded-lg text-white shadow-lg"
@@ -299,7 +296,9 @@ export function Sidebar() {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="md:hidden fixed left-0 top-0 bottom-0 w-72 z-50 bg-[var(--bg-1)] border-r border-white/10 flex flex-col overflow-hidden shadow-2xl">
-            <SidebarContent />
+            {headerJsx(true)}
+            {navJsx}
+            {footerJsx}
           </aside>
         </>
       )}
