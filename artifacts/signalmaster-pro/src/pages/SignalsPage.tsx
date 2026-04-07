@@ -38,24 +38,27 @@ export default function SignalsPage() {
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [recentTrades, setRecentTrades] = useState<any[]>([]);
   const [engineStatus, setEngineStatus] = useState('aguardando dados...');
   const [lastDiag, setLastDiag] = useState<DiagResult | null>(null);
   const [lastDiagTime, setLastDiagTime] = useState<Date | null>(null);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualAsset, setManualAsset] = useState('');
+  const [manualDir, setManualDir] = useState<'CALL'|'PUT'>('CALL');
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const wsRef = useRef<WebSocket | null>(null);
   const ouTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ouPriceRef = useRef<number>(1.0);
 
-  // Load stats from localStorage
-  useEffect(() => {
+  const refreshStats = () => {
     try {
       const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
       const today = new Date().toDateString();
       const todayHist = hist.filter((h: any) => new Date(h.ts).toDateString() === today);
       setWins(todayHist.filter((h: any) => h.result === 'win').length);
       setLosses(todayHist.filter((h: any) => h.result === 'loss').length);
-      // Calculate current streak
+      setRecentTrades([...todayHist].reverse().slice(0, 10));
       let s = 0;
       for (let i = hist.length - 1; i >= 0; i--) {
         if (!hist[i].result) break;
@@ -66,7 +69,10 @@ export default function SignalsPage() {
       }
       setStreak(s);
     } catch {}
-  }, []);
+  };
+
+  // Load stats from localStorage
+  useEffect(() => { refreshStats(); }, []);
 
   // Connect Binance WebSocket for crypto
   const connectBinance = useCallback((sym: string) => {
@@ -240,24 +246,40 @@ export default function SignalsPage() {
     if (!pendingSignal) return;
     playSignalSound(type);
     vibrate(type);
-
-    const histEntry = { ...pendingSignal, result: type, id: Date.now() };
+    const histEntry = { ...pendingSignal, result: type, id: Date.now(), ts: pendingSignal.ts || Date.now() };
     try {
       const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
       hist.push(histEntry);
       localStorage.setItem('smpH7', JSON.stringify(hist));
     } catch {}
-
     updateMLWeights(pendingSignal, type);
     setPendingSignal(null);
+    refreshStats();
+  };
 
-    if (type === 'win') {
-      setWins(w => w + 1);
-      setStreak(s => s >= 0 ? s + 1 : 1);
-    } else {
-      setLosses(l => l + 1);
-      setStreak(s => s <= 0 ? s - 1 : -1);
-    }
+  // Manual WIN/LOSS entry (without a signal)
+  const handleManualResult = (type: 'win' | 'loss') => {
+    playSignalSound(type);
+    vibrate(type);
+    const entry = {
+      asset: manualAsset || asset,
+      direction: manualDir,
+      category: ASSET_CATEGORIES[manualAsset || asset] || 'forex',
+      result: type,
+      score: 0,
+      quality: 'MANUAL',
+      sess: getCurrentSession(),
+      ts: Date.now(),
+      id: Date.now(),
+      manual: true
+    };
+    try {
+      const hist = JSON.parse(localStorage.getItem('smpH7') || '[]');
+      hist.push(entry);
+      localStorage.setItem('smpH7', JSON.stringify(hist));
+    } catch {}
+    setShowManualEntry(false);
+    refreshStats();
   };
 
   const total = wins + losses;
@@ -347,6 +369,65 @@ export default function SignalsPage() {
             {total === 0 && (
               <p className="text-xs text-gray-600 text-center py-2">Aguardando primeiros sinais...</p>
             )}
+
+            {/* MANUAL ENTRY BUTTON */}
+            <button
+              onClick={() => { setManualAsset(asset); setShowManualEntry(v => !v); }}
+              className="w-full mt-3 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white border border-white/10 hover:border-white/20 bg-white/3 hover:bg-white/6 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span className="text-[10px]">✏️</span> Registrar manualmente
+            </button>
+
+            {/* MANUAL ENTRY FORM */}
+            <AnimatePresence>
+              {showManualEntry && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Entrada Manual</div>
+
+                    {/* Asset selector */}
+                    <select
+                      value={manualAsset}
+                      onChange={e => setManualAsset(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--green)]/50"
+                    >
+                      {[...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS].map(a => (
+                        <option key={a} value={a} className="bg-[#07070d]">{a}</option>
+                      ))}
+                    </select>
+
+                    {/* Direction toggle */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setManualDir('CALL')}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${manualDir === 'CALL' ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30' : 'bg-white/5 text-gray-500 border border-white/5'}`}
+                      >▲ CALL</button>
+                      <button
+                        onClick={() => setManualDir('PUT')}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${manualDir === 'PUT' ? 'bg-[var(--red)]/20 text-[var(--red)] border border-[var(--red)]/30' : 'bg-white/5 text-gray-500 border border-white/5'}`}
+                      >▼ PUT</button>
+                    </div>
+
+                    {/* W/L buttons */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleManualResult('win')}
+                        className="py-2 rounded-lg text-xs font-black text-[var(--green)] bg-[var(--green)]/10 hover:bg-[var(--green)]/20 border border-[var(--green)]/20 transition-all active:scale-95"
+                      >✅ WIN</button>
+                      <button
+                        onClick={() => handleManualResult('loss')}
+                        className="py-2 rounded-lg text-xs font-black text-[var(--red)] bg-[var(--red)]/10 hover:bg-[var(--red)]/20 border border-[var(--red)]/20 transition-all active:scale-95"
+                      >❌ LOSS</button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* COUNTDOWN */}
@@ -752,6 +833,86 @@ export default function SignalsPage() {
       <div className="glass-card p-1">
         <TradingViewWidget symbol={TV_SYMBOLS[asset] || `FX:${asset}`} height={380} />
       </div>
+
+      {/* MINI TRADE HISTORY */}
+      {recentTrades.length > 0 && (
+        <div className="glass-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Operações de Hoje</h3>
+            <span className="text-xs text-gray-600">{recentTrades.length} registros</span>
+          </div>
+          <div className="space-y-1.5">
+            {recentTrades.map((t, i) => (
+              <div key={t.id || i} className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs ${
+                t.result === 'win' ? 'bg-[var(--green)]/5 border-[var(--green)]/15' : 'bg-[var(--red)]/5 border-[var(--red)]/15'
+              }`}>
+                <span className={`text-base leading-none ${t.result === 'win' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                  {t.result === 'win' ? '✅' : '❌'}
+                </span>
+                <span className="font-bold text-white w-16 shrink-0">{t.asset || '—'}</span>
+                <span className={`font-bold text-[10px] px-1.5 py-0.5 rounded ${
+                  t.direction === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' : 'text-[var(--red)] bg-[var(--red)]/10'
+                }`}>{t.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}</span>
+                {t.quality && t.quality !== 'MANUAL' && (
+                  <span className="text-gray-600 text-[10px]">{t.quality}</span>
+                )}
+                {t.manual && <span className="text-gray-600 text-[10px]">manual</span>}
+                <span className="ml-auto text-gray-600 tabular-nums">
+                  {new Date(t.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── FLOATING WIN/LOSS BAR (appears when signal is pending) ─── */}
+      <AnimatePresence>
+        {pendingSignal && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            className="fixed bottom-0 left-0 right-0 z-50 p-4 safe-area-pb"
+            style={{ background: 'linear-gradient(to top, rgba(7,7,13,0.98) 70%, transparent)' }}
+          >
+            <div className="max-w-2xl mx-auto">
+              {/* Signal summary row */}
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${pendingSignal.direction === 'CALL' ? 'bg-[var(--green)]' : 'bg-[var(--red)]'}`} />
+                  <span className="text-xs font-bold text-white">{pendingSignal.asset}</span>
+                  <span className={`text-xs font-black ${pendingSignal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                    {pendingSignal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
+                  </span>
+                  <span className="text-[10px] text-gray-500">{pendingSignal.quality} · {pendingSignal.score}%</span>
+                </div>
+                <span className="text-[10px] text-gray-600 animate-pulse">Marque o resultado →</span>
+              </div>
+
+              {/* Big WIN/LOSS buttons */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleResult('win')}
+                  className="py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-2 bg-[var(--green)]/15 text-[var(--green)] hover:bg-[var(--green)]/25 border border-[var(--green)]/25 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-[var(--green)]/10"
+                >
+                  ✅ DEU WIN
+                </button>
+                <button
+                  onClick={() => handleResult('loss')}
+                  className="py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-2 bg-[var(--red)]/15 text-[var(--red)] hover:bg-[var(--red)]/25 border border-[var(--red)]/25 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-[var(--red)]/10"
+                >
+                  ❌ DEU LOSS
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom spacer when floating bar is visible */}
+      {pendingSignal && <div className="h-32" />}
     </div>
   );
 }
