@@ -77,11 +77,24 @@ async function connectCrypto(asset: string) {
         v: parseFloat(k.v), t: k.t
       };
       buf.price = candle.c;
+      const lastT = buf.m1.length > 0 ? buf.m1[buf.m1.length - 1].t : -1;
       if (k.x) {
-        buf.m1.push(candle);
-        if (buf.m1.length > 200) buf.m1.shift();
-      } else if (buf.m1.length > 0) {
-        buf.m1[buf.m1.length - 1] = candle;
+        // Candle closed: update existing live slot with final values (same timestamp)
+        if (lastT === candle.t) {
+          buf.m1[buf.m1.length - 1] = candle;
+        } else {
+          buf.m1.push(candle);
+          if (buf.m1.length > 200) buf.m1.shift();
+        }
+      } else {
+        if (lastT === candle.t) {
+          // Same candle tick — update in place
+          buf.m1[buf.m1.length - 1] = candle;
+        } else {
+          // New candle started — push without overwriting the closed one
+          buf.m1.push(candle);
+          if (buf.m1.length > 200) buf.m1.shift();
+        }
       }
       notify(asset);
     } catch {}
@@ -101,9 +114,11 @@ function connectOU(asset: string) {
   let p = basePrice;
 
   const history: Candle[] = [];
+  // Align timestamps to minute boundaries so groupByPeriod works correctly
+  const nowMin = Math.floor(Date.now() / 60000) * 60000;
   for (let i = 0; i < 150; i++) {
-    const fakePast = Date.now() - (150 - i) * 60000;
-    const seed = fakePast % 1000000;
+    const t = nowMin - (150 - i) * 60000; // aligned to exact minute
+    const seed = t % 1000000;
     const r1 = Math.abs(Math.sin(seed * 9301 + 49297 + i * 1337) % 1) || 0.01;
     const r2 = Math.abs(Math.sin(seed * 49297 + 233 + i * 7919) % 1) || 0.01;
     const mu = BASE_PRICES[asset] || p;
@@ -117,24 +132,53 @@ function connectOU(asset: string) {
     const open = p;
     const high = Math.max(open, close) + range * 0.3;
     const low = Math.min(open, close) - range * 0.3;
-    history.push({ o: open, h: high, l: low, c: close, v: 1000 + Math.abs(normal) * 500, t: fakePast });
+    history.push({ o: open, h: high, l: low, c: close, v: 1000 + Math.abs(normal) * 500, t });
     p = close;
   }
 
   buf.m1 = history;
   buf.price = p;
   buf.connected = true;
+
+  // Add initial live candle for the current (forming) minute
+  const currentMinT = Math.floor(Date.now() / 60000) * 60000;
+  buf.m1.push({ o: p, h: p, l: p, c: p, v: 500, t: currentMinT });
+
   notify(asset);
 
+  // Every 60s: close current live candle and start a new one
   const timer = setInterval(() => {
     const c = generateOUCandle(buf.price, asset);
+    const alignedT = Math.floor(Date.now() / 60000) * 60000;
+    c.t = alignedT;
+    // Finalise the previous live candle (last in buffer)
     buf.price = c.c;
+    // Push closed candle then add new live candle
+    buf.m1[buf.m1.length - 1] = { ...buf.m1[buf.m1.length - 1], c: c.o }; // close prev at new open
     buf.m1.push(c);
-    if (buf.m1.length > 200) buf.m1.shift();
+    if (buf.m1.length > 202) buf.m1.shift();
     notify(asset);
   }, 60000);
 
+  // Every 2s: update the live candle price (simulates real-time feed)
+  const liveTimer = setInterval(() => {
+    if (buf.m1.length === 0) return;
+    const sigma = (asset === 'XAUUSD' ? 0.002 : asset === 'USOIL' ? 0.003 : 0.0003);
+    const tick = (Math.random() - 0.5) * sigma * 0.5;
+    const newPrice = buf.price + tick;
+    const last = buf.m1[buf.m1.length - 1];
+    buf.m1[buf.m1.length - 1] = {
+      ...last,
+      c: newPrice,
+      h: Math.max(last.h, newPrice),
+      l: Math.min(last.l, newPrice),
+    };
+    buf.price = newPrice;
+    notify(asset);
+  }, 2000);
+
   ouTimers.set(asset, timer);
+  ouTimers.set(asset + '_live', liveTimer);
 }
 
 export function getBuffer(asset: string): AssetBuffer | undefined {
