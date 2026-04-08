@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import TradingViewWidget from "@/components/TradingViewWidget";
 import PairMonitorCard from "@/components/PairMonitorCard";
 import ManagementPanel from "@/components/ManagementPanel";
+import MarketNews from "@/components/MarketNews";
+import CryptoPrices from "@/components/CryptoPrices";
+import MarketIndices from "@/components/MarketIndices";
 import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye, Layers, Copy, CheckCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -1062,6 +1065,15 @@ export default function SignalsPage() {
           )}
         </div>
       </div>}
+
+      {/* MARKET DATA ROW — Notícias | Cripto | Índices */}
+      {!multiPairMode && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <MarketNews />
+          <CryptoPrices />
+          <MarketIndices />
+        </div>
+      )}
 
       {/* CHART — full width below all columns, só no modo single */}
       {!multiPairMode && (

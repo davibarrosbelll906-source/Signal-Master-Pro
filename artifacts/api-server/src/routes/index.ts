@@ -6,6 +6,7 @@ import emailRouter from "./email.js";
 import leaderboardRouter from "./leaderboard.js";
 import stripeRouter from "./stripe.js";
 import lunaRouter from "./luna.js";
+import marketRouter from "./market.js";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/email", emailRouter);
 router.use("/leaderboard", leaderboardRouter);
 router.use("/stripe", stripeRouter);
 router.use("/luna", lunaRouter);
+router.use("/", marketRouter);
 
 export default router;
