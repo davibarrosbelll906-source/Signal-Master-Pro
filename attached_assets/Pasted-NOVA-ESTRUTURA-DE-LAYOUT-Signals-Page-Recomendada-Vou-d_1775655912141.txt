@@ -1,0 +1,78 @@
+NOVA ESTRUTURA DE LAYOUT – Signals Page (Recomendada)
+Vou dividir a tela em 4 áreas principais:
+1. Header Superior (Fixo)
+
+Sessão atual (Overlap) com emoji e cor
+Relógio grande contando até o próximo sinal (:48)
+Stats do dia: Win / Loss / Win Rate / Streak
+Toggle REAL / DEMO + nome da corretora
+Botão de Multi-Par (se ativo)
+
+2. Área Central – SINAL PRINCIPAL (O grande destaque)
+Esta será a estrela da página — deve ocupar bastante espaço quando houver sinal.
+Quando tem sinal ativo:
+
+Card grande no centro
+Direção (CALL ou PUT) em letra gigante com cor forte (verde/vermelho)
+Score grande (ex: 87)
+Tier (ELITE / PREMIUM) com badge bonito
+Par + Timeframe + Expiração
+Botão grande “Copiar Sinal”
+Explicação curta da Luna logo abaixo (2-3 linhas)
+
+Quando não tem sinal:
+
+Card elegante com mensagem “Aguardando próximo sinal...”
+Contagem regressiva até o segundo :48
+Texto motivacional ou dica rápida
+
+3. Sidebar Direita (Informações Técnicas)
+
+Gestão de Banca (compacta)
+Motor de Análise (lista de indicadores com status verde/amarelo/vermelho)
+Última Análise (mini card)
+Alerta de Sequência ou Banca Baixa
+
+4. Área Inferior
+
+Gráfico grande (lightweight-charts) — ocupa boa parte da largura
+Operações de hoje (histórico rápido, rolável)
+
+
+Layout Visual (Descrição Posição)
+text[ HEADER SUPERIOR - Fixo ]
+Sessão • Relógio • Stats do Dia • Real/Demo
+
+──────────────────────────────────────────────
+
+[ SINAL PRINCIPAL - Centro Superior ]
+       █████████████████████████████
+       CALL 87%   PREMIUM     3 min
+       EURUSD   M5
+       [ Botão Copiar Sinal grande ]
+       Explicação da Luna (curta)
+
+[ GRÁFICO GRANDE - Centro Inferior ]
+       Lightweight Charts (bem espaçoso)
+
+──────────────────────────────────────────────
+
+[ SIDEBAR DIREITA ]
+• Gestão de Banca
+• Motor de Análise (RSI, ADX, EMA...)
+• Última Análise
+• Alertas
+
+[ HISTÓRICO RÁPIDO - Abaixo do gráfico ou em aba ]
+
+Sugestões de Integração com a Luna (Elegante)
+
+Botão flutuante da Luna
+Canto inferior direito: botão redondo com ícone de IA → abre o chat com Luna
+Dentro do card do sinal principal
+Logo abaixo do score, um pequeno botão:
+“Explicar com Luna” → abre o chat já com o contexto do sinal atual
+Explicação automática da Luna
+Após o sinal aparecer, uma caixa pequena aparece abaixo do sinal com:Luna diz: "Este CALL tem boa confluência entre EMA e RSI na sessão Overlap. Suporte forte em 1.2345..."
+Modo "Pergunte à Luna"
+No card do sinal, adicionar: “O que você acha deste sinal, Luna?” (envia direto pro chat)

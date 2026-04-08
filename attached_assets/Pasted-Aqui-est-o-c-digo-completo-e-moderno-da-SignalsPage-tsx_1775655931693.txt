@@ -1,0 +1,209 @@
+Aqui está o código completo e moderno da SignalsPage.tsx com a nova estrutura que eu recomendei:
+src/pages/SignalsPage.tsx
+tsximport { useEffect, useState } from 'react';
+import { useAccountMode } from '../lib/useAccountMode';
+import { signalEngine } from '../../../api-server/src/lib/signalEngine'; // ajuste o caminho se necessário
+import LunaChat from '../components/LunaChat'; // vamos criar depois
+
+export default function SignalsPage() {
+  const { mode, broker, isReal } = useAccountMode();
+  
+  const [currentSignal, setCurrentSignal] = useState<any>(null);
+  const [lunaExplanation, setLunaExplanation] = useState<string>('');
+  const [timeToNextSignal, setTimeToNextSignal] = useState(48);
+  const [showLunaChat, setShowLunaChat] = useState(false);
+
+  // Simulação de recebimento de sinal via Socket.io (substitua pelo real depois)
+  useEffect(() => {
+    // Aqui você vai conectar com Socket.io mais tarde
+    const interval = setInterval(() => {
+      const seconds = new Date().getSeconds();
+      setTimeToNextSignal(48 - seconds > 0 ? 48 - seconds : 0);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Função para simular chegada de sinal (para teste)
+  const simulateSignal = () => {
+    const newSignal = {
+      id: Date.now().toString(),
+      pair: "EURUSD",
+      direction: "CALL",
+      score: 87,
+      tier: "PREMIUM",
+      timeframe: "M5",
+      expiry: 3,
+      reason: "Forte confluência EMA + RSI + suporte testado",
+      session: "Overlap",
+      confidence: 89,
+    };
+    setCurrentSignal(newSignal);
+    
+    // Simula explicação da Luna
+    setLunaExplanation(
+      "Este CALL tem excelente confluência. O preço está acima da EMA 50 e 200, RSI saindo de zona de oversold e estamos na sessão de maior liquidez (Overlap). Suporte forte em 1.0820."
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 overflow-auto">
+      {/* HEADER SUPERIOR */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Sinais ao Vivo</h1>
+          <p className="text-gray-400">Sessão: <span className="text-green-400 font-medium">Overlap 🌍</span></p>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="text-center">
+            <div className="text-4xl font-mono font-bold text-yellow-400">{timeToNextSignal}</div>
+            <div className="text-xs text-gray-500">segundos para próximo sinal</div>
+          </div>
+
+          <div className={`px-5 py-2 rounded-xl font-medium flex items-center gap-2 ${isReal ? 'bg-red-600' : 'bg-blue-600'}`}>
+            {isReal ? '🔴 CONTA REAL' : '🔵 CONTA DEMO'} • {broker}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* ==================== SINAL PRINCIPAL ==================== */}
+        <div className="lg:col-span-8">
+          <div className="glass-card p-8 rounded-3xl min-h-[420px] flex flex-col items-center justify-center border border-gray-800">
+            {currentSignal ? (
+              <>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className={`text-7xl font-bold ${currentSignal.direction === 'CALL' ? 'text-green-500' : 'text-red-500'}`}>
+                    {currentSignal.direction}
+                  </div>
+                  <div>
+                    <div className="text-6xl font-bold text-white">{currentSignal.score}</div>
+                    <div className="text-xl text-gray-400">SCORE</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mb-6">
+                  <span className="px-6 py-2 bg-green-500/20 text-green-400 rounded-full font-semibold text-lg">
+                    {currentSignal.tier}
+                  </span>
+                  <span className="px-6 py-2 bg-gray-700 rounded-full text-sm flex items-center">
+                    {currentSignal.pair} • {currentSignal.timeframe} • {currentSignal.expiry}min
+                  </span>
+                </div>
+
+                <button 
+                  onClick={() => navigator.clipboard.writeText(`${currentSignal.direction} ${currentSignal.pair} ${currentSignal.expiry}min`)}
+                  className="bg-white text-black font-bold text-xl px-12 py-4 rounded-2xl hover:bg-gray-200 transition-all active:scale-95"
+                >
+                  📋 COPIAR SINAL
+                </button>
+
+                {/* Explicação da Luna */}
+                {lunaExplanation && (
+                  <div className="mt-8 w-full max-w-2xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-violet-400">✦</span>
+                      <span className="font-medium text-violet-400">Luna explica:</span>
+                    </div>
+                    <p className="text-gray-300 leading-relaxed text-lg">
+                      {lunaExplanation}
+                    </p>
+                  </div>
+                )}
+
+                <button 
+                  onClick={() => setShowLunaChat(true)}
+                  className="mt-6 text-violet-400 hover:text-violet-300 flex items-center gap-2 text-sm"
+                >
+                  Perguntar mais para Luna →
+                </button>
+              </>
+            ) : (
+              /* Estado sem sinal */
+              <div className="text-center">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-full border-4 border-dashed border-gray-700 flex items-center justify-center">
+                  <span className="text-5xl">⏳</span>
+                </div>
+                <h2 className="text-3xl font-semibold mb-2">Aguardando próximo sinal</h2>
+                <p className="text-gray-400 max-w-md">
+                  O motor está analisando o mercado. O próximo sinal será gerado automaticamente no segundo <span className="font-mono text-yellow-400">:48</span>.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* GRÁFICO */}
+          <div className="mt-6 glass-card p-4 rounded-3xl">
+            <div className="h-[420px] bg-[#111] rounded-2xl" id="chart-container">
+              {/* Seu TradingViewWidget vai aqui */}
+              <p className="text-center text-gray-500 mt-40">Gráfico Lightweight Charts aqui</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ==================== SIDEBAR DIREITA ==================== */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* Gestão de Banca */}
+          <div className="glass-card p-6 rounded-3xl">
+            <h3 className="text-lg font-semibold mb-4">Gestão de Banca</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Banca Atual</span>
+                <span className="font-medium">R$ 1.235,80</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Entrada Sugerida</span>
+                <span className="text-green-400">R$ 12,35 (1%)</span>
+              </div>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-full w-[65%] bg-gradient-to-r from-green-500 to-emerald-500"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Motor de Análise */}
+          <div className="glass-card p-6 rounded-3xl">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              Motor de Análise
+              <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">ATIVO</span>
+            </h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between"><span>EMA Trend</span><span className="text-green-400">Bullish</span></div>
+              <div className="flex justify-between"><span>RSI (14)</span><span>68.4</span></div>
+              <div className="flex justify-between"><span>ADX</span><span className="text-green-400">Strong Trend</span></div>
+              <div className="flex justify-between"><span>Bollinger Squeeze</span><span className="text-amber-400">Detectado</span></div>
+            </div>
+          </div>
+
+          {/* Última Análise */}
+          <div className="glass-card p-6 rounded-3xl">
+            <h3 className="text-lg font-semibold mb-3">Última Análise</h3>
+            <div className="text-sm text-gray-300">
+              BTCUSD • CALL 79% • 14:32<br />
+              Forte tendência de alta com suporte respeitado.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Botão Flutuante da Luna */}
+      <button
+        onClick={() => setShowLunaChat(true)}
+        className="fixed bottom-8 right-8 w-16 h-16 bg-violet-600 hover:bg-violet-700 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 z-50"
+      >
+        <span className="text-3xl">✦</span>
+      </button>
+
+      {/* Modal do Chat com Luna */}
+      {showLunaChat && (
+        <LunaChat 
+          onClose={() => setShowLunaChat(false)} 
+          initialContext={currentSignal ? `Analise o sinal atual: ${currentSignal.pair} ${currentSignal.direction} ${currentSignal.score}` : undefined}
+        />
+      )}
+    </div>
+  );
+}
