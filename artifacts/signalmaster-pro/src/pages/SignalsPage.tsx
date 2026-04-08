@@ -2,10 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import TradingViewWidget from "@/components/TradingViewWidget";
 import PairMonitorCard from "@/components/PairMonitorCard";
 import ManagementPanel from "@/components/ManagementPanel";
-import MarketNews from "@/components/MarketNews";
-import CryptoPrices from "@/components/CryptoPrices";
-import MarketIndices from "@/components/MarketIndices";
-import { Activity, Check, X, TrendingUp, TrendingDown, Clock, Cpu, Shield, Eye, Layers, Copy, CheckCheck } from "lucide-react";
+import { Clock, Cpu, Layers, Copy, CheckCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ASSET_CATEGORIES, TV_SYMBOLS,
@@ -321,240 +318,242 @@ export default function SignalsPage() {
     london: 'Londres 🇬🇧', overlap: 'Overlap 🌍', ny: 'Nova York 🇺🇸', asia: 'Ásia 🌏'
   };
 
-  return (
-    <div className="space-y-4 max-w-7xl mx-auto relative">
+  const chartRef = useRef<HTMLDivElement>(null);
+  const tradeStats = `W:${wins} L:${losses} WR:${winRate}% Streak:${streak > 0 ? '+' + streak + 'W' : streak < 0 ? streak + 'L' : '-'}`;
 
-      {/* DEMO watermark overlay */}
+  const copySignal = () => {
+    if (!signal) return;
+    navigator.clipboard.writeText(`${signal.direction} ${signal.asset} ${timeframe} Score:${signal.score} ${signal.quality}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto relative space-y-5 pb-10">
+
+      {/* DEMO watermark */}
       {!isReal && (
         <div className="pointer-events-none fixed inset-0 z-10 flex items-center justify-center overflow-hidden" style={{ top: 0, left: 240 }}>
-          <div className="text-[120px] font-black text-blue-500/[0.04] select-none rotate-[-30deg] tracking-widest whitespace-nowrap">
-            DEMO DEMO DEMO
-          </div>
+          <div className="text-[120px] font-black text-blue-500/[0.04] select-none rotate-[-30deg] tracking-widest whitespace-nowrap">DEMO DEMO DEMO</div>
         </div>
       )}
 
-      {/* STATUS BAR */}
-      <div className="glass-card p-3 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[var(--green)] animate-pulse' : 'bg-red-500'}`} />
-            <span className="text-gray-400">{isConnected ? 'Conectado' : 'Desconectado'}</span>
+      {/* ═══════════════════════════════════════════════════════════
+          TOP HEADER — Asset selector + Session + Controls
+      ═══════════════════════════════════════════════════════════ */}
+      <div className="glass-card p-4 space-y-3">
+
+        {/* Row 1: category tabs + asset pills + price */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
+            {(['crypto','forex','commodity'] as const).map(c => (
+              <button key={c} onClick={() => {
+                const first = c === 'crypto' ? 'BTCUSD' : c === 'forex' ? 'EURUSD' : 'XAUUSD';
+                handleAssetChange(first);
+              }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                category === c ? 'bg-[var(--green)] text-black shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'text-gray-500 hover:text-white'
+              }`}>
+                {c === 'crypto' ? '₿ Cripto' : c === 'forex' ? '💱 Forex' : '🏅 Commodities'}
+              </button>
+            ))}
           </div>
-          <div className="text-gray-400">|</div>
-          <div>
-            <span className="text-gray-400">Sessão: </span>
-            <span className="font-bold text-[var(--green)]">{sessLabels[sess] || sess}</span>
+
+          <div className="flex flex-wrap gap-1.5 flex-1">
+            {(category === 'crypto' ? CRYPTO_ASSETS : category === 'forex' ? FOREX_ASSETS : COMMODITY_ASSETS).map(a => (
+              <button key={a} onClick={() => handleAssetChange(a)} className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                asset === a
+                  ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30 shadow-[0_0_8px_rgba(0,255,136,0.12)]'
+                  : 'bg-white/4 text-gray-400 hover:text-white border border-white/5 hover:border-white/10'
+              }`}>
+                {ASSET_ICONS[a] || ''} {a}
+              </button>
+            ))}
           </div>
-          <div className="text-gray-400">|</div>
-          <div className="flex items-center gap-1">
-            <Cpu size={12} className="text-gray-500" />
-            <span className="text-gray-400 text-xs">{engineStatus}</span>
-          </div>
-          {/* News blackout warning */}
-          {activeNewsBlackout && (Date.now() - activeNewsBlackout.at < 900_000) && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20">
-              <span className="text-red-400 text-[10px]">📰</span>
-              <span className="text-red-400 text-[10px] font-bold">
-                {activeNewsBlackout.event.length > 20 ? activeNewsBlackout.event.slice(0, 20) + '…' : activeNewsBlackout.event}
-                {activeNewsBlackout.minutesUntil > 0 ? ` em ${activeNewsBlackout.minutesUntil}min` : ' agora'}
+
+          {lastPrice && (
+            <div className="flex items-baseline gap-1.5 ml-auto">
+              <span className="font-mono text-white font-bold text-lg">
+                {lastPrice < 10 ? lastPrice.toFixed(5) : lastPrice < 1000 ? lastPrice.toFixed(4) : lastPrice.toFixed(2)}
               </span>
+              {priceChange !== 0 && (
+                <span className={`text-xs font-bold ${priceChange >= 0 ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                  {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(3)}%
+                </span>
+              )}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
-          {/* Mode badge */}
-          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-black text-[10px] ${
-            isReal
-              ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-              : 'bg-blue-500/12 text-blue-400 border border-blue-500/20'
-          }`}>
-            <span className={`w-1 h-1 rounded-full bg-current ${isReal ? 'animate-pulse' : ''}`} />
-            {mode.toUpperCase()}
-          </span>
-          <span>{bufferSize} velas M1</span>
-          {lastPrice && <span className="font-mono text-white">{lastPrice < 10 ? lastPrice.toFixed(5) : lastPrice < 1000 ? lastPrice.toFixed(4) : lastPrice.toFixed(2)}</span>}
-          {priceChange !== 0 && (
-            <span className={priceChange >= 0 ? 'text-[var(--green)]' : 'text-[var(--red)]'}>
-              {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(3)}%
+
+        {/* Row 2: Session | Countdown | Stats | Timeframe | Controls */}
+        <div className="flex flex-wrap items-center gap-4">
+
+          {/* Connection + session */}
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[var(--green)] animate-pulse' : 'bg-red-400'}`} />
+            <span className="text-sm font-semibold text-white">{sessLabels[sess] || sess}</span>
+          </div>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Countdown */}
+          <div className="flex items-center gap-2">
+            <div className="relative w-10 h-10">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
+                <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                <circle cx="20" cy="20" r="16" fill="none"
+                  stroke={isFiring ? 'var(--green)' : 'var(--blue)'}
+                  strokeWidth="3" strokeLinecap="round"
+                  strokeDasharray="100.5"
+                  strokeDashoffset={100.5 * (1 - progressPct / 100)}
+                  className="transition-all duration-1000"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                {isFiring ? <span className="text-[8px] font-black text-[var(--green)] animate-pulse">⚡</span> : (
+                  <span className="text-[10px] font-bold font-mono tabular-nums text-white">
+                    {timeToNext < 60 ? timeToNext : `${Math.floor(timeToNext/60)}:${String(timeToNext%60).padStart(2,'0')}`}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-500 leading-none">próx. sinal</div>
+              <div className="text-xs font-bold text-white leading-none mt-0.5">{timeframe}</div>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Day stats */}
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <div className="text-xl font-black text-[var(--green)] leading-none">{wins}</div>
+              <div className="text-[9px] text-gray-600 uppercase tracking-widest">WIN</div>
+            </div>
+            <div className="text-gray-700 text-lg font-thin">/</div>
+            <div className="text-center">
+              <div className="text-xl font-black text-[var(--red)] leading-none">{losses}</div>
+              <div className="text-[9px] text-gray-600 uppercase tracking-widest">LOSS</div>
+            </div>
+            {total > 0 && (
+              <>
+                <div className="w-px h-6 bg-white/10" />
+                <div className="text-center">
+                  <div className={`text-xl font-black leading-none ${winRate >= 65 ? 'text-[var(--green)]' : winRate >= 50 ? 'text-yellow-400' : 'text-[var(--red)]'}`}>{winRate}%</div>
+                  <div className="text-[9px] text-gray-600 uppercase tracking-widest">WR</div>
+                </div>
+                {streak !== 0 && (
+                  <>
+                    <div className="w-px h-6 bg-white/10" />
+                    <div className={`px-2 py-0.5 rounded-lg text-xs font-black ${streak > 0 ? 'bg-[var(--green)]/10 text-[var(--green)]' : 'bg-[var(--red)]/10 text-[var(--red)]'}`}>
+                      {streak > 0 ? `🔥 +${streak}W` : `❄️ ${streak}L`}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            {/* Timeframe toggle */}
+            <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg">
+              {(['M1','M5','M15'] as const).map(tf => (
+                <button key={tf} onClick={() => { setTimeframe(tf); setSignal(null); setPendingSignal(null); }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-black transition-all ${
+                    timeframe === tf ? 'bg-[var(--green)] text-black' : 'text-gray-500 hover:text-white'
+                  }`}>{tf}</button>
+              ))}
+            </div>
+
+            {/* Real/Demo badge */}
+            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full font-black text-xs ${
+              isReal ? 'bg-red-500/15 text-red-400 border border-red-500/20' : 'bg-blue-500/12 text-blue-400 border border-blue-500/20'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full bg-current ${isReal ? 'animate-pulse' : ''}`} />
+              {isReal ? 'REAL' : 'DEMO'}
             </span>
-          )}
-          {/* TOGGLE MODO MULTI-PAR */}
-          <button
-            onClick={() => setMultiPairMode(v => !v)}
-            title="Monitorar múltiplos pares ao mesmo tempo"
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all duration-200 ${
-              multiPairMode
-                ? 'border-[var(--green)] text-[var(--green)] bg-[var(--green)]/10'
-                : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5'
-            }`}
-          >
-            <Layers size={10} />
-            {multiPairMode ? `Multi-Par (${watchedPairs.length})` : 'Multi-Par'}
-          </button>
-          {/* BOTÃO ATIVAR SOM */}
-          <button
-            onClick={async () => {
-              const ok = await unlockAudio();
-              setAudioEnabled(ok);
-              if (ok) playSignalSound('alert');
-            }}
-            title={audioEnabled ? 'Som ativo — clique para testar' : 'Clique para ativar notificações sonoras'}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all duration-200 ${
-              audioEnabled
-                ? 'border-[var(--green)] text-[var(--green)] bg-[var(--green)]/10'
-                : 'border-yellow-500 text-yellow-400 bg-yellow-500/10 animate-pulse'
-            }`}
-          >
-            {audioEnabled ? '🔔 Som ativo' : '🔇 Ativar som'}
-          </button>
+
+            {/* Multi-par toggle */}
+            <button onClick={() => setMultiPairMode(v => !v)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition-all ${
+              multiPairMode ? 'border-[var(--green)] text-[var(--green)] bg-[var(--green)]/10' : 'border-white/15 text-gray-500 hover:text-white bg-white/4'
+            }`}>
+              <Layers size={10} />
+              {multiPairMode ? `Multi (${watchedPairs.length})` : 'Multi-Par'}
+            </button>
+
+            {/* Audio toggle */}
+            <button onClick={async () => { const ok = await unlockAudio(); setAudioEnabled(ok); if (ok) playSignalSound('alert'); }}
+              className={`px-2.5 py-1 rounded-full border text-xs font-bold transition-all ${
+                audioEnabled ? 'border-[var(--green)] text-[var(--green)] bg-[var(--green)]/10' : 'border-yellow-500/60 text-yellow-400 bg-yellow-500/8 animate-pulse'
+              }`}>
+              {audioEnabled ? '🔔' : '🔇'}
+            </button>
+
+            {/* News blackout */}
+            {activeNewsBlackout && (Date.now() - activeNewsBlackout.at < 900_000) && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/10 border border-red-500/20">
+                <span className="text-[10px]">📰</span>
+                <span className="text-red-400 text-[10px] font-bold">
+                  {activeNewsBlackout.event.slice(0, 16)}{activeNewsBlackout.minutesUntil > 0 ? ` ${activeNewsBlackout.minutesUntil}min` : ''}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ─── MODO MULTI-PAR ─────────────────────────────────────────────────── */}
+      {/* ═══════════════════════════════════════════════════════════
+          MULTI-PAR MODE
+      ═══════════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {multiPairMode && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-5"
-          >
-            {/* ── PAIR PICKER ── */}
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
             <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: 'rgba(12,12,24,0.7)', backdropFilter: 'blur(16px)' }}>
-              {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-[var(--green)]/10 flex items-center justify-center">
-                    <Layers size={14} className="text-[var(--green)]" />
-                  </div>
+                  <div className="w-7 h-7 rounded-lg bg-[var(--green)]/10 flex items-center justify-center"><Layers size={14} className="text-[var(--green)]" /></div>
                   <div>
                     <div className="text-sm font-bold text-white">Monitor Multi-Par</div>
-                    <div className="text-[10px] text-gray-600">Sinais disparam imediatamente ao carregar</div>
+                    <div className="text-[10px] text-gray-600">Até {MAX_PAIRS} pares simultâneos</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* Slots indicator */}
-                  <div className="flex gap-1">
-                    {Array.from({ length: MAX_PAIRS }).map((_, i) => (
-                      <div key={i} className={`w-5 h-1.5 rounded-full transition-colors ${i < watchedPairs.length ? 'bg-[var(--green)]' : 'bg-white/10'}`} />
-                    ))}
-                  </div>
-                  <span className="text-[10px] text-gray-600 tabular-nums">{watchedPairs.length}/{MAX_PAIRS}</span>
-                </div>
+                <div className="flex gap-1">{Array.from({ length: MAX_PAIRS }).map((_, i) => (
+                  <div key={i} className={`w-5 h-1.5 rounded-full ${i < watchedPairs.length ? 'bg-[var(--green)]' : 'bg-white/10'}`} />
+                ))}</div>
               </div>
-
-              {/* Category sections */}
               <div className="p-4 space-y-4">
-                {/* Cripto */}
-                <div>
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="text-yellow-400">₿</span>
-                    <span className="text-[10px] font-black text-yellow-400/80 uppercase tracking-widest">Cripto</span>
+                {[{ label: '₿ Cripto', color: 'yellow', assets: CRYPTO_ASSETS }, { label: '💱 Forex', color: 'blue', assets: FOREX_ASSETS }, { label: '🏅 Commodities', color: 'orange', assets: COMMODITY_ASSETS }].map(({ label, color, assets }) => (
+                  <div key={label}>
+                    <div className={`text-[10px] font-black text-${color}-400/80 uppercase tracking-widest mb-2`}>{label}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {assets.map(a => {
+                        const sel = watchedPairs.includes(a); const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                        return (
+                          <button key={a} onClick={() => togglePair(a)} disabled={full} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                            sel ? `bg-${color}-400/12 text-${color}-300 border-${color}-400/25` : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed' : `bg-white/4 text-gray-400 border-white/8 hover:text-${color}-400`
+                          }`}>{ASSET_ICONS[a] || ''} {a.replace('USD','')}{sel && <span className={`inline-block w-1.5 h-1.5 rounded-full bg-${color}-400 ml-1.5 align-middle`} />}</button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {CRYPTO_ASSETS.map(a => {
-                      const sel = watchedPairs.includes(a);
-                      const full = !sel && watchedPairs.length >= MAX_PAIRS;
-                      const icon = { BTCUSD: '₿', ETHUSD: 'Ξ', SOLUSD: '◎', BNBUSD: '⬡', XRPUSD: '✕', ADAUSD: '₳', DOGEUSD: 'Ð', LTCUSD: 'Ł' }[a] || '•';
-                      return (
-                        <button key={a} onClick={() => togglePair(a)} disabled={full}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                            sel ? 'bg-yellow-400/12 text-yellow-300 border-yellow-400/25 shadow-sm shadow-yellow-400/10'
-                            : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
-                            : 'bg-white/4 text-gray-400 border-white/8 hover:bg-yellow-400/8 hover:text-yellow-400 hover:border-yellow-400/20'
-                          }`}>
-                          <span className="text-[11px]">{icon}</span>
-                          {a.replace('USD', '')}
-                          {sel && <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 ml-0.5" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Forex */}
-                <div>
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="text-blue-400">💱</span>
-                    <span className="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">Forex</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {FOREX_ASSETS.map(a => {
-                      const sel = watchedPairs.includes(a);
-                      const full = !sel && watchedPairs.length >= MAX_PAIRS;
-                      return (
-                        <button key={a} onClick={() => togglePair(a)} disabled={full}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                            sel ? 'bg-blue-400/12 text-blue-300 border-blue-400/25 shadow-sm shadow-blue-400/10'
-                            : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
-                            : 'bg-white/4 text-gray-400 border-white/8 hover:bg-blue-400/8 hover:text-blue-400 hover:border-blue-400/20'
-                          }`}>
-                          {a}
-                          {sel && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 ml-1.5 align-middle" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Commodities */}
-                <div>
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="text-orange-400">🏅</span>
-                    <span className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest">Commodities</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {COMMODITY_ASSETS.map(a => {
-                      const sel = watchedPairs.includes(a);
-                      const full = !sel && watchedPairs.length >= MAX_PAIRS;
-                      return (
-                        <button key={a} onClick={() => togglePair(a)} disabled={full}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                            sel ? 'bg-orange-400/12 text-orange-300 border-orange-400/25 shadow-sm shadow-orange-400/10'
-                            : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
-                            : 'bg-white/4 text-gray-400 border-white/8 hover:bg-orange-400/8 hover:text-orange-400 hover:border-orange-400/20'
-                          }`}>
-                          {a}
-                          {sel && <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400 ml-1.5 align-middle" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
+                ))}
                 {watchedPairs.length >= MAX_PAIRS && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-yellow-400/5 border border-yellow-400/10">
                     <span className="text-yellow-400">⚠</span>
-                    <span className="text-[11px] text-yellow-400/80">Limite de {MAX_PAIRS} pares atingido. Remova um para adicionar outro.</span>
+                    <span className="text-[11px] text-yellow-400/80">Limite atingido. Remova um par para adicionar outro.</span>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* ── MONITOR GRID ── */}
             {watchedPairs.length === 0 ? (
               <div className="rounded-2xl border border-white/5 p-10 text-center" style={{ background: 'rgba(12,12,24,0.5)' }}>
                 <div className="text-3xl mb-3">📡</div>
                 <div className="text-gray-400 font-semibold mb-1">Nenhum par selecionado</div>
-                <div className="text-gray-700 text-xs">Selecione de 1 a {MAX_PAIRS} pares acima para começar a monitorar</div>
               </div>
             ) : (
-              <div className={`grid gap-4 ${
-                watchedPairs.length === 1 ? 'grid-cols-1 max-w-xs' :
-                watchedPairs.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-xl' :
-                watchedPairs.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
-                watchedPairs.length === 4 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' :
-                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
-              }`}>
+              <div className={`grid gap-4 ${watchedPairs.length <= 2 ? 'grid-cols-1 sm:grid-cols-2' : watchedPairs.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'}`}>
                 <AnimatePresence>
-                  {watchedPairs.map(a => (
-                    <PairMonitorCard
-                      key={a}
-                      asset={a}
-                      timeframe={timeframe}
-                      onRemove={() => togglePair(a)}
-                    />
-                  ))}
+                  {watchedPairs.map(a => <PairMonitorCard key={a} asset={a} timeframe={timeframe} onRemove={() => togglePair(a)} />)}
                 </AnimatePresence>
               </div>
             )}
@@ -562,764 +561,366 @@ export default function SignalsPage() {
         )}
       </AnimatePresence>
 
-      {/* ─── MODO SINGLE (layout original) ─────────────────────────────────── */}
-      {!multiPairMode && <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+      {/* ═══════════════════════════════════════════════════════════
+          SINGLE MODE — Main 8/4 grid
+      ═══════════════════════════════════════════════════════════ */}
+      {!multiPairMode && (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
 
-        {/* LEFT PANEL */}
-        <div className="xl:col-span-1 space-y-4">
+          {/* ─── LEFT COLUMN (8/12): Signal card + Chart ─── */}
+          <div className="xl:col-span-8 space-y-4">
 
-          {/* SCOREBOARD */}
-          <div className="glass-card p-5 relative overflow-hidden">
-            <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-3xl bg-[var(--green)]/10 pointer-events-none" />
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Placar do Dia</h3>
-            <div className="flex items-end gap-3 mb-4">
-              <div>
-                <div className="text-4xl font-black text-[var(--green)]">{wins}</div>
-                <div className="text-xs text-gray-500 mt-0.5">WINS</div>
-              </div>
-              <div className="text-2xl text-gray-700 pb-1">/</div>
-              <div>
-                <div className="text-4xl font-black text-[var(--red)]">{losses}</div>
-                <div className="text-xs text-gray-500 mt-0.5">LOSSES</div>
-              </div>
+            {/* ENGINE STATUS strip */}
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/3 border border-white/6">
+              <Cpu size={12} className="text-gray-500 flex-shrink-0" />
+              <span className="text-xs text-gray-400 truncate">{engineStatus}</span>
+              <span className="ml-auto text-[10px] text-gray-600">{bufferSize} velas</span>
             </div>
 
-            {total > 0 && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Assertividade</span>
-                  <span className="font-bold text-white">{winRate}%</span>
-                </div>
-                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{ width: `${winRate}%`, background: winRate >= 65 ? 'var(--green)' : winRate >= 50 ? 'var(--yellow)' : 'var(--red)' }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs pt-1">
-                  <span className="text-gray-500">Sequência</span>
-                  <span className={`font-bold ${streak > 0 ? 'text-[var(--green)]' : streak < 0 ? 'text-[var(--red)]' : 'text-gray-400'}`}>
-                    {streak > 0 ? `🔥 +${streak}W` : streak < 0 ? `❄️ ${streak}L` : '—'}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {total === 0 && (
-              <p className="text-xs text-gray-600 text-center py-2">Aguardando primeiros sinais...</p>
-            )}
-
-            {/* MANUAL ENTRY BUTTON */}
-            <button
-              onClick={() => { setManualAsset(asset); setShowManualEntry(v => !v); }}
-              className="w-full mt-3 py-2 rounded-lg text-xs font-bold text-gray-400 hover:text-white border border-white/10 hover:border-white/20 bg-white/3 hover:bg-white/6 transition-all flex items-center justify-center gap-1.5"
-            >
-              <span className="text-[10px]">✏️</span> Registrar manualmente
-            </button>
-
-            {/* MANUAL ENTRY FORM */}
-            <AnimatePresence>
-              {showManualEntry && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
+            {/* ──── MAIN SIGNAL CARD ──── */}
+            <AnimatePresence mode="wait">
+              {signal ? (
+                <motion.div key={signal.ts} initial={{ opacity: 0, scale: 0.97, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ type: 'spring', damping: 20, stiffness: 220 }}
+                  className={`relative rounded-3xl overflow-hidden border ${
+                    signal.quality === 'ULTRA'
+                      ? 'border-amber-400/50 shadow-[0_0_60px_rgba(251,191,36,0.15),0_0_120px_rgba(251,191,36,0.06)]'
+                      : signal.direction === 'CALL'
+                        ? 'border-[var(--green)]/25 shadow-[0_0_50px_rgba(0,255,136,0.08)]'
+                        : 'border-[var(--red)]/25 shadow-[0_0_50px_rgba(255,68,102,0.08)]'
+                  }`}
+                  style={{ background: 'rgba(10,10,20,0.85)', backdropFilter: 'blur(20px)' }}
                 >
-                  <div className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Entrada Manual</div>
+                  {/* ULTRA shimmer lines */}
+                  {signal.quality === 'ULTRA' && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/70 to-transparent animate-pulse" />
+                      <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent animate-pulse" />
+                    </div>
+                  )}
 
-                    {/* Asset selector */}
-                    <select
-                      value={manualAsset}
-                      onChange={e => setManualAsset(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--green)]/50"
-                    >
-                      {[...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS].map(a => (
-                        <option key={a} value={a} className="bg-[#07070d]">{a}</option>
-                      ))}
-                    </select>
+                  {/* Glow blob */}
+                  <div className={`absolute -top-16 -right-16 w-64 h-64 rounded-full blur-3xl opacity-15 pointer-events-none ${
+                    signal.quality === 'ULTRA' ? 'bg-amber-400' : signal.direction === 'CALL' ? 'bg-[var(--green)]' : 'bg-[var(--red)]'
+                  }`} />
 
-                    {/* Direction toggle */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setManualDir('CALL')}
-                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${manualDir === 'CALL' ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30' : 'bg-white/5 text-gray-500 border border-white/5'}`}
-                      >▲ CALL</button>
-                      <button
-                        onClick={() => setManualDir('PUT')}
-                        className={`py-1.5 rounded-lg text-xs font-bold transition-all ${manualDir === 'PUT' ? 'bg-[var(--red)]/20 text-[var(--red)] border border-[var(--red)]/30' : 'bg-white/5 text-gray-500 border border-white/5'}`}
-                      >▼ PUT</button>
+                  <div className="relative p-8 md:p-10">
+                    {/* Top row: pair + timeframe + quality badge + regime */}
+                    <div className="flex items-start justify-between mb-8">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl font-black">
+                          {ASSET_ICONS[signal.asset] || signal.asset.slice(0,2)}
+                        </div>
+                        <div>
+                          <div className="text-2xl font-black text-white leading-none">{signal.asset}</div>
+                          <div className="text-sm text-gray-500 mt-1">{timeframe} • {sessLabels[signal.sess] || signal.sess}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className={`px-4 py-1.5 rounded-full text-sm font-black border ${QUALITY_COLORS[signal.quality] || ''} ${signal.quality === 'ULTRA' ? 'animate-pulse' : ''}`}>
+                          {signal.quality === 'ULTRA' ? '⚡' : signal.quality === 'ELITE' ? '👑' : signal.quality === 'PREMIUM' ? '💎' : signal.quality === 'FORTE' ? '🟢' : '🟡'} {signal.quality}
+                        </div>
+                        {signal.marketRegime && (() => {
+                          const rc = REGIME_CONFIG[signal.marketRegime as keyof typeof REGIME_CONFIG];
+                          return rc ? <div className={`px-3 py-1 rounded-full text-xs font-bold border ${rc.color}`}>{rc.icon} {rc.label}</div> : null;
+                        })()}
+                      </div>
                     </div>
 
-                    {/* W/L buttons */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleManualResult('win')}
-                        className="py-2 rounded-lg text-xs font-black text-[var(--green)] bg-[var(--green)]/10 hover:bg-[var(--green)]/20 border border-[var(--green)]/20 transition-all active:scale-95"
-                      >✅ WIN</button>
-                      <button
-                        onClick={() => handleManualResult('loss')}
-                        className="py-2 rounded-lg text-xs font-black text-[var(--red)] bg-[var(--red)]/10 hover:bg-[var(--red)]/20 border border-[var(--red)]/20 transition-all active:scale-95"
-                      >❌ LOSS</button>
+                    {/* Center: CALL/PUT + Score */}
+                    <div className="flex items-center justify-center gap-8 mb-8">
+                      <div className="text-center">
+                        <div className={`text-8xl md:text-9xl font-black leading-none tracking-tight ${
+                          signal.quality === 'ULTRA' ? 'text-amber-300' : signal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
+                        }`}>
+                          {signal.direction === 'CALL' ? '▲' : '▼'}
+                        </div>
+                        <div className={`text-4xl font-black leading-none mt-1 ${
+                          signal.quality === 'ULTRA' ? 'text-amber-200' : signal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
+                        }`}>
+                          {signal.direction}
+                        </div>
+                      </div>
+                      <div className="w-px h-32 bg-white/8" />
+                      <div className="text-center">
+                        <div className={`text-7xl md:text-8xl font-black leading-none tabular-nums ${signal.quality === 'ULTRA' ? 'text-amber-300' : 'text-white'}`}>
+                          {signal.score}
+                        </div>
+                        <div className="text-sm text-gray-500 uppercase tracking-widest mt-1">Score</div>
+                        <div className="mt-2 text-xs text-gray-600 flex items-center justify-center gap-1">
+                          <Clock size={10} /> {timeframe === 'M1' ? '1' : timeframe === 'M5' ? '5' : '15'}min expiração
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Copy signal button */}
+                    <div className="flex justify-center mb-6">
+                      <button onClick={copySignal} className={`flex items-center gap-3 px-10 py-4 rounded-2xl font-black text-lg transition-all active:scale-95 ${
+                        copied
+                          ? 'bg-[var(--green)] text-black'
+                          : signal.quality === 'ULTRA'
+                            ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-black hover:brightness-110'
+                            : 'bg-white text-black hover:bg-gray-100'
+                      }`}>
+                        {copied ? <><CheckCheck size={20} /> Copiado!</> : <><Copy size={20} /> Copiar Sinal</>}
+                      </button>
+                    </div>
+
+                    {/* Consensus / votes summary */}
+                    {signal.votes && Object.keys(signal.votes).length > 0 && (
+                      <div className="flex flex-wrap justify-center gap-2 mb-6">
+                        {Object.entries(signal.votes).slice(0, 5).map(([ind, dir]) => (
+                          <span key={ind} className={`px-2.5 py-1 rounded-full border text-xs font-bold ${dir === signal.direction ? 'bg-[var(--green)]/8 border-[var(--green)]/20 text-[var(--green)]' : 'bg-white/4 border-white/8 text-gray-500'}`}>
+                            {ind}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Luna explanation */}
+                    <div className="border-t border-white/6 pt-6">
+                      {lunaLoading && !lunaExplanation && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-sm flex-shrink-0 animate-pulse">✦</div>
+                          <div className="flex gap-1.5 items-center">
+                            <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            <span className="text-xs text-gray-500 ml-2">Luna analisando...</span>
+                          </div>
+                        </div>
+                      )}
+                      {lunaExplanation && (
+                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-sm flex-shrink-0">✦</div>
+                            <span className="text-sm font-bold text-violet-400">Luna diz:</span>
+                          </div>
+                          <p className="text-gray-300 text-sm leading-relaxed pl-10">{lunaExplanation.text}</p>
+                          {lunaExplanation.keyPoints && lunaExplanation.keyPoints.length > 0 && (
+                            <div className="pl-10 space-y-1">
+                              {lunaExplanation.keyPoints.map((p, i) => (
+                                <div key={i} className="flex items-start gap-2 text-xs text-gray-400">
+                                  <span className="text-violet-500 mt-0.5">•</span>{p}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {lunaExplanation.riskNote && (
+                            <div className="pl-10">
+                              <span className="text-xs text-amber-400/80 italic">⚠ {lunaExplanation.riskNote}</span>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
                     </div>
                   </div>
+                </motion.div>
+              ) : (
+                /* ──── WAITING STATE ──── */
+                <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="rounded-3xl border border-white/6 p-10 flex flex-col items-center justify-center min-h-[440px] text-center"
+                  style={{ background: 'rgba(10,10,20,0.7)', backdropFilter: 'blur(20px)' }}
+                >
+                  <div className="relative w-32 h-32 mb-8">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
+                      <circle cx="64" cy="64" r="56" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="6" />
+                      <circle cx="64" cy="64" r="56" fill="none" stroke="var(--blue)" strokeWidth="6" strokeLinecap="round"
+                        strokeDasharray="351.9" strokeDashoffset={351.9 * (1 - progressPct / 100)}
+                        className="transition-all duration-1000" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      {isFiring ? (
+                        <div className="text-center">
+                          <div className="text-lg font-black text-[var(--green)] animate-pulse">⚡</div>
+                          <div className="text-[10px] font-black text-[var(--green)] animate-pulse">ANÁLISE</div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-3xl font-bold font-mono tabular-nums text-white">
+                            {String(Math.floor(timeToNext / 60)).padStart(2,'0')}:{String(timeToNext % 60).padStart(2,'0')}
+                          </div>
+                          <div className="text-[10px] text-gray-600 uppercase tracking-widest mt-1">{timeframe}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <h2 className="text-3xl font-bold text-white mb-3">Aguardando sinal</h2>
+                  <p className="text-gray-500 max-w-sm text-sm leading-relaxed">
+                    O motor analisa o mercado em cada segundo <span className="font-mono text-white">:48</span>.
+                    {timeframe !== 'M1' && ` Para ${timeframe}, dispara em múltiplos do intervalo.`}
+                  </p>
+                  {lastDiag && (
+                    <div className="mt-6 px-4 py-2 rounded-xl bg-white/4 border border-white/6 text-xs text-gray-500">
+                      <span className="font-bold text-gray-400">Último:</span> {lastDiag.blockedBy || (lastDiag.passed ? 'sinal gerado' : 'filtrado pelo motor')}
+                      {lastDiagTime && <span className="ml-2 text-gray-600">• {lastDiagTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
 
-          {/* MANAGEMENT PANEL */}
-          <ManagementPanel wins={wins} losses={losses} onResult={() => refreshStats()} />
-        </div>
+            {/* WIN / LOSS buttons */}
+            <AnimatePresence>
+              {pendingSignal && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                  className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleResult('win')}
+                    className="py-5 rounded-2xl font-black text-2xl text-[var(--green)] bg-[var(--green)]/10 hover:bg-[var(--green)]/20 border-2 border-[var(--green)]/30 hover:border-[var(--green)]/50 transition-all active:scale-95 shadow-[0_0_30px_rgba(0,255,136,0.08)]">
+                    ✅ WIN
+                  </button>
+                  <button onClick={() => handleResult('loss')}
+                    className="py-5 rounded-2xl font-black text-2xl text-[var(--red)] bg-[var(--red)]/10 hover:bg-[var(--red)]/20 border-2 border-[var(--red)]/30 hover:border-[var(--red)]/50 transition-all active:scale-95 shadow-[0_0_30px_rgba(255,68,102,0.08)]">
+                    ❌ LOSS
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* CENTER / MAIN */}
-        <div className="xl:col-span-3 space-y-4">
-
-          {/* ASSET SELECTOR */}
-          <div className="glass-card p-4">
-            <div className="flex gap-2 mb-3">
-              {['crypto', 'forex', 'commodity'].map(c => (
-                <button
-                  key={c}
-                  onClick={() => {
-                    const first = c === 'crypto' ? 'BTCUSD' : c === 'forex' ? 'EURUSD' : 'XAUUSD';
-                    handleAssetChange(first);
-                  }}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                    category === c ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30' :
-                    'text-gray-500 hover:text-white border border-transparent'
-                  }`}
-                >
-                  {c === 'crypto' ? '₿ Cripto' : c === 'forex' ? '💱 Forex' : '🏅 Commodities'}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(category === 'crypto' ? CRYPTO_ASSETS : category === 'forex' ? FOREX_ASSETS : COMMODITY_ASSETS).map(a => (
-                <button
-                  key={a}
-                  onClick={() => handleAssetChange(a)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                    asset === a
-                      ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30 shadow-[0_0_10px_rgba(0,255,136,0.15)]'
-                      : 'bg-white/5 text-gray-400 hover:text-white border border-white/5 hover:border-white/10'
-                  }`}
-                >
-                  <span className="font-mono">{ASSET_ICONS[a] || ''}</span>
-                  {a}
-                </button>
-              ))}
+            {/* CHART */}
+            <div ref={chartRef} className="glass-card p-0 overflow-hidden rounded-2xl" style={{ height: 420 }} data-chart-container>
+              <TradingViewWidget symbol={TV_SYMBOLS[asset] || asset} />
             </div>
           </div>
 
-          {/* INTERNAL DESKTOP GRID: [Timeframe + Analysis | Signal Card] */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          {/* ─── RIGHT SIDEBAR (4/12) ─── */}
+          <div className="xl:col-span-4 space-y-4">
 
-            {/* LEFT SUB: Timeframe + Last Analysis */}
-            <div className="space-y-4">
-
-              {/* TIMEFRAME + COUNTDOWN */}
-              <div className="glass-card p-5 flex flex-col items-center space-y-3">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Timeframe</h3>
-                <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl w-full">
-                  {(['M1', 'M5', 'M15'] as const).map(tf => (
-                    <button
-                      key={tf}
-                      onClick={() => { setTimeframe(tf); setSignal(null); setPendingSignal(null); }}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all duration-200 ${
-                        timeframe === tf
-                          ? 'bg-[var(--green)] text-black shadow-[0_0_12px_rgba(0,255,136,0.3)]'
-                          : 'text-gray-500 hover:text-white'
-                      }`}
-                    >{tf}</button>
+            {/* ANALYSIS ENGINE */}
+            <div className="glass-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Motor de Análise</h3>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${isConnected ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10' : 'text-red-400 border-red-400/20 bg-red-400/8'}`}>
+                  {isConnected ? '● ATIVO' : '○ OFF'}
+                </span>
+              </div>
+              {lastDiag ? (
+                <div className="space-y-2.5">
+                  {[
+                    { label: 'RSI (14)', value: lastDiag.rsi.toFixed(1), ok: lastDiag.rsi > 30 && lastDiag.rsi < 70 },
+                    { label: 'ADX', value: lastDiag.adx.toFixed(1), ok: lastDiag.adx > 18 },
+                    { label: 'Entropia', value: lastDiag.entropy.toFixed(2), ok: lastDiag.entropy < 0.65 },
+                    { label: 'Consenso', value: `${lastDiag.consensus}/5`, ok: lastDiag.consensus >= 4 },
+                    { label: 'Confirmação', value: `${lastDiag.confirmed}/6`, ok: lastDiag.confirmed >= 3 },
+                    { label: 'Qualidade', value: lastDiag.quality, ok: lastDiag.quality !== 'EVITAR' && lastDiag.quality !== 'FRACO' },
+                  ].map(({ label, value, ok }) => (
+                    <div key={label} className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">{label}</span>
+                      <span className={`text-xs font-bold ${ok ? 'text-[var(--green)]' : 'text-gray-400'}`}>{value}</span>
+                    </div>
                   ))}
-                </div>
-                <div className="text-[10px] text-gray-600 text-center">
-                  {timeframe === 'M1' && 'Sinal a cada minuto — alta frequência'}
-                  {timeframe === 'M5' && 'Sinal a cada 5 min — mais confiável'}
-                  {timeframe === 'M15' && 'Sinal a cada 15 min — máxima confiança'}
-                </div>
-                <div className="relative w-24 h-24">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
-                    <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
-                    <circle
-                      cx="48" cy="48" r="40" fill="none"
-                      stroke={isFiring ? 'var(--green)' : timeframe === 'M15' ? '#f59e0b' : timeframe === 'M5' ? '#3b82f6' : 'var(--blue)'}
-                      strokeWidth="6" strokeLinecap="round"
-                      strokeDasharray="251.3"
-                      strokeDashoffset={251.3 * (1 - progressPct / 100)}
-                      className="transition-all duration-1000"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    {isFiring ? (
-                      <div className="text-xs font-black text-[var(--green)] animate-pulse text-center">⚡<br/>ANALISANDO</div>
-                    ) : (
-                      <>
-                        <div className="text-2xl font-bold font-mono tabular-nums text-white">
-                          {String(Math.floor(timeToNext / 60)).padStart(2, '0')}:{String(timeToNext % 60).padStart(2, '0')}
-                        </div>
-                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">{timeframe}</div>
-                      </>
-                    )}
+                  {lastDiag.blockedBy && (
+                    <div className="mt-2 px-2 py-1.5 rounded-lg bg-orange-500/8 border border-orange-500/15">
+                      <div className="text-[10px] text-orange-400 font-bold">Bloqueado: {lastDiag.blockedBy}</div>
+                    </div>
+                  )}
+                  <div className="pt-1 text-[10px] text-gray-700">
+                    {lastDiagTime?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </div>
                 </div>
-                <div className="text-[10px] text-gray-700 text-center">
-                  {timeframe === 'M1' && 'Próximo: :48s de cada minuto'}
-                  {timeframe === 'M5' && 'Próximo: min :00/:05/:10... seg :48'}
-                  {timeframe === 'M15' && 'Próximo: min :00/:15/:30/:45 seg :48'}
+              ) : (
+                <div className="text-center py-4">
+                  <div className="text-2xl mb-2">🔍</div>
+                  <div className="text-xs text-gray-600">Aguardando primeira análise...</div>
+                  <div className="text-[10px] text-gray-700 mt-1">Motor dispara no segundo :48</div>
+                </div>
+              )}
+            </div>
+
+            {/* SCOREBOARD */}
+            <div className="glass-card p-5">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Placar do Dia</h3>
+              <div className="flex items-center justify-around mb-4">
+                <div className="text-center">
+                  <div className="text-4xl font-black text-[var(--green)]">{wins}</div>
+                  <div className="text-[10px] text-gray-600 uppercase">WINS</div>
+                </div>
+                <div className="text-2xl text-gray-800 font-thin">/</div>
+                <div className="text-center">
+                  <div className="text-4xl font-black text-[var(--red)]">{losses}</div>
+                  <div className="text-[10px] text-gray-600 uppercase">LOSSES</div>
                 </div>
               </div>
-
-              {/* LAST ANALYSIS DIAGNOSTIC */}
-              {lastDiag ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`glass-card p-4 space-y-3 border ${lastDiag.passed ? 'border-[var(--green)]/30' : 'border-orange-500/20'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Última Análise</h3>
-                    <span className="text-[10px] text-gray-600">
-                      {lastDiagTime?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
+              {total > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Assertividade</span>
+                    <span className={`font-bold ${winRate >= 65 ? 'text-[var(--green)]' : winRate >= 50 ? 'text-yellow-400' : 'text-[var(--red)]'}`}>{winRate}%</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs text-gray-600 mb-0.5">Direção</div>
-                      <div className={`font-black text-lg ${lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
-                        {lastDiag.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-600 mb-0.5">Score</div>
-                      <div className={`font-black text-xl ${
-                        lastDiag.score >= 92 ? 'text-white' : lastDiag.score >= 83 ? 'text-yellow-400' :
-                        lastDiag.score >= 74 ? 'text-[var(--green)]' : lastDiag.score >= 68 ? 'text-[var(--blue)]' : 'text-gray-400'
-                      }`}>{lastDiag.score}%</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-600 mb-0.5">Qualidade</div>
-                      <div className={`font-bold text-sm ${
-                        lastDiag.quality === 'ELITE' ? 'text-white' : lastDiag.quality === 'PREMIUM' ? 'text-yellow-400' :
-                        lastDiag.quality === 'FORTE' ? 'text-[var(--green)]' : lastDiag.quality === 'MÉDIO' ? 'text-[var(--blue)]' : 'text-gray-500'
-                      }`}>{lastDiag.quality}</div>
-                    </div>
+                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-1000"
+                      style={{ width: `${winRate}%`, background: winRate >= 65 ? 'var(--green)' : winRate >= 50 ? '#f59e0b' : 'var(--red)' }} />
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5 text-center">
-                    <div className="bg-white/5 rounded-lg p-1.5">
-                      <div className="text-[10px] text-gray-600">ADX</div>
-                      <div className={`text-sm font-bold ${lastDiag.adx >= 25 ? 'text-[var(--green)]' : lastDiag.adx >= 18 ? 'text-yellow-400' : 'text-[var(--red)]'}`}>{lastDiag.adx}</div>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-1.5">
-                      <div className="text-[10px] text-gray-600">Consenso</div>
-                      <div className={`text-sm font-bold ${lastDiag.consensus >= 4 ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>{lastDiag.consensus}/5</div>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-1.5">
-                      <div className="text-[10px] text-gray-600">Confirmados</div>
-                      <div className={`text-sm font-bold ${lastDiag.confirmed >= 3 ? 'text-[var(--green)]' : 'text-yellow-400'}`}>{lastDiag.confirmed}/5</div>
-                    </div>
-                  </div>
-                  {lastDiag.extras && lastDiag.extras.length > 0 && (
-                    <div className="space-y-1">
-                      {lastDiag.extras.map((e, i) => (
-                        <div key={i} className="flex items-center gap-1.5 text-[10px] text-emerald-400">
-                          <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />{e}
-                        </div>
-                      ))}
+                  {streak !== 0 && (
+                    <div className={`text-center text-xs font-bold mt-2 ${streak > 0 ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                      {streak > 0 ? `🔥 Sequência de +${streak} WINS` : `❄️ Sequência de ${Math.abs(streak)} LOSSES`}
                     </div>
                   )}
-                  {lastDiag.blockedBy ? (
-                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/15">
-                      <span className="text-orange-400 text-xs shrink-0">⚠</span>
-                      <span className="text-xs text-orange-300 leading-relaxed">{lastDiag.blockedBy}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--green)]/10 border border-[var(--green)]/20">
-                      <span className="text-[var(--green)] text-xs">✓</span>
-                      <span className="text-xs text-[var(--green)] font-bold">Sinal aprovado e emitido</span>
-                    </div>
-                  )}
-                </motion.div>
-              ) : (
-                <div className="glass-card p-4 text-center">
-                  <div className="text-gray-600 text-xs mb-1">Aguardando primeira análise</div>
-                  <div className="text-gray-700 text-[10px]">O motor analisa a cada segundo :48</div>
                 </div>
               )}
 
+              {/* Manual entry */}
+              <button onClick={() => { setManualAsset(asset); setShowManualEntry(v => !v); }}
+                className="w-full mt-3 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-white border border-white/8 hover:border-white/15 bg-white/3 hover:bg-white/6 transition-all flex items-center justify-center gap-1.5">
+                ✏️ Registrar manualmente
+              </button>
+              <AnimatePresence>
+                {showManualEntry && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                    <div className="mt-3 p-3 rounded-xl bg-white/4 border border-white/8 space-y-3">
+                      <select value={manualAsset} onChange={e => setManualAsset(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none">
+                        {[...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS].map(a => (
+                          <option key={a} value={a} className="bg-[#07070d]">{a}</option>
+                        ))}
+                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setManualDir('CALL')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${manualDir === 'CALL' ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30' : 'bg-white/5 text-gray-500 border border-white/5'}`}>▲ CALL</button>
+                        <button onClick={() => setManualDir('PUT')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${manualDir === 'PUT' ? 'bg-[var(--red)]/20 text-[var(--red)] border border-[var(--red)]/30' : 'bg-white/5 text-gray-500 border border-white/5'}`}>▼ PUT</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => handleManualResult('win')} className="py-2 rounded-lg text-xs font-black text-[var(--green)] bg-[var(--green)]/10 hover:bg-[var(--green)]/20 border border-[var(--green)]/20 transition-all active:scale-95">✅ WIN</button>
+                        <button onClick={() => handleManualResult('loss')} className="py-2 rounded-lg text-xs font-black text-[var(--red)] bg-[var(--red)]/10 hover:bg-[var(--red)]/20 border border-[var(--red)]/20 transition-all active:scale-95">❌ LOSS</button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* RIGHT SUB: Signal Card (2/3 width) */}
-            <div className="lg:col-span-2">
-          {/* SIGNAL CARD */}
-          <AnimatePresence mode="wait">
-            {signal ? (
-              <motion.div
-                key={signal.ts}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`glass-card p-6 relative overflow-hidden border ${
-                  signal.quality === 'ULTRA'
-                    ? 'border-amber-400/50 shadow-[0_0_40px_rgba(251,191,36,0.18),0_0_80px_rgba(251,191,36,0.06)]'
-                    : signal.direction === 'CALL' ? 'border-[var(--green)]/20 shadow-[0_0_30px_rgba(0,255,136,0.07)]' : 'border-[var(--red)]/20 shadow-[0_0_30px_rgba(255,68,102,0.07)]'
-                }`}
-              >
-                {/* ULTRA golden shimmer overlay */}
-                {signal.quality === 'ULTRA' && (
-                  <div className="absolute inset-0 pointer-events-none rounded-2xl overflow-hidden">
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent animate-pulse" />
-                    <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent animate-pulse" />
-                  </div>
-                )}
-                {/* Glow bg */}
-                <div className={`absolute -top-8 -right-8 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none ${signal.quality === 'ULTRA' ? 'bg-amber-400' : signal.direction === 'CALL' ? 'bg-[var(--green)]' : 'bg-[var(--red)]'}`} />
+            {/* BANK MANAGEMENT */}
+            <ManagementPanel wins={wins} losses={losses} onResult={() => refreshStats()} />
 
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center font-bold text-lg border border-white/10">
-                      {ASSET_ICONS[signal.asset] || signal.asset[0]}
-                    </div>
-                    <div>
-                      <div className="font-bold text-white text-lg">{signal.asset} <span className="text-gray-500 text-sm font-normal">M1</span></div>
-                      <div className="text-xs text-gray-500">{sessLabels[signal.sess] || signal.sess}</div>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-bold border ${QUALITY_COLORS[signal.quality] || ''} ${signal.quality === 'ULTRA' ? 'animate-pulse' : ''}`}>
-                    {signal.quality === 'ULTRA' ? '⚡' : signal.quality === 'ELITE' ? '👑' : signal.quality === 'PREMIUM' ? '💎' : signal.quality === 'FORTE' ? '🟢' : '🟡'} {signal.quality}
-                  </div>
-                  {/* Market Regime Badge */}
-                  {signal.marketRegime && (() => {
-                    const rc = REGIME_CONFIG[signal.marketRegime];
-                    return (
-                      <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${rc.color}`} title={rc.tip}>
-                        {rc.icon} {rc.label}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Direction */}
-                <div className="text-center my-4">
-                  <div className={`text-5xl xl:text-6xl font-black tracking-tight mb-2 ${
-                    signal.direction === 'CALL'
-                      ? 'text-[var(--green)] drop-shadow-[0_0_20px_rgba(0,255,136,0.5)]'
-                      : 'text-[var(--red)] drop-shadow-[0_0_20px_rgba(255,68,102,0.5)]'
-                  }`}>
-                    {signal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
-                  </div>
-                  <div className="flex justify-center items-center gap-2 text-sm text-gray-400">
-                    {signal.direction === 'CALL' ? <TrendingUp size={16} className="text-[var(--green)]" /> : <TrendingDown size={16} className="text-[var(--red)]" />}
-                    Operar no próximo minuto
-                  </div>
-                  {/* Copy Signal Button */}
-                  <button
-                    onClick={() => {
-                      const txt = `📊 SINAL SIGNALMASTER PRO\n${signal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'} — ${signal.asset}\nQualidade: ${signal.quality}\nScore: ${signal.score}%\nTimeframe: ${timeframe}\nHora: ${new Date(signal.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}`;
-                      navigator.clipboard.writeText(txt).then(() => {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2500);
-                      }).catch(() => {});
-                    }}
-                    className={`mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                      copied
-                        ? 'bg-[var(--green)]/15 text-[var(--green)] border-[var(--green)]/30'
-                        : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
-                    }`}
-                  >
-                    {copied ? <><CheckCheck size={12} /> Copiado!</> : <><Copy size={12} /> Copiar Sinal</>}
-                  </button>
-                </div>
-
-                {/* Score bar */}
-                <div className="mb-5">
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-400">Score do Motor</span>
-                    <span className="font-bold text-white">{signal.score}%</span>
-                  </div>
-                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${signal.score}%` }}
-                      transition={{ duration: 0.8, ease: 'easeOut' }}
-                      className="h-full rounded-full"
-                      style={{ background: signal.score >= 82 ? 'var(--gold)' : signal.score >= 74 ? 'var(--green)' : 'var(--blue)' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Stats grid */}
-                <div className="grid grid-cols-4 gap-3 mb-5">
-                  {[
-                    { label: 'ADX', value: signal.adx, unit: '' },
-                    { label: 'RSI', value: signal.rsi, unit: '' },
-                    { label: 'Entropia', value: signal.entropy, unit: '%' },
-                    { label: 'Consenso', value: signal.consensus, unit: '/5' },
-                  ].map(({ label, value, unit }) => (
-                    <div key={label} className="bg-white/5 rounded-lg p-2 text-center border border-white/5">
-                      <div className="text-[10px] text-gray-500 mb-1">{label}</div>
-                      <div className="font-bold text-white text-sm">{value}{unit}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* DNA + MM */}
-                <div className="flex gap-3 mb-5">
-                  <div className="flex-1 bg-white/5 rounded-lg p-3 border border-white/5 text-center">
-                    <div className="text-[10px] text-gray-500 mb-1">🧬 DNA Match</div>
-                    <div className="font-bold text-white">{signal.dnaMatch}%</div>
-                  </div>
-                  <div className={`flex-1 rounded-lg p-3 border text-center ${signal.mmTrap ? 'bg-orange-500/10 border-orange-500/20' : 'bg-white/5 border-white/5'}`}>
-                    <div className="text-[10px] text-gray-500 mb-1">🪤 MM Trap</div>
-                    <div className={`font-bold text-sm ${signal.mmTrap ? 'text-orange-400' : 'text-gray-500'}`}>
-                      {signal.mmTrap ? signal.mmTrapType : 'Não detectado'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* WIN/LOSS */}
-                {pendingSignal && pendingSignal.ts === signal.ts ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => handleResult('win')}
-                      className="py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 bg-[var(--green)]/10 text-[var(--green)] hover:bg-[var(--green)]/20 border border-[var(--green)]/20 transition-all hover:scale-[1.02] active:scale-95"
-                    >
-                      <Check size={20} /> DEU WIN ✅
-                    </button>
-                    <button
-                      onClick={() => handleResult('loss')}
-                      className="py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 bg-[var(--red)]/10 text-[var(--red)] hover:bg-[var(--red)]/20 border border-[var(--red)]/20 transition-all hover:scale-[1.02] active:scale-95"
-                    >
-                      <X size={20} /> DEU LOSS ❌
-                    </button>
-                  </div>
-                ) : (
-                  <div className="py-3 rounded-xl text-center text-gray-500 text-sm border border-white/5 bg-white/3">
-                    <Eye size={14} className="inline mr-2" />
-                    Sinal já registrado — aguardando próximo
-                  </div>
-                )}
-
-                {/* ─── LUNA EDUCATIONAL EXPLANATION ─────────────────────── */}
-                <AnimatePresence mode="wait">
-                  {lunaLoading && !lunaExplanation && (
-                    <motion.div
-                      key="luna-loading"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="mt-4 rounded-xl border border-purple-500/20 bg-purple-500/5 p-3 flex items-center gap-3"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
-                        <span className="text-sm">🌙</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-black text-purple-400/80 uppercase tracking-widest">Luna</span>
-                          <span className="text-[10px] text-purple-400/50">analisando o sinal...</span>
-                        </div>
-                        <div className="flex gap-1">
-                          {[0, 1, 2].map(i => (
-                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-purple-400/40 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {lunaExplanation && (
-                    <motion.div
-                      key="luna-explanation"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 rounded-xl border border-purple-500/25 bg-gradient-to-br from-purple-500/8 to-purple-900/5 p-4 space-y-3"
-                    >
-                      {/* Header */}
+            {/* RECENT TRADES */}
+            {recentTrades.length > 0 && (
+              <div className="glass-card p-5">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Operações de Hoje</h3>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {recentTrades.map((t, i) => (
+                    <div key={t.id || i} className="flex items-center justify-between py-1.5 border-b border-white/4 last:border-0">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-sm">🌙</div>
-                        <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Luna explica</span>
-                        <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
-                          <div className="w-1 h-1 rounded-full bg-purple-400 animate-pulse" />
-                          <span className="text-[9px] text-purple-400 font-bold">IA EDUCACIONAL</span>
-                        </div>
+                        <span className={`text-xs font-black ${t.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                          {t.direction === 'CALL' ? '▲' : '▼'}
+                        </span>
+                        <span className="text-xs text-gray-300 font-bold">{t.asset}</span>
+                        {t.quality && t.quality !== 'MANUAL' && (
+                          <span className="text-[9px] text-gray-600">{t.quality}</span>
+                        )}
                       </div>
-
-                      {/* Main explanation */}
-                      <p className="text-xs text-gray-300 leading-relaxed">{lunaExplanation.explanation}</p>
-
-                      {/* Key points */}
-                      {lunaExplanation.keyPoints.length > 0 && (
-                        <div className="space-y-1.5">
-                          {lunaExplanation.keyPoints.map((point, i) => (
-                            <div key={i} className="flex items-start gap-2">
-                              <div className="w-4 h-4 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                                <span className="text-[9px] text-purple-400 font-bold">{i + 1}</span>
-                              </div>
-                              <span className="text-[11px] text-gray-400 leading-snug">{point}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Risk note */}
-                      {lunaExplanation.riskNote && (
-                        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/15">
-                          <span className="text-amber-400 text-xs shrink-0 mt-0.5">⚠</span>
-                          <span className="text-[11px] text-amber-300/80 leading-snug">{lunaExplanation.riskNote}</span>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="waiting"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="glass-card p-8 flex flex-col items-center justify-center text-center min-h-[300px]"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10">
-                  <Activity size={28} className="text-[var(--green)] animate-pulse" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Motor Ativo</h3>
-                <p className="text-gray-500 text-sm max-w-xs">
-                  {bufferSize < 30
-                    ? `Carregando dados... (${bufferSize}/30 velas mínimas)`
-                    : `Analisando ${asset} — sinal será emitido no segundo 48 de cada minuto`}
-                </p>
-                <div className="mt-4 flex items-center gap-2 text-xs text-gray-600">
-                  <Clock size={12} />
-                  Próximo ciclo em {timeToNext}s
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* INDICATORS VOTES — below signal card */}
-          {(signal || lastDiag) && (() => {
-            const VOTE_LABELS: Record<string, string> = {
-              ema: 'EMA Stack (M1)', htf: 'HTF M5', m15: 'HTF M15',
-              rsi: 'RSI', rsidiv: 'RSI Divergência', macd: 'MACD',
-              bb: 'Bollinger %B', bsq: 'BB Squeeze', stoch: 'Estocástico',
-              sr: 'Suporte/Resistência', candle: 'Candle Pattern', volume: 'Volume', obv: 'OBV Fluxo'
-            };
-            const src = (signal || lastDiag)!;
-            const callVotes = Object.values(src.votes).filter(v => v === 'CALL').length;
-            const putVotes  = Object.values(src.votes).filter(v => v === 'PUT').length;
-            const neuVotes  = Object.values(src.votes).filter(v => v === 'NEUTRAL').length;
-            const total     = callVotes + putVotes + neuVotes;
-            return (
-              <div className="glass-card p-4 mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Votos dos Indicadores</h3>
-                  <div className="flex gap-2 text-[10px]">
-                    <span className="text-[var(--green)] font-bold">▲ {callVotes} CALL</span>
-                    <span className="text-gray-600">·</span>
-                    <span className="text-[var(--red)] font-bold">▼ {putVotes} PUT</span>
-                    <span className="text-gray-600">·</span>
-                    <span className="text-gray-500">— {neuVotes} NEU</span>
-                  </div>
-                </div>
-                {/* Vote bar */}
-                <div className="flex rounded-full overflow-hidden h-1.5 mb-4 bg-white/5">
-                  {callVotes > 0 && <div className="bg-[var(--green)] transition-all" style={{ width: `${(callVotes/total)*100}%` }} />}
-                  {neuVotes  > 0 && <div className="bg-gray-600 transition-all" style={{ width: `${(neuVotes/total)*100}%` }} />}
-                  {putVotes  > 0 && <div className="bg-[var(--red)] transition-all"  style={{ width: `${(putVotes/total)*100}%` }} />}
-                </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                  {Object.entries(src.votes).map(([ind, vote]) => (
-                    <div key={ind} className="flex items-center justify-between text-xs">
-                      <span className="text-gray-500">{VOTE_LABELS[ind] || ind.toUpperCase()}</span>
-                      <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                        vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
-                        vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
-                        'text-gray-500 bg-white/5'
-                      }`}>{vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-700">{new Date(t.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className={`text-xs font-black ${t.result === 'win' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                          {t.result === 'win' ? '✅' : '❌'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-            );
-          })()}
-            </div>{/* end RIGHT SUB */}
-          </div>{/* end INTERNAL GRID */}
-
-        </div>
-
-        {/* RIGHT PANEL */}
-        <div className="xl:col-span-1 space-y-4">
-
-          {/* CONFIDENCE INDEX */}
-          <div className="glass-card p-5 flex flex-col items-center">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Índice de Confiança</h3>
-            <div className="relative w-28 h-28 mb-2">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 112 112">
-                <circle cx="56" cy="56" r="46" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-                <circle
-                  cx="56" cy="56" r="46" fill="none"
-                  stroke={winRate >= 65 ? 'var(--green)' : winRate >= 50 ? 'var(--yellow)' : 'var(--red)'}
-                  strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray="289"
-                  strokeDashoffset={289 * (1 - (signal ? signal.score / 100 : total > 0 ? winRate / 100 : 0.5))}
-                  className="transition-all duration-1000"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-2xl font-black text-white">
-                  {signal ? signal.score : total > 0 ? winRate : '—'}
-                  {(signal || total > 0) ? '%' : ''}
-                </div>
-                <div className="text-[9px] text-gray-500 uppercase tracking-widest">
-                  {signal ? signal.quality : total > 0 ? 'WIN RATE' : 'AGUARD.'}
-                </div>
-              </div>
-            </div>
-            <div className="text-xs text-gray-600 text-center">
-              {signal ? `Motor: ${signal.consensus}/5 universos` : 'Aguardando sinal'}
-            </div>
-          </div>
-
-          {/* ENGINE INFO */}
-          <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Motor de Análise</h3>
-            {[
-              { label: 'EMA 9/21/50', ok: true },
-              { label: 'RSI (14)', ok: true },
-              { label: 'MACD (12,26,9)', ok: true },
-              { label: 'Bollinger Bands', ok: true },
-              { label: 'ADX (14)', ok: true },
-              { label: 'ATR (14)', ok: true },
-              { label: 'OBV', ok: true },
-              { label: 'Stochastic', ok: true },
-              { label: category === 'crypto' ? 'Binance WebSocket' : 'Simulação O-U', ok: isConnected },
-              { label: 'DNA de Candle', ok: true },
-              { label: 'MM Trap Detector', ok: true },
-              { label: 'Shannon Entropy', ok: true },
-              { label: 'Multi-Universo 5x', ok: true },
-            ].map(({ label, ok }) => (
-              <div key={label} className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">{label}</span>
-                <div className={`w-2 h-2 rounded-full ${ok ? 'bg-[var(--green)]' : 'bg-yellow-500 animate-pulse'}`} />
-              </div>
-            ))}
-          </div>
-
-          {/* PROTECTION */}
-          {Math.abs(streak) >= 3 && (
-            <div className={`glass-card p-4 border ${streak < 0 ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Shield size={14} className={streak < 0 ? 'text-red-400' : 'text-green-400'} />
-                <span className="text-xs font-bold text-white">
-                  {streak < 0 ? '⚠️ Alerta de Sequência' : '🔥 Sequência Positiva'}
-                </span>
-              </div>
-              <p className="text-xs text-gray-400">
-                {streak < 0
-                  ? `${Math.abs(streak)} perdas consecutivas. Considere fazer uma pausa.`
-                  : `${streak} vitórias seguidas! Continue com disciplina.`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>}
-
-      {/* MARKET DATA ROW — Notícias | Cripto | Índices */}
-      {!multiPairMode && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <MarketNews />
-          <CryptoPrices />
-          <MarketIndices />
-        </div>
-      )}
-
-      {/* CHART — full width below all columns, só no modo single */}
-      {!multiPairMode && (
-        <div className="glass-card p-1">
-          <TradingViewWidget symbol={asset} height={400} />
-        </div>
-      )}
-
-      {/* MINI TRADE HISTORY */}
-      {recentTrades.length > 0 && (
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Operações de Hoje</h3>
-            <span className="text-xs text-gray-600">{recentTrades.length} registros</span>
-          </div>
-          <div className="space-y-1.5">
-            {recentTrades.map((t, i) => (
-              <div key={t.id || i} className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs ${
-                t.result === 'win' ? 'bg-[var(--green)]/5 border-[var(--green)]/15' : 'bg-[var(--red)]/5 border-[var(--red)]/15'
-              }`}>
-                <span className={`text-base leading-none ${t.result === 'win' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
-                  {t.result === 'win' ? '✅' : '❌'}
-                </span>
-                <span className="font-bold text-white w-16 shrink-0">{t.asset || '—'}</span>
-                <span className={`font-bold text-[10px] px-1.5 py-0.5 rounded ${
-                  t.direction === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' : 'text-[var(--red)] bg-[var(--red)]/10'
-                }`}>{t.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}</span>
-                {t.quality && t.quality !== 'MANUAL' && (
-                  <span className="text-gray-600 text-[10px]">{t.quality}</span>
-                )}
-                {t.manual && <span className="text-gray-600 text-[10px]">manual</span>}
-                <span className="ml-auto text-gray-600 tabular-nums">
-                  {new Date(t.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            ))}
+            )}
           </div>
         </div>
       )}
-
-      {/* ─── FLOATING WIN/LOSS BAR (apenas no modo single) ─── */}
-      <AnimatePresence>
-        {pendingSignal && !multiPairMode && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 p-4 safe-area-pb"
-            style={{ background: 'linear-gradient(to top, rgba(7,7,13,0.98) 70%, transparent)' }}
-          >
-            <div className="max-w-2xl mx-auto">
-              {/* Signal summary row */}
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${pendingSignal.direction === 'CALL' ? 'bg-[var(--green)]' : 'bg-[var(--red)]'}`} />
-                  <span className="text-xs font-bold text-white">{pendingSignal.asset}</span>
-                  <span className={`text-xs font-black ${pendingSignal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
-                    {pendingSignal.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
-                  </span>
-                  <span className="text-[10px] text-gray-500">{pendingSignal.quality} · {pendingSignal.score}%</span>
-                </div>
-                <span className="text-[10px] text-gray-600 animate-pulse">Marque o resultado →</span>
-              </div>
-
-              {/* Big WIN/LOSS buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleResult('win')}
-                  className="py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-2 bg-[var(--green)]/15 text-[var(--green)] hover:bg-[var(--green)]/25 border border-[var(--green)]/25 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-[var(--green)]/10"
-                >
-                  ✅ DEU WIN
-                </button>
-                <button
-                  onClick={() => handleResult('loss')}
-                  className="py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-2 bg-[var(--red)]/15 text-[var(--red)] hover:bg-[var(--red)]/25 border border-[var(--red)]/25 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-[var(--red)]/10"
-                >
-                  ❌ DEU LOSS
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Bottom spacer when floating bar is visible */}
-      {pendingSignal && <div className="h-32" />}
     </div>
   );
 }
