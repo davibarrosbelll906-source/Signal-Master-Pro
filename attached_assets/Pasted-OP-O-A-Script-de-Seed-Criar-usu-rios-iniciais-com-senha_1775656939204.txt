@@ -1,0 +1,183 @@
+OPÇÃO A: Script de Seed – Criar usuários iniciais com senha segura
+Crie o arquivo:
+artifacts/api-server/src/scripts/seed.ts
+TypeScriptimport { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log('🌱 Iniciando seed de usuários seguros...');
+
+  const users = [
+    {
+      username: "admin",
+      password: "admin123",        // será hasheada
+      role: "ADMIN",
+      name: "Administrador",
+      avatarColor: "#ef4444"
+    },
+    {
+      username: "gerente",
+      password: "ger123",
+      role: "GERENTE",
+      name: "Gerente",
+      avatarColor: "#eab308"
+    },
+    {
+      username: "suporte",
+      password: "sup123",
+      role: "SUPORTE",
+      name: "Suporte",
+      avatarColor: "#22c55e"
+    },
+    {
+      username: "analista",
+      password: "ana123",
+      role: "ANALISTA",
+      name: "Analista",
+      avatarColor: "#3b82f6"
+    },
+    {
+      username: "financeiro",
+      password: "fin123",
+      role: "FINANCEIRO",
+      name: "Financeiro",
+      avatarColor: "#a855f7"
+    }
+  ];
+
+  for (const userData of users) {
+    const existingUser = await prisma.user.findUnique({
+      where: { username: userData.username }
+    });
+
+    if (existingUser) {
+      console.log(`⚠️ Usuário ${userData.username} já existe. Pulando...`);
+      continue;
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(userData.password, salt);
+
+    await prisma.user.create({
+      data: {
+        username: userData.username,
+        passwordHash,
+        role: userData.role as any,
+        name: userData.name,
+        avatarColor: userData.avatarColor,
+        balance: 1250.00,
+      }
+    });
+
+    console.log(`✅ Usuário criado: ${userData.username} (${userData.role})`);
+  }
+
+  console.log('🎉 Seed concluído com sucesso!');
+}
+
+main()
+  .catch((e) => {
+    console.error('❌ Erro no seed:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
+Como executar o seed:
+Bashcd artifacts/api-server
+
+# Criar o script no package.json (adicione isso)
+"scripts": {
+  "seed": "ts-node src/scripts/seed.ts"
+}
+Depois rode:
+Bashpnpm seed
+
+OPÇÃO B: Como proteger todas as rotas do app
+Crie o arquivo: src/middleware/protectRoutes.ts
+TypeScriptimport { authenticateToken, authorizeRole } from './auth';
+
+// Exemplo de como proteger suas rotas principais
+
+// Rotas públicas (não precisam de login)
+app.use('/api/auth', authRoutes);
+
+// Rotas protegidas por autenticação
+app.use('/api/signals', authenticateToken);
+app.use('/api/history', authenticateToken);
+app.use('/api/balance', authenticateToken);
+app.use('/api/user', authenticateToken);
+
+// Rotas que só ADMIN pode acessar
+app.use('/api/admin', authenticateToken, authorizeRole(['ADMIN']));
+
+// Rotas que ADMIN e GERENTE podem acessar
+app.use('/api/management', authenticateToken, authorizeRole(['ADMIN', 'GERENTE']));
+Exemplo prático de uma rota protegida:
+TypeScript// routes/signals.ts
+import { Router } from 'express';
+import { authenticateToken } from '../middleware/auth';
+
+const router = Router();
+
+router.get('/', authenticateToken, async (req, res) => {
+  // req.user já está disponível aqui
+  const signals = await prisma.signal.findMany({
+    where: { userId: req.user.id },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  res.json(signals);
+});
+
+export default router;
+
+OPÇÃO C: Atualizar o Frontend para usar JWT
+1. Crie um serviço de API (src/lib/api.ts)
+TypeScriptimport axios from 'axios';
+
+const api = axios.create({
+  baseURL: '/api',           // ou seu domínio em produção
+  withCredentials: true,
+});
+
+// Interceptor para adicionar token automaticamente
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Interceptor para tratar erros de token expirado
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+2. Atualize o Login (LoginPage.tsx)
+tsxconst handleLogin = async () => {
+  try {
+    const response = await api.post('/auth/login', { username, password });
+    
+    localStorage.setItem('token', response.data.token);
+    localStorage.setItem('refreshToken', response.data.refreshToken);
+    localStorage.setItem('user', JSON.stringify(response.data.user));
+
+    window.location.href = '/dashboard';
+  } catch (err: any) {
+    alert(err.response?.data?.error || "Erro ao fazer login");
+  }
+};
+3. Atualize useAccountMode.ts e outras páginas
+Substitua todas as chamadas diretas ao localStorage por chamadas à API protegida.

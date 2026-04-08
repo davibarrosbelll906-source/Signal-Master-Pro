@@ -83,16 +83,18 @@ router.post("/webhook", async (req, res) => {
     const sig = req.headers["stripe-signature"] as string;
     const webhookSecret = process.env["STRIPE_WEBHOOK_SECRET"];
 
+    if (!webhookSecret) {
+      console.error("STRIPE_WEBHOOK_SECRET não configurado — webhook rejeitado por segurança");
+      res.status(500).json({ error: "Webhook não configurado" });
+      return;
+    }
+
     let event: any;
-    if (webhookSecret) {
-      try {
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      } catch {
-        res.status(400).json({ error: "Invalid signature" });
-        return;
-      }
-    } else {
-      event = req.body;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } catch {
+      res.status(400).json({ error: "Assinatura inválida" });
+      return;
     }
 
     if (event.type === "checkout.session.completed") {
