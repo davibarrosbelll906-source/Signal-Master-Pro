@@ -129,12 +129,23 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - smpPin7: PIN hash, smpPinEnabled7: '1' if PIN active
 
 ### v7.1 New Features
-- **IA Explicativa**: botão "Por que este sinal?" em cada card — `explainSignal()` em signalEngine.ts gera bullets detalhados por indicador
+- **IA Explicativa**: botão "Por que este sinal?" em cada card — `explainSignal()` em signalEngine.ts gera bullets detalhados por indicador — bloqueado para plano Básico com badge 🔒 PRO
 - **PWA**: vite-plugin-pwa configurado, manifest.json, ícones 192/512, Workbox cache para Binance API
-- **Analytics Profissionais**: Profit Factor, Expectância, Índice de Sharpe, Max Drawdown, Equity Curve real acumulada
+- **Analytics Profissionais**: Profit Factor, Expectância, Índice de Sharpe, Max Drawdown, Equity Curve real acumulada — KPIs avançados bloqueados com PlanGate para PRO+
 - **Leaderboard Real**: rota `/api/leaderboard` com dados do PostgreSQL, substituindo mock traders
 - **E-mail**: Resend daily-report + alertas meta/stop via `/api/email/`
 - **Stripe Assinaturas**: 3 planos (Básico grátis, PRO R$49,90, PREMIUM R$99,90), checkout, webhooks; PlansPage em `/dashboard/plans`
+
+### Luna AI + Plan-Based Access Control (v7.2)
+- **Luna AI**: Floating 🌙 button; streaming SSE chat com `gpt-5.2`; chart capture via html2canvas + GPT Vision; histórico em DB (conversations + messages)
+- **Luna Analyses Library**: DB table `luna_analyses`; auto-save após análise de gráfico; `/dashboard/luna-analyses` — restrito a PRO+
+- **Limites por plano (backend + frontend)**:
+  - Básico: 10 msgs/dia total, sem análise de gráfico, sem biblioteca de análises
+  - PRO: 5 análises de gráfico/dia, 50 análises salvas máximo, sem limite de mensagens
+  - PREMIUM: ilimitado
+  - Admin: ilimitado (bypassa tudo)
+- **Backend**: verificações em `/api/luna/conversations/:id/messages` (count msgs do dia via DB); `/api/luna/usage` (retorna uso atual + limites); `requirePlan("pro")` em GET/POST `/api/luna/analyses`
+- **Frontend**: `usePlan()` em LunaChat (botão gráfico bloqueado com 🔒 para Básico); `PlanGate` em LunaAnalysesPage + AnalyticsPage (KPIs profissionais); `PairMonitorIAButton` com lock badge para "Por que este sinal?"
 
 ### Stripe Config
 - Env vars: `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM` (set via shared environment)

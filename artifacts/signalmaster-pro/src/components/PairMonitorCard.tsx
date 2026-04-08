@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, CheckCheck, X, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, CheckCheck, X, HelpCircle, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { usePlanGuard } from "@/lib/usePlanGuard";
+import { useLocation } from "wouter";
 import {
   ASSET_CATEGORIES,
   runEngine, runEngineDiag,
@@ -8,6 +10,38 @@ import {
   type CandleBuffer, type SignalResult
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
+
+function PairMonitorIAButton({ showExplain, setShowExplain }: { showExplain: boolean; setShowExplain: (v: (p: boolean) => boolean) => void }) {
+  const allowed = usePlanGuard("pro");
+  const [, navigate] = useLocation();
+  if (!allowed) {
+    return (
+      <button
+        onClick={() => navigate("/dashboard/plans")}
+        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/3 border border-white/8 transition-all text-[10px] text-gray-500 cursor-pointer hover:border-purple-500/40 group"
+        title="Requer plano PRO"
+      >
+        <span className="flex items-center gap-1 font-bold group-hover:text-purple-400 transition-colors">
+          <HelpCircle size={10} /> Por que este sinal?
+        </span>
+        <span className="flex items-center gap-1 bg-purple-500/20 text-purple-400 rounded px-1 py-0.5 text-[9px] font-bold">
+          <Lock size={8} /> PRO
+        </span>
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={() => setShowExplain(v => !v)}
+      className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/3 hover:bg-white/6 border border-white/8 transition-all text-[10px] text-gray-500 hover:text-gray-300"
+    >
+      <span className="flex items-center gap-1 font-bold">
+        <HelpCircle size={10} /> Por que este sinal?
+      </span>
+      {showExplain ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+    </button>
+  );
+}
 
 const ASSET_ICONS: Record<string, string> = {
   BTCUSD: '₿', ETHUSD: 'Ξ', SOLUSD: '◎', BNBUSD: '⬡', XRPUSD: '✕', ADAUSD: '₳',
@@ -318,16 +352,8 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
                   style={{ width: `${pendingSignal.score}%` }} />
               </div>
 
-              {/* Por que este sinal? */}
-              <button
-                onClick={() => setShowExplain(v => !v)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/3 hover:bg-white/6 border border-white/8 transition-all text-[10px] text-gray-500 hover:text-gray-300"
-              >
-                <span className="flex items-center gap-1 font-bold">
-                  <HelpCircle size={10} /> Por que este sinal?
-                </span>
-                {showExplain ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-              </button>
+              {/* Por que este sinal? — PRO+ */}
+              <PairMonitorIAButton showExplain={showExplain} setShowExplain={setShowExplain} />
 
               <AnimatePresence>
                 {showExplain && (() => {

@@ -2,8 +2,9 @@ import express from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { db } from "@workspace/db";
 import { conversations, messages, lunaAnalyses } from "@workspace/db";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, and, gte, count, inArray, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
+import { requirePlan, planLevel } from "../middlewares/plan.js";
 
 const router = express.Router();
 
@@ -66,6 +67,53 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/usage", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).user.sub;
+    const plan = (req as any).user.plan;
+    const role = (req as any).user.role;
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+
+    const userConvs = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.userId, userId));
+    const convIds = userConvs.map(c => c.id);
+
+    let msgsToday = 0;
+    let chartAnalisesToday = 0;
+    let totalAnalyses = 0;
+
+    if (convIds.length > 0) {
+      const [r] = await db.select({ total: count() }).from(messages).where(
+        and(eq(messages.role, "user"), gte(messages.createdAt, startOfDay), inArray(messages.conversationId, convIds))
+      );
+      msgsToday = Number(r?.total ?? 0);
+    }
+
+    const [ca] = await db.select({ total: count() }).from(lunaAnalyses).where(
+      and(eq(lunaAnalyses.userId, userId), gte(lunaAnalyses.createdAt, startOfDay), isNotNull(lunaAnalyses.thumbnailBase64))
+    );
+    chartAnalisesToday = Number(ca?.total ?? 0);
+
+    const [ta] = await db.select({ total: count() }).from(lunaAnalyses).where(eq(lunaAnalyses.userId, userId));
+    totalAnalyses = Number(ta?.total ?? 0);
+
+    const isAdmin = role === "admin";
+    res.json({
+      plan,
+      isAdmin,
+      msgsToday,
+      chartAnalisesToday,
+      totalAnalyses,
+      limits: {
+        msgsPerDay: isAdmin || plan === "pro" || plan === "premium" ? null : 10,
+        chartPerDay: isAdmin || plan === "premium" ? null : plan === "pro" ? 5 : 0,
+        maxAnalyses: isAdmin || plan === "premium" ? null : plan === "pro" ? 50 : 0,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao buscar uso" });
+  }
+});
+
 router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
   const convId = parseInt(req.params.id);
   const { message, imageBase64, tradeContext } = req.body;
@@ -75,6 +123,38 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
   }
 
   try {
+    const userId = (req as any).user.sub;
+    const userPlan = (req as any).user.plan;
+    const userRole = (req as any).user.role;
+    const isAdmin = userRole === "admin";
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+
+    if (!isAdmin) {
+      const userConvs = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.userId, userId));
+      const convIds = userConvs.map(c => c.id);
+
+      if (userPlan === "basico" && convIds.length > 0) {
+        const [r] = await db.select({ total: count() }).from(messages).where(
+          and(eq(messages.role, "user"), gte(messages.createdAt, startOfDay), inArray(messages.conversationId, convIds))
+        );
+        if (Number(r?.total ?? 0) >= 10) {
+          return res.status(403).json({ error: "Limite diário atingido", limitReached: true, requiredPlan: "pro" });
+        }
+      }
+
+      if (imageBase64 && userPlan === "basico") {
+        return res.status(403).json({ error: "Análise de gráfico requer plano PRO", requiredPlan: "pro" });
+      }
+
+      if (imageBase64 && userPlan === "pro") {
+        const [ca] = await db.select({ total: count() }).from(lunaAnalyses).where(
+          and(eq(lunaAnalyses.userId, userId), gte(lunaAnalyses.createdAt, startOfDay), isNotNull(lunaAnalyses.thumbnailBase64))
+        );
+        if (Number(ca?.total ?? 0) >= 5) {
+          return res.status(403).json({ error: "Limite de 5 análises de gráfico por dia atingido (PRO)", limitReached: true });
+        }
+      }
+    }
     const history = await db
       .select()
       .from(messages)
@@ -158,7 +238,7 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/analyses", requireAuth, async (req, res) => {
+router.get("/analyses", requireAuth, requirePlan("pro"), async (req, res) => {
   try {
     const userId = (req as any).user.sub;
     const rows = await db
@@ -173,9 +253,21 @@ router.get("/analyses", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/analyses", requireAuth, async (req, res) => {
+router.post("/analyses", requireAuth, requirePlan("pro"), async (req, res) => {
   try {
     const userId = (req as any).user.sub;
+    const userPlan = (req as any).user.plan;
+    const userRole = (req as any).user.role;
+    const isAdmin = userRole === "admin";
+
+    if (!isAdmin && userPlan === "pro") {
+      const [ta] = await db.select({ total: count() }).from(lunaAnalyses).where(eq(lunaAnalyses.userId, userId));
+      if (Number(ta?.total ?? 0) >= 50) {
+        res.status(403).json({ error: "Limite de 50 análises atingido. Faça upgrade para PREMIUM.", requiredPlan: "premium" });
+        return;
+      }
+    }
+
     const { pair, timeframe, userQuestion, lunaResponse, keyLessons, tags, thumbnailBase64 } = req.body;
     const [row] = await db
       .insert(lunaAnalyses)

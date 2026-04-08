@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { PlanGate } from "../components/PlanGate";
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, ReferenceLine
@@ -204,25 +205,27 @@ export default function AnalyticsPage() {
           sub="operações consecutivas perdidas" />
       </div>
 
-      {/* KPIs profissionais */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Profit Factor"
-          value={profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}
-          color={profitFactor >= 1.5 ? 'text-[var(--green)]' : profitFactor >= 1 ? 'text-yellow-400' : 'text-[var(--red)]'}
-          sub="wins ÷ losses (>1.5 = bom)" />
-        <StatCard label="Expectativa"
-          value={`${(expectancy * 100).toFixed(1)}%`}
-          color={expectancy > 0 ? 'text-[var(--green)]' : expectancy === 0 ? 'text-yellow-400' : 'text-[var(--red)]'}
-          sub="retorno médio por operação" />
-        <StatCard label="Índice de Sharpe"
-          value={sharpeRatio.toFixed(2)}
-          color={sharpeRatio >= 1 ? 'text-[var(--green)]' : sharpeRatio >= 0 ? 'text-yellow-400' : 'text-[var(--red)]'}
-          sub="retorno ajustado ao risco" />
-        <StatCard label="Consistência"
-          value={`${wins > 0 && losses > 0 ? Math.min(100, Math.round((Math.min(wins, losses) / Math.max(wins, losses)) * 100 * (globalWR / 50))) : 0}%`}
-          color="text-purple-400"
-          sub="regularidade dos resultados" />
-      </div>
+      {/* KPIs profissionais — PRO+ */}
+      <PlanGate requiredPlan="pro" feature="Analytics Profissionais (Profit Factor, Sharpe, Expectativa)">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Profit Factor"
+            value={profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}
+            color={profitFactor >= 1.5 ? 'text-[var(--green)]' : profitFactor >= 1 ? 'text-yellow-400' : 'text-[var(--red)]'}
+            sub="wins ÷ losses (>1.5 = bom)" />
+          <StatCard label="Expectativa"
+            value={`${(expectancy * 100).toFixed(1)}%`}
+            color={expectancy > 0 ? 'text-[var(--green)]' : expectancy === 0 ? 'text-yellow-400' : 'text-[var(--red)]'}
+            sub="retorno médio por operação" />
+          <StatCard label="Índice de Sharpe"
+            value={sharpeRatio.toFixed(2)}
+            color={sharpeRatio >= 1 ? 'text-[var(--green)]' : sharpeRatio >= 0 ? 'text-yellow-400' : 'text-[var(--red)]'}
+            sub="retorno ajustado ao risco" />
+          <StatCard label="Consistência"
+            value={`${wins > 0 && losses > 0 ? Math.min(100, Math.round((Math.min(wins, losses) / Math.max(wins, losses)) * 100 * (globalWR / 50))) : 0}%`}
+            color="text-purple-400"
+            sub="regularidade dos resultados" />
+        </div>
+      </PlanGate>
 
       {totalOps === 0 ? (
         <div className="glass-card p-16 text-center">

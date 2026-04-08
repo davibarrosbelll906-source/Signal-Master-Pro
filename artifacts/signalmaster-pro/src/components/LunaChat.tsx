@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLocation } from "wouter";
 import { apiClient } from "../lib/apiClient";
+import { usePlan } from "../lib/usePlanGuard";
 import html2canvas from "html2canvas";
 
 interface Message {
@@ -19,6 +21,11 @@ interface LunaChatProps {
 }
 
 export default function LunaChat({ chartRef, currentPair, currentTimeframe, tradeStats }: LunaChatProps) {
+  const plan = usePlan();
+  const [, navigate] = useLocation();
+  const canChart = plan === "pro" || plan === "premium";
+  const msgLimit = plan === "basico" ? 10 : null;
+
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -26,6 +33,7 @@ export default function LunaChat({ chartRef, currentPair, currentTimeframe, trad
   const [loading, setLoading] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [msgsToday, setMsgsToday] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -330,18 +338,28 @@ export default function LunaChat({ chartRef, currentPair, currentTimeframe, trad
             </div>
 
             <div className="border-t border-white/10 p-3 space-y-2" style={{ background: "rgba(10,10,20,0.9)" }}>
-              <button
-                onClick={captureAndAnalyze}
-                disabled={capturing || loading}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #7c3aed33, #4f46e533)", border: "1px solid #7c3aed55", color: "#c4b5fd" }}
-              >
-                {capturing ? (
-                  <><span className="animate-spin">⟳</span> Capturando gráfico...</>
-                ) : (
-                  <><span>📸</span> Analisar gráfico com Luna</>
-                )}
-              </button>
+              {canChart ? (
+                <button
+                  onClick={captureAndAnalyze}
+                  disabled={capturing || loading}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #7c3aed33, #4f46e533)", border: "1px solid #7c3aed55", color: "#c4b5fd" }}
+                >
+                  {capturing ? (
+                    <><span className="animate-spin">⟳</span> Capturando gráfico...</>
+                  ) : (
+                    <><span>📸</span> Analisar gráfico com Luna</>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate("/dashboard/plans")}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-all opacity-70 hover:opacity-100"
+                  style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.3)", color: "#a78bfa" }}
+                >
+                  <span>🔒</span> Analisar gráfico — Requer PRO
+                </button>
+              )}
               <div className="flex gap-2">
                 <textarea
                   ref={inputRef}

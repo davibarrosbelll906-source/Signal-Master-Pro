@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Search, X, ChevronDown, ChevronUp, Tag, Clock, TrendingUp, Star } from "lucide-react";
 import { apiClient } from "../lib/apiClient";
+import { PlanGate } from "../components/PlanGate";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -83,6 +84,7 @@ export default function LunaAnalysesPage() {
   const allPairs = ["Todos", ...Array.from(new Set(analyses.map(a => a.pair).filter(Boolean)))];
 
   return (
+    <PlanGate requiredPlan="pro" feature="Biblioteca de Análises com Luna">
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
@@ -261,5 +263,6 @@ export default function LunaAnalysesPage() {
         </div>
       )}
     </div>
+    </PlanGate>
   );
 }
