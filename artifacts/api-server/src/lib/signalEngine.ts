@@ -508,6 +508,13 @@ export function runEngine(m1: Candle[], asset: string): SignalResult | null {
   const total = callScore + putScore || 1;
   const direction: 'CALL' | 'PUT' = callScore >= putScore ? 'CALL' : 'PUT';
   let rawScore = Math.max(callScore, putScore) / total;
+
+  // ── 3-Factor Confluence: Trend + RSI + Volume/PA ──────────────────────
+  const confluenceTrend  = votes.ema === direction;
+  const confluenceRSI    = votes.rsi === direction;
+  const confluenceVolume = votes.volume === direction || votes.obv === direction;
+  const confluenceFactors = [confluenceTrend, confluenceRSI, confluenceVolume].filter(Boolean).length;
+
   rawScore = Math.min(0.95, Math.max(0.35, rawScore + getPairSessionBonus(sess, category, asset)));
   if (adx >= 30) rawScore = Math.min(0.95, rawScore + 0.05);
   else if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.03);
@@ -519,8 +526,17 @@ export function runEngine(m1: Candle[], asset: string): SignalResult | null {
   if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
   if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
   if (entropy > 0.6) rawScore = Math.max(0.35, rawScore - 0.08);
+
+  // ── ATR Volatility Filter: 0.03%–1.2% of price ───────────────────────
   const atrPct = lastClose > 0 ? atr / lastClose : 0;
-  if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
+  if (atrPct < 0.0003) rawScore = Math.max(0.35, rawScore - 0.10);      // mercado morto
+  else if (atrPct > 0.012) rawScore = Math.max(0.35, rawScore - 0.08);  // mercado caótico
+  else if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
+
+  // ── Confluence bonus/penalty ──────────────────────────────────────────
+  if (confluenceFactors >= 3) rawScore = Math.min(0.95, rawScore + 0.06);
+  else if (confluenceFactors <= 1) rawScore = Math.max(0.35, rawScore - 0.05);
+
   const score = Math.round(rawScore * 100);
 
   let quality: SignalResult['quality'] = 'EVITAR';
@@ -557,7 +573,10 @@ export function runEngine(m1: Candle[], asset: string): SignalResult | null {
   let blockedBy: string | null = null;
   if (mins === 59 || mins === 0) blockedBy = 'Horário morto (min :00 ou :59)';
   else if (adx < 18) blockedBy = `ADX fraco (${Math.round(adx)} < 18) — mercado lateral`;
+  else if (atrPct < 0.0003) blockedBy = `Mercado morto — ATR ${(atrPct * 10000).toFixed(1)} bps (< 3 bps)`;
+  else if (atrPct > 0.012) blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps (> 120 bps)`;
   else if (entropy > 0.65) blockedBy = `Entropia alta (${Math.round(entropy * 100)}%) — mercado aleatório`;
+  else if (confluenceFactors < 2) blockedBy = `Confluência insuficiente (${confluenceFactors}/3 fatores: tendência, RSI, volume)`;
   else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
   else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;

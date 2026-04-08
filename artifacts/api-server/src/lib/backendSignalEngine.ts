@@ -14,7 +14,7 @@ const ALL_ASSETS = [
   'XAUUSD', 'XAGUSD', 'USOIL'
 ];
 
-// Anti-spam: minimum 3 minutes between signals for the same pair
+// Anti-overtrade: maximum 1 signal per pair every 4 minutes
 const lastSignalTime = new Map<string, number>();
 
 // Latest signal per asset (for REST fallback)
@@ -26,7 +26,7 @@ export function getLatestSignals() {
 
 function shouldThrottle(asset: string): boolean {
   const last = lastSignalTime.get(asset) || 0;
-  return Date.now() - last < 180_000; // 3 minutes
+  return Date.now() - last < 240_000; // 4 minutes
 }
 
 export function initSignalEngine(io: IOServer) {

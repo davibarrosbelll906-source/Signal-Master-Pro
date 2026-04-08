@@ -75,6 +75,7 @@ export default function SignalsPage() {
   const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
+  const lastFiredByPairRef = useRef<Map<string, number>>(new Map());
 
   const refreshStats = () => {
     try {
@@ -196,6 +197,16 @@ export default function SignalsPage() {
           setEngineStatus(`aguardando dados... (${buf.m1.length}/30 velas)`);
           return;
         }
+
+        // Anti-overtrade: máximo 1 sinal por par a cada 4 minutos
+        const lastFired = lastFiredByPairRef.current.get(asset) || 0;
+        const elapsed = Date.now() - lastFired;
+        if (elapsed < 240_000) {
+          const remaining = Math.ceil((240_000 - elapsed) / 60000);
+          setEngineStatus(`anti-overtrade: próximo sinal em ${remaining}min`);
+          return;
+        }
+
         setEngineStatus('calculando indicadores...');
         try {
           const diag = runEngineDiag(buf, asset);
@@ -203,6 +214,7 @@ export default function SignalsPage() {
 
           const result = runEngine(buf, asset);
           if (result) {
+            lastFiredByPairRef.current.set(asset, Date.now());
             setSignal(result);
             setPendingSignal(result);
             const soundType = result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte';
