@@ -16,7 +16,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { subscribeAsset } from "@/lib/assetDataManager";
-import { ASSET_CATEGORIES } from "@/lib/signalEngine";
+import { ASSET_CATEGORIES, TV_SYMBOLS } from "@/lib/signalEngine";
 
 interface TradingViewWidgetProps {
   symbol: string;
@@ -163,7 +163,9 @@ export default function TradingViewWidget({ symbol, theme = "dark", height = 400
       <div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-3 px-3 py-2 pointer-events-none"
         style={{ background: "linear-gradient(to bottom, rgba(7,7,13,0.9) 0%, transparent 100%)" }}>
         <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-[var(--green)] animate-pulse" : "bg-yellow-500 animate-pulse"}`} />
-        <span className="text-xs font-black text-white">{symbol.replace("USD", "/USD")}</span>
+        <span className="text-xs font-black text-white">
+          {(TV_SYMBOLS[symbol] || symbol).replace(/^[A-Z]+:/, "").replace(/USDT?$/, "/USD")}
+        </span>
         <span className="text-[10px]" style={{ color: accentColor }}>
           {category === "crypto" ? "₿" : category === "forex" ? "💱" : "🏅"} {category}
         </span>

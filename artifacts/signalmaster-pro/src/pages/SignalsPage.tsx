@@ -1079,7 +1079,7 @@ export default function SignalsPage() {
 
       {/* TRADINGVIEW CHART — só no modo single */}
       {!multiPairMode && <div className="glass-card p-1">
-        <TradingViewWidget symbol={TV_SYMBOLS[asset] || `FX:${asset}`} height={380} />
+        <TradingViewWidget symbol={asset} height={380} />
       </div>}
 
       {/* MINI TRADE HISTORY */}
