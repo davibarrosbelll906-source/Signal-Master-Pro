@@ -41,4 +41,8 @@ socket.on('news_blackout', (blackout: Omit<NewsBlackout, 'at'>) => {
   useSignalStore.getState().setNewsBlackout({ ...blackout, at: Date.now() });
 });
 
+socket.on('timeframe_changed', (data: { timeframe: string }) => {
+  console.log(`[Socket] Timeframe confirmado pelo backend: ${data.timeframe}`);
+});
+
 export default socket;

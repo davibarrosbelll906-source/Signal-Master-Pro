@@ -1,10 +1,11 @@
 /**
  * BackendSignalEngine — Orchestrator
- * Runs every second, fires runEngine at :48 for all active assets,
- * emits signals via Socket.io.
+ * Runs every second, fires runEngine at :48 for each active asset.
+ * Timeframe is synced from the frontend via Socket.io `change_timeframe`.
+ * Uses shouldTriggerSignal() to fire only at the correct minutes.
  */
 
-import type { Server as IOServer } from 'socket.io';
+import type { Server as IOServer, Socket } from 'socket.io';
 import { getBuffer, onBufferUpdate, initAllAssets } from './assetDataManager.js';
 import { runEngine, ASSET_CATEGORIES, type SignalResult } from './signalEngine.js';
 import { generateLunaExplanation } from './lunaExplainer.js';
@@ -22,6 +23,12 @@ const lastSignalTime = new Map<string, number>();
 // Latest signal per asset (for REST fallback)
 const latestSignals = new Map<string, SignalResult>();
 
+// Per-socket timeframe tracking (defaults to M1)
+const socketTimeframes = new Map<string, string>();
+
+// Global default timeframe (used when no socket preference is known)
+let globalTimeframe: string = 'M1';
+
 export function getLatestSignals() {
   return Object.fromEntries(latestSignals);
 }
@@ -29,6 +36,34 @@ export function getLatestSignals() {
 function shouldThrottle(asset: string): boolean {
   const last = lastSignalTime.get(asset) || 0;
   return Date.now() - last < 240_000; // 4 minutes
+}
+
+/**
+ * Verifica se deve disparar o sinal no minuto atual baseado no timeframe.
+ * Alinha com abertura dos candles das corretoras:
+ *   M1:  todo minuto (00, 01, 02, ...)
+ *   M5:  minutos 00, 05, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55
+ *   M15: minutos 00, 15, 30, 45
+ */
+function shouldTriggerSignal(currentMinute: number, timeframe: string): boolean {
+  switch (timeframe) {
+    case 'M5':  return currentMinute % 5 === 0;
+    case 'M15': return currentMinute % 15 === 0;
+    case 'M1':
+    default:    return true;
+  }
+}
+
+/**
+ * Sugere expiração em minutos baseado no timeframe
+ */
+export function suggestExpiry(timeframe: string): number {
+  switch (timeframe) {
+    case 'M5':  return 5;
+    case 'M15': return 15;
+    case 'M1':
+    default:    return 1;
+  }
 }
 
 export function initSignalEngine(io: IOServer) {
@@ -48,11 +83,52 @@ export function initSignalEngine(io: IOServer) {
     });
   });
 
+  // Handle socket connections
+  io.on('connection', (socket: Socket) => {
+    // Set default timeframe for this socket
+    socketTimeframes.set(socket.id, globalTimeframe);
+
+    // Send current snapshots to newly connected client
+    for (const [asset, signal] of latestSignals) {
+      socket.emit('new_signal', signal);
+    }
+    for (const asset of ALL_ASSETS) {
+      const buf = getBuffer(asset);
+      if (buf) {
+        socket.emit('price_update', { asset, price: buf.price, connected: buf.connected, bufSize: buf.m1.length });
+      }
+    }
+
+    // Frontend → Backend: timeframe change
+    socket.on('change_timeframe', (timeframe: string) => {
+      if (['M1', 'M5', 'M15'].includes(timeframe)) {
+        socketTimeframes.set(socket.id, timeframe);
+        globalTimeframe = timeframe; // update global for single-user simplicity
+        console.log(`[SignalEngine] ⏱️ Timeframe atualizado → ${timeframe} (socket: ${socket.id})`);
+        // Confirm back to the client
+        socket.emit('timeframe_changed', { timeframe });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      socketTimeframes.delete(socket.id);
+    });
+  });
+
   // Run signal engine every second
   setInterval(() => {
     const now = new Date();
     const second = now.getSeconds();
+    const minute = now.getMinutes();
+
     if (second !== 48) return;
+
+    // Use global timeframe to decide if this minute should trigger
+    if (!shouldTriggerSignal(minute, globalTimeframe)) {
+      return; // Not a valid fire minute for current timeframe
+    }
+
+    console.log(`[SignalEngine] 🕐 Disparo ${globalTimeframe} — minuto :${String(minute).padStart(2,'0')}`);
 
     for (const asset of ALL_ASSETS) {
       const buf = getBuffer(asset);
@@ -73,15 +149,16 @@ export function initSignalEngine(io: IOServer) {
         const result = runEngine(buf.m1, asset);
         if (!result) continue;
 
-        // Always broadcast the result (frontend applies user-specific filters)
-        latestSignals.set(asset, result);
-        io.emit('new_signal', result);
+        // Tag signal with the timeframe it was generated for
+        const taggedResult = { ...result, timeframe: globalTimeframe };
+
+        latestSignals.set(asset, taggedResult);
+        io.emit('new_signal', taggedResult);
 
         if (result.passed) {
           lastSignalTime.set(asset, Date.now());
-          console.log(`[SignalEngine] ${asset} → ${result.direction} ${result.score}% (${result.quality})`);
+          console.log(`[SignalEngine] ${asset} → ${result.direction} ${result.score}% (${result.quality}) [${globalTimeframe}]`);
 
-          // Fire Luna explanation async — does NOT block signal delivery
           generateLunaExplanation({
             asset: result.asset,
             direction: result.direction,
@@ -97,26 +174,11 @@ export function initSignalEngine(io: IOServer) {
             ts: result.ts,
           }, io).catch(() => {});
         }
-      } catch (e) {
+      } catch {
         // Swallow individual asset errors
       }
     }
   }, 1000);
-
-  // REST endpoint helper: send current signals on client connect
-  io.on('connection', (socket) => {
-    // Send all current signals to newly connected client
-    for (const [asset, signal] of latestSignals) {
-      socket.emit('new_signal', signal);
-    }
-    // Send current price snapshots
-    for (const asset of ALL_ASSETS) {
-      const buf = getBuffer(asset);
-      if (buf) {
-        socket.emit('price_update', { asset, price: buf.price, connected: buf.connected, bufSize: buf.m1.length });
-      }
-    }
-  });
 
   console.log('[SignalEngine] Backend signal engine started');
 }

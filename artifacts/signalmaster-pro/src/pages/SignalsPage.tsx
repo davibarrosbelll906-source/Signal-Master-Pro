@@ -13,6 +13,7 @@ import {
 import { subscribeAsset } from "@/lib/assetDataManager";
 import { useAccountMode } from "@/lib/useAccountMode";
 import { useSignalStore, type LunaExplanation, type NewsBlackout } from "@/lib/signalStore";
+import { socket } from "@/lib/socket";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
 const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
 const COMMODITY_ASSETS = ['XAUUSD', 'XAGUSD', 'USOIL'];
@@ -123,7 +124,11 @@ export default function SignalsPage() {
   }, []);
 
   // Persist timeframe
-  useEffect(() => { localStorage.setItem('smpTimeframe', timeframe); }, [timeframe]);
+  useEffect(() => {
+    localStorage.setItem('smpTimeframe', timeframe);
+    // Sincroniza timeframe com o motor do backend via Socket.io
+    socket.emit('change_timeframe', timeframe);
+  }, [timeframe]);
 
   // Reset Luna state when new signal fires for this asset
   useEffect(() => {
