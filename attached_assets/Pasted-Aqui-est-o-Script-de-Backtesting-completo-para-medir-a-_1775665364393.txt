@@ -1,0 +1,164 @@
+Aqui está o Script de Backtesting completo para medir a assertividade dos sinais do seu SignalMaster Pro.
+Este script é muito útil porque permite testar seu motor de sinais com dados históricos e ver qual é a taxa de acerto real.
+1. Crie o arquivo: backtest.ts
+Coloque este arquivo em:
+artifacts/api-server/src/scripts/backtest.ts
+TypeScriptimport { PrismaClient } from '@prisma/client';
+import { SignalEngine } from '../lib/signalEngine';
+
+const prisma = new PrismaClient();
+
+interface BacktestResult {
+  totalSignals: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  avgScore: number;
+  byTimeframe: Record<string, { total: number; wins: number; winRate: number }>;
+  bySession: Record<string, { total: number; wins: number; winRate: number }>;
+  bestPairs: Array<{ pair: string; winRate: number; total: number }>;
+}
+
+async function runBacktest(days: number = 30) {
+  console.log(`🚀 Iniciando Backtest - Últimos ${days} dias`);
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  // Busca todos os sinais históricos (você precisa ter salvo os sinais no banco)
+  const historicalSignals = await prisma.signal.findMany({
+    where: {
+      createdAt: { gte: startDate }
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  if (historicalSignals.length === 0) {
+    console.log("❌ Nenhum sinal encontrado no banco. Rode o backtest após gerar sinais reais.");
+    return;
+  }
+
+  const result: BacktestResult = {
+    totalSignals: historicalSignals.length,
+    wins: 0,
+    losses: 0,
+    winRate: 0,
+    avgScore: 0,
+    byTimeframe: {},
+    bySession: {},
+    bestPairs: []
+  };
+
+  const pairStats = new Map<string, { wins: number; total: number }>();
+
+  for (const signal of historicalSignals) {
+    const isWin = signal.result === 'WIN'; // ajuste o nome do campo se necessário
+
+    if (isWin) result.wins++;
+    else result.losses++;
+
+    // Estatísticas por timeframe
+    if (!result.byTimeframe[signal.timeframe]) {
+      result.byTimeframe[signal.timeframe] = { total: 0, wins: 0, winRate: 0 };
+    }
+    result.byTimeframe[signal.timeframe].total++;
+    if (isWin) result.byTimeframe[signal.timeframe].wins++;
+
+    // Estatísticas por sessão
+    if (!result.bySession[signal.session]) {
+      result.bySession[signal.session] = { total: 0, wins: 0, winRate: 0 };
+    }
+    result.bySession[signal.session].total++;
+    if (isWin) result.bySession[signal.session].wins++;
+
+    // Estatísticas por par
+    const pairData = pairStats.get(signal.pair) || { wins: 0, total: 0 };
+    pairData.total++;
+    if (isWin) pairData.wins++;
+    pairStats.set(signal.pair, pairData);
+
+    result.avgScore += signal.score;
+  }
+
+  result.winRate = (result.wins / result.totalSignals) * 100;
+  result.avgScore = result.avgScore / result.totalSignals;
+
+  // Calcula winrate por timeframe e sessão
+  Object.keys(result.byTimeframe).forEach(tf => {
+    const data = result.byTimeframe[tf];
+    data.winRate = (data.wins / data.total) * 100;
+  });
+
+  Object.keys(result.bySession).forEach(s => {
+    const data = result.bySession[s];
+    data.winRate = (data.wins / data.total) * 100;
+  });
+
+  // Melhores pares
+  result.bestPairs = Array.from(pairStats.entries())
+    .map(([pair, stats]) => ({
+      pair,
+      winRate: (stats.wins / stats.total) * 100,
+      total: stats.total
+    }))
+    .sort((a, b) => b.winRate - a.winRate)
+    .slice(0, 10);
+
+  // ====================== RESULTADO FINAL ======================
+  console.log("\n📊 === BACKTEST RESULTS ===");
+  console.log(`Período analisado     : ${days} dias`);
+  console.log(`Total de sinais       : ${result.totalSignals}`);
+  console.log(`Vitórias              : ${result.wins}`);
+  console.log(`Derrotas              : ${result.losses}`);
+  console.log(`Win Rate Geral        : ${result.winRate.toFixed(2)}%`);
+  console.log(`Score Médio dos Sinais: ${result.avgScore.toFixed(1)}`);
+
+  console.log("\n📈 Por Timeframe:");
+  Object.entries(result.byTimeframe).forEach(([tf, data]) => {
+    console.log(`   ${tf}: ${data.winRate.toFixed(1)}% (${data.wins}/${data.total})`);
+  });
+
+  console.log("\n🌍 Por Sessão:");
+  Object.entries(result.bySession).forEach(([session, data]) => {
+    console.log(`   ${session}: ${data.winRate.toFixed(1)}% (${data.wins}/${data.total})`);
+  });
+
+  console.log("\n🏆 Melhores Pares:");
+  result.bestPairs.forEach((p, i) => {
+    console.log(`   ${i+1}. ${p.pair}: ${p.winRate.toFixed(1)}% (${p.total} sinais)`);
+  });
+
+  // Análise de qualidade
+  if (result.winRate > 68) {
+    console.log("\n✅ Ótimo! Assertividade acima da média.");
+  } else if (result.winRate > 60) {
+    console.log("\n⚠️  Aceitável, mas ainda pode melhorar.");
+  } else {
+    console.log("\n❌ Assertividade baixa. Recomendo ajustar o motor.");
+  }
+
+  await prisma.$disconnect();
+}
+
+// ====================== EXECUTAR ======================
+runBacktest(30)   // Testa últimos 30 dias
+  .catch(console.error);
+
+2. Como usar o Backtest
+
+Adicione no package.json (backend):
+
+JSON"scripts": {
+  "backtest": "ts-node src/scripts/backtest.ts",
+  "backtest:7d": "ts-node src/scripts/backtest.ts 7",
+  "backtest:60d": "ts-node src/scripts/backtest.ts 60"
+}
+
+Execute:
+
+Bashcd artifacts/api-server
+pnpm backtest
+
+Observações Importantes:
+
+Este script assume que você tem uma tabela Signal no banco com os campos: result (WIN/LOSS), score, timeframe, session, pair, etc.
