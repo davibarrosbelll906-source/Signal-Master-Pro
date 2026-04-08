@@ -7,6 +7,7 @@
 import type { Server as IOServer } from 'socket.io';
 import { getBuffer, onBufferUpdate, initAllAssets } from './assetDataManager.js';
 import { runEngine, ASSET_CATEGORIES, type SignalResult } from './signalEngine.js';
+import { generateLunaExplanation } from './lunaExplainer.js';
 
 const ALL_ASSETS = [
   'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD',
@@ -65,6 +66,22 @@ export function initSignalEngine(io: IOServer) {
         if (result.passed) {
           lastSignalTime.set(asset, Date.now());
           console.log(`[SignalEngine] ${asset} → ${result.direction} ${result.score}% (${result.quality})`);
+
+          // Fire Luna explanation async — does NOT block signal delivery
+          generateLunaExplanation({
+            asset: result.asset,
+            direction: result.direction,
+            score: result.score,
+            quality: result.quality,
+            adx: result.adx,
+            rsi: result.rsi,
+            entropy: result.entropy,
+            consensus: result.consensus,
+            marketRegime: result.marketRegime,
+            sess: result.sess,
+            category: result.category,
+            ts: result.ts,
+          }, io).catch(() => {});
         }
       } catch (e) {
         // Swallow individual asset errors

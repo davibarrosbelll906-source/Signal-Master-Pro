@@ -28,22 +28,40 @@ export interface PriceUpdate {
   bufSize: number;
 }
 
+export interface LunaExplanation {
+  signalId: string;
+  asset: string;
+  explanation: string;
+  keyPoints: string[];
+  riskNote: string;
+}
+
 interface SignalState {
   signals: Record<string, BackendSignal>;
   prices: Record<string, PriceUpdate>;
+  lunaExplanations: Record<string, LunaExplanation>;
   socketConnected: boolean;
   setSignal: (signal: BackendSignal) => void;
   setPrice: (update: PriceUpdate) => void;
   setConnected: (connected: boolean) => void;
+  setLunaExplanation: (explanation: LunaExplanation) => void;
 }
 
 export const useSignalStore = create<SignalState>((set) => ({
   signals: {},
   prices: {},
+  lunaExplanations: {},
   socketConnected: false,
   setSignal: (signal) =>
     set((s) => ({ signals: { ...s.signals, [signal.asset]: signal } })),
   setPrice: (update) =>
     set((s) => ({ prices: { ...s.prices, [update.asset]: update } })),
   setConnected: (socketConnected) => set({ socketConnected }),
+  setLunaExplanation: (explanation) =>
+    set((s) => ({
+      lunaExplanations: {
+        ...s.lunaExplanations,
+        [explanation.asset]: explanation,
+      },
+    })),
 }));

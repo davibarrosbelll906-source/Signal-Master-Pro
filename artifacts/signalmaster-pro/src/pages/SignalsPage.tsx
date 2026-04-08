@@ -15,6 +15,7 @@ import {
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
 import { useAccountMode } from "@/lib/useAccountMode";
+import { useSignalStore, type LunaExplanation } from "@/lib/signalStore";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
 const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
 const COMMODITY_ASSETS = ['XAUUSD', 'XAGUSD', 'USOIL'];
@@ -70,6 +71,9 @@ export default function SignalsPage() {
   const [watchedPairs, setWatchedPairs] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('smpWatchedPairs') || '["EURUSD","BTCUSD"]'); } catch { return ['EURUSD', 'BTCUSD']; }
   });
+  const [lunaExplanation, setLunaExplanation] = useState<LunaExplanation | null>(null);
+  const [lunaLoading, setLunaLoading] = useState(false);
+  const lunaExplanations = useSignalStore((s) => s.lunaExplanations);
 
   const MAX_PAIRS = 5;
   const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
@@ -109,6 +113,32 @@ export default function SignalsPage() {
 
   // Persist timeframe
   useEffect(() => { localStorage.setItem('smpTimeframe', timeframe); }, [timeframe]);
+
+  // Reset Luna state when new signal fires for this asset
+  useEffect(() => {
+    if (!signal) return;
+    setLunaExplanation(null);
+    setLunaLoading(true);
+    // Race-condition guard: explanation may already have arrived
+    const existing = lunaExplanations[signal.asset];
+    if (existing) {
+      setLunaExplanation(existing);
+      setLunaLoading(false);
+    }
+    // Auto-timeout: if no explanation in 15s, stop showing loading
+    const timeout = setTimeout(() => setLunaLoading(false), 15000);
+    return () => clearTimeout(timeout);
+  }, [signal?.ts]);
+
+  // Watch for Luna explanation arriving for the currently displayed asset
+  useEffect(() => {
+    if (!signal) return;
+    const explanation = lunaExplanations[signal.asset];
+    if (explanation) {
+      setLunaExplanation(explanation);
+      setLunaLoading(false);
+    }
+  }, [lunaExplanations, signal?.asset]);
 
   // Persist watched pairs
   useEffect(() => {
@@ -948,6 +978,78 @@ export default function SignalsPage() {
                     Sinal já registrado — aguardando próximo
                   </div>
                 )}
+
+                {/* ─── LUNA EDUCATIONAL EXPLANATION ─────────────────────── */}
+                <AnimatePresence mode="wait">
+                  {lunaLoading && !lunaExplanation && (
+                    <motion.div
+                      key="luna-loading"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="mt-4 rounded-xl border border-purple-500/20 bg-purple-500/5 p-3 flex items-center gap-3"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
+                        <span className="text-sm">🌙</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black text-purple-400/80 uppercase tracking-widest">Luna</span>
+                          <span className="text-[10px] text-purple-400/50">analisando o sinal...</span>
+                        </div>
+                        <div className="flex gap-1">
+                          {[0, 1, 2].map(i => (
+                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-purple-400/40 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {lunaExplanation && (
+                    <motion.div
+                      key="luna-explanation"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 rounded-xl border border-purple-500/25 bg-gradient-to-br from-purple-500/8 to-purple-900/5 p-4 space-y-3"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-sm">🌙</div>
+                        <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Luna explica</span>
+                        <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
+                          <div className="w-1 h-1 rounded-full bg-purple-400 animate-pulse" />
+                          <span className="text-[9px] text-purple-400 font-bold">IA EDUCACIONAL</span>
+                        </div>
+                      </div>
+
+                      {/* Main explanation */}
+                      <p className="text-xs text-gray-300 leading-relaxed">{lunaExplanation.explanation}</p>
+
+                      {/* Key points */}
+                      {lunaExplanation.keyPoints.length > 0 && (
+                        <div className="space-y-1.5">
+                          {lunaExplanation.keyPoints.map((point, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <div className="w-4 h-4 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-[9px] text-purple-400 font-bold">{i + 1}</span>
+                              </div>
+                              <span className="text-[11px] text-gray-400 leading-snug">{point}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Risk note */}
+                      {lunaExplanation.riskNote && (
+                        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/15">
+                          <span className="text-amber-400 text-xs shrink-0 mt-0.5">⚠</span>
+                          <span className="text-[11px] text-amber-300/80 leading-snug">{lunaExplanation.riskNote}</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ) : (
               <motion.div
