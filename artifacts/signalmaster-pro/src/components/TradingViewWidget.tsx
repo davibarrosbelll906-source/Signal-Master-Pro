@@ -7,6 +7,8 @@ import {
   createChart,
   ColorType,
   CrosshairMode,
+  CandlestickSeries,
+  HistogramSeries,
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
@@ -80,7 +82,7 @@ export default function TradingViewWidget({ symbol, theme = "dark", height = 400
     const upColor = "#00ff88";
     const downColor = "#ff4466";
 
-    const cs = chart.addCandlestickSeries({
+    const cs = chart.addSeries(CandlestickSeries, {
       upColor,
       downColor,
       borderUpColor: upColor,
@@ -89,7 +91,7 @@ export default function TradingViewWidget({ symbol, theme = "dark", height = 400
       wickDownColor: downColor,
     });
 
-    const vol = chart.addHistogramSeries({
+    const vol = chart.addSeries(HistogramSeries, {
       color: accentColor,
       priceFormat: { type: "volume" },
       priceScaleId: "vol",
