@@ -49,6 +49,13 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `POST /api/trades` — record a trade (requires auth)
 - `DELETE /api/trades/today` — clear today's trades
 - `DELETE /api/trades/all` — clear all trades
+- `POST /api/email/daily-report` — envia relatório diário por e-mail (Resend)
+- `POST /api/email/alert` — envia alerta de meta/stop por e-mail (Resend)
+- `GET /api/leaderboard?period=7d|30d|all` — ranking global do banco de dados
+- `GET /api/stripe/plans` — lista planos de assinatura
+- `GET /api/stripe/config` — publishable key do Stripe
+- `POST /api/stripe/create-checkout` — cria sessão de checkout Stripe
+- `POST /api/stripe/webhook` — webhook Stripe (atualiza plano do user no DB)
 
 ### localStorage (UI-only, non-sensitive)
 Keys kept: `smpMode7`, `smpBroker7`, `smpMgmt7`, `smpTheme`, `smpTimeframe`, `smpWatchedPairs`, `smpPin7`, `smpPinEnabled7`, `smpCurrentUser7` (non-sensitive user object), `smpJwt7`, `smpRefresh7`
@@ -82,7 +89,7 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 ### Pages (all fully functional with real data)
 - SignalsPage: real Binance REST+WS for crypto, OU simulation for forex/commodity; ManagementPanel (banca/entrada/meta/stop config + progress bars + full-screen goal/stop notifications); Copy Signal button (copies to clipboard with quality/score/timeframe); PIN lock via usePinLock hook (5-min inactivity)
 - HistoryPage: localStorage history with filters and CSV export
-- AnalyticsPage: Recharts charts (session WR, equity curve, asset WR, indicator accuracy, hour-by-hour Win Rate with best hour detection)
+- AnalyticsPage: Recharts charts (session WR, equity curve real (banca), asset WR, indicator accuracy, hour-by-hour Win Rate) + métricas profissionais: Profit Factor, Expectância, Índice de Sharpe, Max Drawdown
 - SettingsPage: all settings persisted to smpCfg7
 - AdminPage: full user CRUD from localStorage + plan management
 - AchievementsPage: 21 real achievements with progress tracking (including Primeira Semana, Elite Signal, Morning/Night sessions, Crypto King, Forex Master, Green Month, Iron Discipline, Grand Master)
@@ -95,7 +102,7 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - RiskPage: full risk calculator (Kelly criterion, EV, ruin probability, max consecutive losses)
 - HeatmapPage: real hour×day heatmap from history, best/worst hour detection
 - CalendarPage: dual-tab — trading calendar (monthly grid, W/L per day) + economic calendar (today's high/medium/low impact events with countdown, upcoming events for the week)
-- LeaderboardPage: mix of real user stats + mock traders, podium, filters
+- LeaderboardPage: ranking global real do banco de dados via `/api/leaderboard`, podium, filtro por período, fallback para stats locais
 - NotificationsPage: auto-generated alerts from history + persistent localStorage
 - StrategiesPage: educational accordion with 6 strategies, logic/conditions/avoid
 - TeamPage: real users from localStorage (staff roles only)
@@ -121,9 +128,27 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - smpMgmt7: management panel config (banca, entrada, payout, metaWins, stopLosses)
 - smpPin7: PIN hash, smpPinEnabled7: '1' if PIN active
 
+### v7.1 New Features
+- **IA Explicativa**: botão "Por que este sinal?" em cada card — `explainSignal()` em signalEngine.ts gera bullets detalhados por indicador
+- **PWA**: vite-plugin-pwa configurado, manifest.json, ícones 192/512, Workbox cache para Binance API
+- **Analytics Profissionais**: Profit Factor, Expectância, Índice de Sharpe, Max Drawdown, Equity Curve real acumulada
+- **Leaderboard Real**: rota `/api/leaderboard` com dados do PostgreSQL, substituindo mock traders
+- **E-mail**: Resend daily-report + alertas meta/stop via `/api/email/`
+- **Stripe Assinaturas**: 3 planos (Básico grátis, PRO R$49,90, PREMIUM R$99,90), checkout, webhooks; PlansPage em `/dashboard/plans`
+
+### Stripe Config
+- Env vars: `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM` (set via shared environment)
+- Webhook: configure endpoint `/api/stripe/webhook` no dashboard Stripe
+- Env: `STRIPE_WEBHOOK_SECRET` (opcional para prod)
+- Connector: Stripe Sandbox via Replit integrations
+
 ### Key Dependencies
 - zustand: global state management
 - wouter: client-side routing
 - framer-motion: animations
 - recharts: analytics charts
 - lucide-react + react-icons: icons
+- stripe@20.0.0 + stripe-replit-sync@1.0.0 (api-server)
+- @stripe/stripe-js (frontend)
+- vite-plugin-pwa (frontend PWA)
+- resend (api-server e-mail)

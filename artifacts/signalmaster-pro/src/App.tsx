@@ -39,6 +39,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
 import DashboardHomePage from "@/pages/DashboardHomePage";
+import PlansPage from "@/pages/PlansPage";
 
 import NotFound from "@/pages/not-found";
 
@@ -108,6 +109,7 @@ function Router() {
       <Route path="/dashboard/profile" component={() => <D component={ProfilePage} />} />
       <Route path="/dashboard/settings" component={() => <D component={SettingsPage} />} />
       <Route path="/dashboard/admin" component={() => <D component={AdminPage} />} />
+      <Route path="/dashboard/plans" component={() => <D component={PlansPage} />} />
 
       {/* Projector — full screen overlay, rendered inside dashboard layout so auth is enforced */}
       <Route path="/dashboard/projector" component={() => <D component={ProjectorPage} />} />

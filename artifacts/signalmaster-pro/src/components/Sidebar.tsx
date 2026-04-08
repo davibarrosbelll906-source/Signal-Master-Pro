@@ -5,7 +5,7 @@ import {
   Activity, History, BarChart2, Map, Beaker, Trophy, BookOpen, Goal,
   ShieldAlert, Wallet, PieChart, Video, Calendar, DollarSign, Users,
   Link as LinkIcon, Award, Send, Bell, User, Settings, LogOut, Home,
-  Menu, X, ChevronDown, ChevronRight, Brain, RadioTower, ChevronDown as ChevDown
+  Menu, X, ChevronDown, ChevronRight, Brain, RadioTower, ChevronDown as ChevDown, Crown
 } from "lucide-react";
 import { getCurrentSession } from "@/lib/signalEngine";
 import { useAccountMode, KNOWN_BROKERS } from "@/lib/useAccountMode";
@@ -143,6 +143,7 @@ export function Sidebar() {
       { href: "/dashboard/team", label: "Equipe", icon: Users },
       { href: "/dashboard/affiliates", label: "Afiliados", icon: LinkIcon },
       { href: "/dashboard/admin", label: "Painel Admin", icon: Settings },
+      { href: "/dashboard/plans", label: "Planos & Assinatura", icon: Crown },
     ].filter(l => {
       if (currentUser?.role === 'financeiro') return l.label === 'Receita';
       if (currentUser?.role === 'gerente') return l.label !== 'Painel Admin';

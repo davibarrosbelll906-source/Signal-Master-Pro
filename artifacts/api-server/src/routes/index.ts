@@ -4,6 +4,7 @@ import authRouter from "./auth.js";
 import tradesRouter from "./trades.js";
 import emailRouter from "./email.js";
 import leaderboardRouter from "./leaderboard.js";
+import stripeRouter from "./stripe.js";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use("/auth", authRouter);
 router.use("/trades", tradesRouter);
 router.use("/email", emailRouter);
 router.use("/leaderboard", leaderboardRouter);
+router.use("/stripe", stripeRouter);
 
 export default router;
