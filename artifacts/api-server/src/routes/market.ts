@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getCalendarEvents } from "../lib/newsFilter.js";
 
 const router = Router();
 
@@ -78,6 +79,21 @@ router.get("/market/news", async (req, res) => {
   } catch (err: any) {
     res.status(502).json({ error: err.message ?? "Fetch failed" });
   }
+});
+
+// Calendário econômico — retorna eventos de alta importância desta semana
+router.get("/market/calendar", (_req, res) => {
+  const now = Date.now();
+  const events = getCalendarEvents().map(e => ({
+    title: e.title,
+    country: e.country,
+    impact: e.impact,
+    date: e.date.toISOString(),
+    minutesUntil: Math.round((e.date.getTime() - now) / 60000),
+  }));
+  // Ordena por proximidade temporal
+  events.sort((a, b) => a.minutesUntil - b.minutesUntil);
+  res.json(events);
 });
 
 export default router;

@@ -75,6 +75,17 @@ export default function SignalsPage() {
   const newsBlackouts = useSignalStore((s) => s.newsBlackouts);
   const activeNewsBlackout: NewsBlackout | null = newsBlackouts[asset] ?? null;
 
+  // ── Calendário Econômico + Notícias ──
+  const [newsTab, setNewsTab] = useState<'calendar' | 'news'>('calendar');
+  const [calendarEvents, setCalendarEvents] = useState<Array<{
+    title: string; country: string; impact: string; date: string; minutesUntil: number;
+  }>>([]);
+  const [marketNews, setMarketNews] = useState<Array<{
+    title: string; link: string; pubDate: string; source: string;
+  }>>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [newsLoading, setNewsLoading] = useState(false);
+
   const MAX_PAIRS = 5;
   const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
 
@@ -320,6 +331,56 @@ export default function SignalsPage() {
 
   const chartRef = useRef<HTMLDivElement>(null);
   const tradeStats = `W:${wins} L:${losses} WR:${winRate}% Streak:${streak > 0 ? '+' + streak + 'W' : streak < 0 ? streak + 'L' : '-'}`;
+
+  // Fetch do calendário econômico
+  useEffect(() => {
+    const load = async () => {
+      setCalendarLoading(true);
+      try {
+        const r = await fetch('/api/market/calendar');
+        if (r.ok) setCalendarEvents(await r.json());
+      } catch {} finally { setCalendarLoading(false); }
+    };
+    load();
+    const t = setInterval(load, 5 * 60 * 1000); // refresh a cada 5min
+    return () => clearInterval(t);
+  }, []);
+
+  // Fetch das notícias
+  useEffect(() => {
+    if (newsTab !== 'news' || marketNews.length > 0) return;
+    const load = async () => {
+      setNewsLoading(true);
+      try {
+        const r = await fetch('/api/market/news');
+        if (r.ok) setMarketNews(await r.json());
+      } catch {} finally { setNewsLoading(false); }
+    };
+    load();
+  }, [newsTab]);
+
+  // Helpers para calendário
+  const fmtCountdown = (min: number) => {
+    if (Math.abs(min) < 1) return 'AGORA';
+    if (min < 0) return `há ${Math.abs(min)}min`;
+    if (min < 60) return `em ${min}min`;
+    return `em ${Math.floor(min / 60)}h${min % 60 > 0 ? String(min % 60).padStart(2, '0') + 'min' : ''}`;
+  };
+
+  const COUNTRY_FLAG: Record<string, string> = {
+    USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵', AUD: '🇦🇺',
+    CAD: '🇨🇦', NZD: '🇳🇿', CHF: '🇨🇭', CNY: '🇨🇳', ALL: '🌐',
+  };
+
+  const isBlackoutEvent = (ev: typeof calendarEvents[0]) => {
+    const assetCurrencies: Record<string, string[]> = {
+      EURUSD: ['EUR','USD'], GBPUSD: ['GBP','USD'], USDJPY: ['USD','JPY'],
+      AUDUSD: ['AUD','USD'], USDCAD: ['USD','CAD'], NZDUSD: ['NZD','USD'],
+      EURGBP: ['EUR','GBP'], GBPJPY: ['GBP','JPY'],
+      XAUUSD: ['USD'], XAGUSD: ['USD'], USOIL: ['USD'],
+    };
+    return (assetCurrencies[asset] || []).includes(ev.country);
+  };
 
   const copySignal = () => {
     if (!signal) return;
@@ -779,7 +840,142 @@ export default function SignalsPage() {
 
             {/* CHART */}
             <div ref={chartRef} className="glass-card p-0 overflow-hidden rounded-2xl" style={{ height: 420 }} data-chart-container>
-              <TradingViewWidget symbol={TV_SYMBOLS[asset] || asset} />
+              <TradingViewWidget symbol={asset} />
+            </div>
+
+            {/* ── PAINEL CALENDÁRIO + NOTÍCIAS ── */}
+            <div className="glass-card p-0 overflow-hidden rounded-2xl">
+              {/* Tabs */}
+              <div className="flex border-b border-white/6">
+                {([['calendar','📅 Calendário Econômico'],['news','📰 Notícias']] as const).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    onClick={() => setNewsTab(tab)}
+                    className={`flex-1 py-3 text-xs font-bold transition-all ${newsTab === tab ? 'text-white border-b-2 border-[var(--green)] bg-[var(--green)]/4' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    {label}
+                    {tab === 'calendar' && calendarEvents.filter(e => Math.abs(e.minutesUntil) <= 15 && isBlackoutEvent(e)).length > 0 && (
+                      <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* CALENDÁRIO ECONÔMICO */}
+              {newsTab === 'calendar' && (
+                <div className="p-4">
+                  {calendarLoading && calendarEvents.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-gray-600 text-xs">
+                      <div className="w-4 h-4 rounded-full border border-gray-700 border-t-gray-400 animate-spin" />
+                      Carregando calendário...
+                    </div>
+                  ) : calendarEvents.length === 0 ? (
+                    <p className="text-center text-gray-600 text-xs py-6">Nenhum evento de alto impacto esta semana.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                      {calendarEvents.map((ev, i) => {
+                        const isPast = ev.minutesUntil < -15;
+                        const isActive = Math.abs(ev.minutesUntil) <= 15;
+                        const isSoon = ev.minutesUntil > 0 && ev.minutesUntil <= 60;
+                        const affectsAsset = isBlackoutEvent(ev);
+                        const evDate = new Date(ev.date);
+
+                        return (
+                          <div
+                            key={i}
+                            className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
+                              isActive && affectsAsset ? 'border-red-500/40 bg-red-500/6 shadow-[0_0_8px_rgba(239,68,68,0.15)]' :
+                              isActive ? 'border-orange-400/30 bg-orange-400/5' :
+                              isSoon && affectsAsset ? 'border-yellow-400/25 bg-yellow-400/4' :
+                              isPast ? 'border-white/4 bg-transparent opacity-40' :
+                              'border-white/6 bg-white/2'
+                            }`}
+                          >
+                            {/* Impacto + país */}
+                            <div className="shrink-0 text-center min-w-[40px]">
+                              <div className="text-lg leading-none">{COUNTRY_FLAG[ev.country] || '🌐'}</div>
+                              <div className="text-[9px] text-gray-600 font-bold mt-0.5">{ev.country}</div>
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${ev.impact === 'High' ? 'text-red-400 border-red-400/30 bg-red-400/8' : 'text-orange-400 border-orange-400/30 bg-orange-400/8'}`}>
+                                  {ev.impact === 'High' ? '🔴 ALTO' : '🟡 MÉD'}
+                                </span>
+                                {isActive && affectsAsset && (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 animate-pulse">
+                                    ⚡ BLOQUEIO ATIVO
+                                  </span>
+                                )}
+                                {isSoon && affectsAsset && !isActive && (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded border border-yellow-400/30 bg-yellow-400/8 text-yellow-400">
+                                    ⚠️ AFETA {asset}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-white font-medium mt-1 truncate">{ev.title}</div>
+                              <div className="text-[10px] text-gray-600 mt-0.5">
+                                {evDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {evDate.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                              </div>
+                            </div>
+
+                            {/* Countdown */}
+                            <div className={`shrink-0 text-right text-[10px] font-black ${isActive ? 'text-red-400' : isSoon ? 'text-yellow-400' : 'text-gray-600'}`}>
+                              {fmtCountdown(ev.minutesUntil)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="mt-3 text-[9px] text-gray-700 text-center">
+                    Fonte: ForexFactory · Atualizado a cada 5min · Bloqueio ±15min ao redor de eventos de ALTO impacto
+                  </div>
+                </div>
+              )}
+
+              {/* NOTÍCIAS */}
+              {newsTab === 'news' && (
+                <div className="p-4">
+                  {newsLoading && marketNews.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-gray-600 text-xs">
+                      <div className="w-4 h-4 rounded-full border border-gray-700 border-t-gray-400 animate-spin" />
+                      Carregando notícias...
+                    </div>
+                  ) : marketNews.length === 0 ? (
+                    <p className="text-center text-gray-600 text-xs py-6">Nenhuma notícia disponível no momento.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                      {marketNews.map((n, i) => {
+                        const pub = n.pubDate ? new Date(n.pubDate) : null;
+                        return (
+                          <a
+                            key={i}
+                            href={n.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-start gap-3 p-3 rounded-xl border border-white/6 bg-white/2 hover:bg-white/4 hover:border-white/10 transition-all group block"
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--green)]/60 mt-1.5 shrink-0 group-hover:bg-[var(--green)] transition-colors" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-300 group-hover:text-white transition-colors font-medium leading-snug line-clamp-2">{n.title}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-gray-600">{n.source}</span>
+                                {pub && <span className="text-[10px] text-gray-700">· {pub.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                              </div>
+                            </div>
+                            <span className="text-gray-700 group-hover:text-gray-400 text-xs shrink-0 mt-0.5">↗</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="mt-3 text-[9px] text-gray-700 text-center">
+                    Fonte: Yahoo Finance · Atualizado a cada 5min
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -133,6 +133,11 @@ export function checkNewsBlackoutSync(asset: string): NewsBlackout {
   return { active: false };
 }
 
+// Export cached events for API consumption
+export function getCalendarEvents(): NewsEvent[] {
+  return cachedEvents.map(e => ({ ...e }));
+}
+
 // Pre-warm cache on startup (non-blocking)
 export function initNewsFilter() {
   fetchCalendar().catch(() => {});
