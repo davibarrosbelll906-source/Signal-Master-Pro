@@ -3,8 +3,32 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAppStore, initStore } from "@/lib/store";
-import { useEffect } from "react";
+import { useEffect, Component, type ReactNode } from "react";
 import "@/lib/socket"; // initialise Socket.io connection
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: any) { console.error('[AppCrash]', error, info); }
+  render() {
+    if (this.state.error) {
+      const err = this.state.error as Error;
+      return (
+        <div style={{ background: '#07070d', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', fontFamily: 'monospace' }}>
+          <div style={{ background: '#1a0a0a', border: '1px solid #ff4466', borderRadius: '12px', padding: '2rem', maxWidth: '600px', width: '100%' }}>
+            <div style={{ color: '#ff4466', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem' }}>⚠ Erro na aplicação</div>
+            <div style={{ color: '#ffaaaa', fontSize: '0.9rem', marginBottom: '0.5rem' }}>{err.message}</div>
+            <pre style={{ color: '#888', fontSize: '0.75rem', overflow: 'auto', maxHeight: '200px' }}>{err.stack}</pre>
+            <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} style={{ marginTop: '1rem', background: '#00ff88', color: '#000', border: 'none', borderRadius: '8px', padding: '0.5rem 1.5rem', cursor: 'pointer', fontWeight: 'bold' }}>
+              Limpar cache e voltar ao login
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { AnimatePresence } from "framer-motion";
 import { Sidebar } from "@/components/Sidebar";
 import { usePinLock, PinLockScreen } from "@/components/PinLock";
@@ -144,14 +168,16 @@ function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
