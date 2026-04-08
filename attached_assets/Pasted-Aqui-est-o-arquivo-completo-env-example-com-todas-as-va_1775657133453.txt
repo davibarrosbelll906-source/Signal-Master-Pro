@@ -1,0 +1,133 @@
+Aqui está o arquivo completo .env.example com todas as variáveis necessárias para deixar seu SignalMaster Pro seguro.
+1. Arquivo: .env.example
+Crie este arquivo na raiz do seu backend (artifacts/api-server/.env.example):
+env# =============================================
+# SIGNALMASTER PRO v7 - ARQUIVO .env.example
+# =============================================
+
+# ==================== BANCO DE DADOS ====================
+# PostgreSQL (recomendado) ou SQLite para desenvolvimento
+DATABASE_URL="postgresql://usuario:senha@localhost:5432/signalmaster?schema=public"
+
+# Para SQLite (mais simples para começar)
+# DATABASE_URL="file:./dev.db"
+
+# ==================== SEGURANÇA - JWT ====================
+JWT_SECRET=suachavejwt_muito_longa_e_segura_aqui_2026
+REFRESH_SECRET=outrachave_diferente_e_mais_longa_para_refresh_2026
+
+# Tempo de expiração (não mude aqui, só no código se precisar)
+JWT_EXPIRES_IN=15m
+REFRESH_EXPIRES_IN=7d
+
+# ==================== API KEYS (nunca exponha no frontend!) ====================
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ==================== CONFIGURAÇÃO DO SERVIDOR ====================
+NODE_ENV=development
+PORT=8080
+
+# URL do frontend (usado no CORS)
+FRONTEND_URL=http://localhost:18264
+
+# ==================== OUTRAS CONFIGURAÇÕES ====================
+# Chave para criptografia adicional (opcional)
+ENCRYPTION_KEY=outra_chave_super_secreta_32_caracteres_ou_mais
+
+# ==================== AVISOS IMPORTANTES ====================
+# 1. NUNCA commite este arquivo com valores reais no Git
+# 2. Crie um arquivo .env baseado neste exemplo
+# 3. Use senhas longas e aleatórias para JWT_SECRET e REFRESH_SECRET
+# 4. Em produção, use variáveis de ambiente do servidor (Railway, Render, etc.)
+
+2. Instruções Completa (Passo a Passo)
+Passo 1: Criar o arquivo .env
+
+Na pasta artifacts/api-server/, crie um arquivo chamado .env (sem a palavra "example")
+Copie todo o conteúdo acima e cole no .env
+Substitua os valores por informações reais:
+
+env# Exemplo de como deve ficar seu .env real:
+DATABASE_URL="postgresql://postgres:suasenha123@ep-cool-db.us-east-1.aws.neon.tech/signalmaster"
+
+JWT_SECRET=MeuSuperSegredoJWT2026SignalMasterPro_v7_!@#Random123456789
+REFRESH_SECRET=RefreshTokenSecretDiferente2026OutroValorLongo1234567890
+
+RESEND_API_KEY=re_abc123def456ghi789jkl012mno345pqr
+Passo 2: Configurar o .gitignore
+Abra ou crie o arquivo .gitignore na raiz do backend e certifique-se de ter estas linhas:
+gitignore# Environment variables
+.env
+.env.local
+.env.production
+
+# Database
+*.db
+prisma/migrations/
+
+# Logs
+*.log
+Passo 3: Atualizar o server.ts para carregar o .env
+No início do seu server.ts:
+TypeScriptimport dotenv from 'dotenv';
+dotenv.config();   // Deve ser a primeira linha após os imports
+
+console.log('✅ Environment variables carregadas');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+Passo 4: Gerar uma chave JWT segura (importante!)
+Você pode gerar uma chave forte usando este comando no terminal:
+Bashnode -e "
+const crypto = require('crypto');
+console.log('JWT_SECRET=' + crypto.randomBytes(64).toString('hex'));
+console.log('REFRESH_SECRET=' + crypto.randomBytes(64).toString('hex'));
+"
+
+Resumo das Variáveis Mais Importantes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+VariávelTipoOnde usarObrigatórioDATABASE_URLBancoPrismaSimJWT_SECRETSegurançaGeração de tokensSimREFRESH_SECRETSegurançaRefresh TokenSimRESEND_API_KEYEmailEnvio de emailsSimFRONTEND_URLCORSConfiguração de CORSRecomendadoNODE_ENVAmbientedevelopment / productionRecomendado
