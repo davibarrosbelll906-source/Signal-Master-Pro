@@ -1,0 +1,205 @@
+Aqui está a estrutura pronta e completa para implementar a Luna no seu SignalMaster Pro v7, focada exatamente:
+
+Organizar o aplicativo (dicas de uso, configurações, gestão de banca, lembretes).
+Ajudar os usuários a aprender análise gráfica.
+Permitir que o usuário tire foto/screenshot do gráfico e peça análise para a Luna.
+
+1. O que a Luna deve fazer (System Prompt)
+Crie o arquivo: artifacts/api-server/src/lib/lunaAgent.ts
+TypeScriptimport { ChatOpenAI } from "@langchain/openai"; // ou ChatXAI se preferir Grok
+// import { ChatXAI } from "@langchain/xai";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+// ==================== TOOLS ====================
+
+const getCurrentSignalTool = tool({
+  name: "get_current_signal",
+  description: "Retorna o sinal atual gerado pelo signalEngine",
+  schema: z.object({}),
+  func: async () => {
+    // Integre aqui com seu signalEngine.ts
+    return "Sinal atual: EURUSD CALL - Score 87 (ELITE) - Sessão London";
+  },
+});
+
+const getUserHistoryTool = tool({
+  name: "get_user_history",
+  description: "Busca histórico de operações do usuário para feedback",
+  schema: z.object({ days: z.number().default(7) }),
+  func: async ({ days }) => {
+    // Integre com seu localStorage ou banco futuro
+    return `Últimos ${days} dias: 18 operações, 13 WIN, Win Rate 72%, Streak 4`;
+  },
+});
+
+const getAccountInfoTool = tool({
+  name: "get_account_info",
+  description: "Retorna dados da conta (banca, entrada, modo real/demo, etc.)",
+  schema: z.object({}),
+  func: async () => {
+    return "Modo: DEMO | Banca: R$ 1240,00 | Entrada atual: R$ 12,40 | Meta diária: 8%";
+  },
+});
+
+const analyzeChartImageTool = tool({
+  name: "analyze_chart_image",
+  description: "Analisa uma imagem de gráfico enviada pelo usuário",
+  schema: z.object({
+    imageBase64: z.string(),
+    pair: z.string().optional(),
+    timeframe: z.string().optional(),
+    userQuestion: z.string().optional(),
+  }),
+  func: async ({ imageBase64, pair, timeframe, userQuestion }) => {
+    // Esta tool será chamada automaticamente pelo agent quando houver imagem
+    // O agent vai usar o modelo vision (GPT-4o ou similar)
+    return "Imagem recebida. Analisando...";
+  },
+});
+
+// ==================== AGENTE LUNA ====================
+
+const model = new ChatOpenAI({
+  model: "gpt-4o",                    // Melhor para visão de gráficos em 2026
+  temperature: 0.35,
+});
+
+// Ou use Grok se preferir:
+// const model = new ChatXAI({ model: "grok-beta" });
+
+const lunaAgent = createReactAgent({
+  llm: model,
+  tools: [getCurrentSignalTool, getUserHistoryTool, getAccountInfoTool, analyzeChartImageTool],
+  messageModifier: `
+    Você é **Luna**, a assistente educacional e organizadora do SignalMaster Pro v7.
+    Seu tom é: paciente, motivadora, clara e sempre educativa. Responda em português brasileiro.
+
+    **Papéis principais:**
+    1. **Professora de Análise Gráfica**: Ensine o usuário a ler gráficos (tendência, suporte/resistência, padrões de velas, força do movimento, sessões de mercado, etc.). Sempre explique o "por quê" e o que ele pode aprender.
+    2. **Organizadora do App**: Ajude o usuário a usar melhor o aplicativo (gestão de banca, quando zerar o diário, ajustar meta, evitar overtrading, configurações, etc.).
+    3. **Coach de Risco**: Sempre priorize gestão de risco e disciplina. Nunca incentive operação impulsiva.
+
+    Regras importantes:
+    - Nunca dê sinal direto. Sempre explique e ensine.
+    - Quando o usuário enviar uma imagem de gráfico, analise de forma detalhada e educativa.
+    - Seja positiva e motivadora, mas honesta.
+    - Use linguagem simples, evite jargão sem explicar.
+  `
+});
+
+export { lunaAgent };
+2. Rota no Backend (Express)
+Crie ou edite: artifacts/api-server/src/routes/luna.ts
+TypeScriptimport express from 'express';
+import { lunaAgent } from '../lib/lunaAgent';
+
+const router = express.Router();
+
+router.post('/chat', async (req, res) => {
+  const { message, imageBase64, pair, timeframe } = req.body; // imageBase64 opcional
+
+  try {
+    let userContent: any = [{ type: "text", text: message }];
+
+    if (imageBase64) {
+      userContent.push({
+        type: "image_url",
+        image_url: { url: imageBase64 }   // base64: data:image/png;base64,...
+      });
+    }
+
+    const stream = await lunaAgent.stream({
+      messages: [{ role: "user", content: userContent }]
+    });
+
+    // Streaming para o usuário ver a resposta aos poucos
+    for await (const chunk of stream) {
+      if (chunk.content) res.write(chunk.content);
+    }
+    res.end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao falar com Luna" });
+  }
+});
+
+export default router;
+Não esqueça de registrar a rota no seu server.ts ou app.ts do backend:
+TypeScriptapp.use('/api/luna', lunaRouter);
+3. Onde colocar no aplicativo (Frontend)
+Melhor lugar recomendado:
+
+Um botão flutuante fixo no canto inferior direito (em todas as páginas principais, especialmente em SignalsPage).
+Dentro do chat com Luna (melhor experiência).
+
+Componente recomendado: LunaChat.tsx
+Crie este componente e coloque ele como um modal ou drawer que abre ao clicar no botão flutuante.
+Dentro do chat, adicione dois botões principais:
+
+“💬 Falar com Luna” (chat normal)
+“📸 Analisar Gráfico com Luna” (captura automática + chat)
+
+Aqui está o código principal para captura (coloque dentro do chat ou em SignalsPage):
+tsx// components/LunaChartAnalyzer.tsx
+import html2canvas from 'html2canvas';
+import { useRef, useState } from 'react';
+
+export default function LunaChartAnalyzer({ chartContainerRef }: { chartContainerRef: React.RefObject<HTMLDivElement> }) {
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const captureAndAnalyze = async () => {
+    if (!chartContainerRef.current) {
+      alert("Gráfico não encontrado");
+      return;
+    }
+
+    setAnalyzing(true);
+
+    try {
+      const canvas = await html2canvas(chartContainerRef.current, {
+        scale: 2,                    // Alta qualidade
+        useCORS: true,
+        backgroundColor: '#111827',
+        logging: false,
+      });
+
+      const base64Image = canvas.toDataURL('image/png');
+
+      // Envia para Luna
+      const response = await fetch('/api/luna/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: "Analise este gráfico de forma educativa. Explique tendência, suportes, resistências, padrões de velas e o que eu posso aprender.",
+          imageBase64: base64Image,
+          pair: "EURUSD",           // passe o par atual do estado
+          timeframe: "M5"
+        })
+      });
+
+      const reply = await response.text();
+      // Adicione "reply" ao histórico do chat com Luna
+      console.log("Resposta da Luna:", reply);
+    } catch (err) {
+      alert("Erro ao capturar ou analisar o gráfico");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={captureAndAnalyze}
+      disabled={analyzing}
+      className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-5 py-3 rounded-xl shadow-lg fixed bottom-6 right-6 z-50"
+    >
+      {analyzing ? "📸 Analisando com Luna..." : "📸 Analisar Gráfico com Luna"}
+    </button>
+  );
+}
+Como usar:
+
+Passe o ref do container do seu TradingViewWidget (lightweight-charts) para esse componente.
+Coloque o botão flutuante em SignalsPage.tsx ou no layout principal.
