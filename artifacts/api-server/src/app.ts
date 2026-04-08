@@ -11,17 +11,15 @@ const app: Express = express();
 // Trust reverse proxy (Replit deployment, Nginx, etc.)
 app.set("trust proxy", 1);
 
-// Allowed origins: Replit dev domain + production domain
-const allowedOrigins = (() => {
-  const origins: (string | RegExp)[] = [
-    /^http:\/\/localhost(:\d+)?$/,
-  ];
-  const replitDev = process.env["REPLIT_DEV_DOMAIN"];
-  if (replitDev) origins.push(`https://${replitDev}`);
-  const prodDomain = process.env["PRODUCTION_DOMAIN"];
-  if (prodDomain) origins.push(`https://${prodDomain}`);
-  return origins;
-})();
+// Allowed origins: localhost + qualquer subdomínio *.replit.app (dev e produção)
+const allowedOrigins: (string | RegExp)[] = [
+  /^http:\/\/localhost(:\d+)?$/,
+  /^https:\/\/[\w-]+\.replit\.app$/,  // cobre dev e produção no Replit
+  /^https:\/\/[\w-]+\.repl\.co$/,     // domínios legados do Replit
+];
+// Domínio customizado opcional
+const prodDomain = process.env["PRODUCTION_DOMAIN"];
+if (prodDomain) allowedOrigins.push(`https://${prodDomain}`);
 
 app.use(
   helmet({

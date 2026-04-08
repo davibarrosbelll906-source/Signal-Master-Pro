@@ -19,9 +19,11 @@ if (Number.isNaN(port) || port <= 0) {
 
 const httpServer = createServer(app);
 
-const socketOrigins: (string | RegExp)[] = [/^http:\/\/localhost(:\d+)?$/];
-const replitDev = process.env["REPLIT_DEV_DOMAIN"];
-if (replitDev) socketOrigins.push(`https://${replitDev}`);
+const socketOrigins: (string | RegExp)[] = [
+  /^http:\/\/localhost(:\d+)?$/,
+  /^https:\/\/[\w-]+\.replit\.app$/,
+  /^https:\/\/[\w-]+\.repl\.co$/,
+];
 const prodDomain = process.env["PRODUCTION_DOMAIN"];
 if (prodDomain) socketOrigins.push(`https://${prodDomain}`);
 
