@@ -6,7 +6,7 @@
 
 import WebSocket from 'ws';
 import {
-  ASSET_CATEGORIES, CRYPTO_SYMBOLS, BASE_PRICES,
+  ASSET_CATEGORIES, CRYPTO_SYMBOLS, BASE_PRICES, PAIR_VOL,
   generateOUCandle, type Candle
 } from './signalEngine.js';
 
@@ -49,9 +49,12 @@ async function connectCrypto(asset: string) {
 
   try {
     const res = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${binanceSym.toUpperCase()}&interval=1m&limit=200`
+      `https://api.binance.com/api/v3/klines?symbol=${binanceSym.toUpperCase()}&interval=1m&limit=200`,
+      { signal: AbortSignal.timeout(6000) }
     );
     const data: any[] = await res.json();
+    // Binance blocked returns a JSON object with "code" field, not an array
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Binance unavailable');
     const candles: Candle[] = data.map((k: any) => ({
       o: parseFloat(k[1]), h: parseFloat(k[2]), l: parseFloat(k[3]), c: parseFloat(k[4]),
       v: parseFloat(k[5]), t: k[0]
@@ -61,7 +64,10 @@ async function connectCrypto(asset: string) {
     buf.connected = true;
     notify(asset);
   } catch {
-    buf.connected = false;
+    // Binance not reachable — fall back to OU simulation
+    console.log(`[AssetData] Binance unavailable for ${asset}, using OU simulation`);
+    connectOU(asset);
+    return;
   }
 
   // Open streaming WebSocket
@@ -123,7 +129,7 @@ function connectOU(asset: string) {
     const r2 = Math.abs(Math.sin(seed * 49297 + 233 + i * 7919) % 1) || 0.01;
     const mu = BASE_PRICES[asset] || p;
     const theta = 0.05;
-    const sigma = (asset === 'XAUUSD' ? 0.002 : asset === 'USOIL' ? 0.003 : 0.0003);
+    const sigma = PAIR_VOL[asset] || 0.0003;
     const dt = 1 / 1440;
     const drift = theta * (mu - p) * dt;
     const normal = Math.sqrt(-2 * Math.log(r1)) * Math.cos(2 * Math.PI * r2);
@@ -163,8 +169,9 @@ function connectOU(asset: string) {
   // Every 2s: update the live candle price (simulates real-time feed)
   const liveTimer = setInterval(() => {
     if (buf.m1.length === 0) return;
-    const sigma = (asset === 'XAUUSD' ? 0.002 : asset === 'USOIL' ? 0.003 : 0.0003);
-    const tick = (Math.random() - 0.5) * sigma * 0.5;
+    const sigma = PAIR_VOL[asset] || 0.0003;
+    // Scale tick to ~10% of per-minute move for a 2-second update
+    const tick = (Math.random() - 0.5) * sigma * Math.sqrt(2 / 1440) * 100;
     const newPrice = buf.price + tick;
     const last = buf.m1[buf.m1.length - 1];
     buf.m1[buf.m1.length - 1] = {
