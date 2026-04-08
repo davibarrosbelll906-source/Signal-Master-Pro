@@ -205,28 +205,32 @@ export function detectCandlePattern(candles: Candle[]): { pattern: string; direc
   return { pattern: 'none', direction: c.c > c.o ? 1 : -1 };
 }
 
-export function deriveM5(m1: Candle[]): Candle[] {
-  const m5: Candle[] = [];
-  for (let i = 0; i + 4 < m1.length; i += 5) {
-    const group = m1.slice(i, i + 5);
-    m5.push({
-      o: group[0].o, h: Math.max(...group.map(c => c.h)), l: Math.min(...group.map(c => c.l)),
-      c: group[group.length - 1].c, v: group.reduce((a, b) => a + b.v, 0), t: group[0].t
-    });
+function groupByPeriod(m1: Candle[], periodMs: number): Candle[] {
+  if (m1.length === 0) return [];
+  const buckets = new Map<number, Candle[]>();
+  for (const c of m1) {
+    const key = Math.floor(c.t / periodMs) * periodMs;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(c);
   }
-  return m5;
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, group]) => ({
+      o: group[0].o,
+      h: Math.max(...group.map(c => c.h)),
+      l: Math.min(...group.map(c => c.l)),
+      c: group[group.length - 1].c,
+      v: group.reduce((a, b) => a + b.v, 0),
+      t: group[0].t
+    }));
+}
+
+export function deriveM5(m1: Candle[]): Candle[] {
+  return groupByPeriod(m1, 5 * 60 * 1000);
 }
 
 export function deriveM15(m1: Candle[]): Candle[] {
-  const m15: Candle[] = [];
-  for (let i = 0; i + 14 < m1.length; i += 15) {
-    const group = m1.slice(i, i + 15);
-    m15.push({
-      o: group[0].o, h: Math.max(...group.map(c => c.h)), l: Math.min(...group.map(c => c.l)),
-      c: group[group.length - 1].c, v: group.reduce((a, b) => a + b.v, 0), t: group[0].t
-    });
-  }
-  return m15;
+  return groupByPeriod(m1, 15 * 60 * 1000);
 }
 
 export function getCurrentSession(): string {
@@ -471,8 +475,8 @@ export function runEngine(m1: Candle[], asset: string): SignalResult | null {
   const emaBull = lastEma9 > lastEma21 && lastEma21 > lastEma50 && lastClose > lastEma9;
   const emaBear = lastEma9 < lastEma21 && lastEma21 < lastEma50 && lastClose < lastEma9;
   votes.ema = emaBull ? 'CALL' : emaBear ? 'PUT' : 'NEUTRAL';
-  votes.htf = htfBull ? 'CALL' : 'PUT';
-  votes.m15 = m15closes.length >= 8 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL';
+  votes.htf = m5closes.length >= 9 ? (htfBull ? 'CALL' : 'PUT') : 'NEUTRAL';
+  votes.m15 = m15closes.length >= 9 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL';
   votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL';
   votes.rsidiv = rsidiv === 'bullish' ? 'CALL' : rsidiv === 'bearish' ? 'PUT' : 'NEUTRAL';
   votes.macd = macd.hist > 0 ? 'CALL' : 'PUT';
