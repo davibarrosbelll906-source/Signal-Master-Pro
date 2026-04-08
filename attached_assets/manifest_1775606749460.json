@@ -1,0 +1,20 @@
+{
+    "manifest_version": 3,
+    "name": "Target Ebinex Ultra v.2 - PC",
+    "version": "2.0",
+    "description": "DESENVOLVIDO POR @ESTRATEGIASTARGET - Cria um painel de controle para com informações adicionais do ativo, na corretora Ebinex",
+    "permissions": [
+      "storage"
+    ],
+    "content_scripts": [
+      {
+        "matches": ["https://app.ebinex.com/traderoom"],
+        "js": ["content.js"],
+        "run_at": "document_start"
+      }
+    ],
+    "host_permissions": [
+      "https://app.ebinex.com/*"
+    ]
+}
+  
