@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, DollarSign, Target, ShieldAlert, ChevronDown, ChevronUp, Percent, RotateCcw } from "lucide-react";
+import { X, DollarSign, Target, ShieldAlert, ChevronDown, ChevronUp, Percent, RotateCcw, AlertTriangle } from "lucide-react";
+import { useAccountMode } from "@/lib/useAccountMode";
 
 interface MgmtConfig {
   banca: number;
@@ -110,6 +111,7 @@ interface Props {
 }
 
 export default function ManagementPanel({ wins, losses, onResult }: Props) {
+  const { isReal, mode, broker } = useAccountMode();
   const [cfg, setCfg] = useState<MgmtConfig>(() => {
     try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem('smpMgmt7') || '{}') }; } catch { return DEFAULT_CFG; }
   });
@@ -231,6 +233,19 @@ export default function ManagementPanel({ wins, losses, onResult }: Props) {
       </AnimatePresence>
 
       <div className="glass-card overflow-hidden">
+        {/* Mode badge strip */}
+        <div className={`px-4 py-1.5 flex items-center justify-between text-[10px] font-black border-b ${
+          isReal
+            ? 'bg-red-500/10 border-red-500/20 text-red-400'
+            : 'bg-blue-500/8 border-blue-500/15 text-blue-400'
+        }`}>
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full bg-current ${isReal ? 'animate-pulse' : ''}`} />
+            CONTA {mode.toUpperCase()}
+          </div>
+          <span className="text-gray-600 font-normal">{broker}</span>
+        </div>
+
         {/* Header */}
         <button
           onClick={() => setEditing(v => !v)}
@@ -251,6 +266,19 @@ export default function ManagementPanel({ wins, losses, onResult }: Props) {
             {editing ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
           </div>
         </button>
+
+        {/* Low balance warning */}
+        {cfg.banca > 0 && cfg.banca < entradaR * 3 && (
+          <div className="mx-4 mb-2 flex items-start gap-2 px-3 py-2 rounded-xl bg-orange-500/8 border border-orange-500/20 text-[10px] text-orange-400">
+            <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+            <span>
+              {cfg.banca < entradaR
+                ? 'Banca insuficiente para operar! Adicione saldo.'
+                : `Banca baixa — apenas ${Math.floor(cfg.banca / entradaR)} entrada${Math.floor(cfg.banca / entradaR) !== 1 ? 's' : ''} disponível${Math.floor(cfg.banca / entradaR) !== 1 ? 'is' : ''}.`
+              }
+            </span>
+          </div>
+        )}
 
         {/* Config fields (collapsible) */}
         <AnimatePresence>

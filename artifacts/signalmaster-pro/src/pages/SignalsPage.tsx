@@ -11,6 +11,7 @@ import {
   type CandleBuffer, type SignalResult, type DiagResult
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
+import { useAccountMode } from "@/lib/useAccountMode";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
 const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
 const COMMODITY_ASSETS = ['XAUUSD', 'XAGUSD', 'USOIL'];
@@ -58,6 +59,7 @@ export default function SignalsPage() {
   const [manualDir, setManualDir] = useState<'CALL'|'PUT'>('CALL');
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { isReal, mode, broker } = useAccountMode();
   const [timeframe, setTimeframe] = useState<'M1' | 'M5' | 'M15'>(() => {
     return (localStorage.getItem('smpTimeframe') as 'M1' | 'M5' | 'M15') || 'M1';
   });
@@ -293,6 +295,15 @@ export default function SignalsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500">
+          {/* Mode badge */}
+          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-black text-[10px] ${
+            isReal
+              ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+              : 'bg-blue-500/12 text-blue-400 border border-blue-500/20'
+          }`}>
+            <span className={`w-1 h-1 rounded-full bg-current ${isReal ? 'animate-pulse' : ''}`} />
+            {mode.toUpperCase()}
+          </span>
           <span>{bufferSize} velas M1</span>
           {lastPrice && <span className="font-mono text-white">{lastPrice < 10 ? lastPrice.toFixed(5) : lastPrice < 1000 ? lastPrice.toFixed(4) : lastPrice.toFixed(2)}</span>}
           {priceChange !== 0 && (

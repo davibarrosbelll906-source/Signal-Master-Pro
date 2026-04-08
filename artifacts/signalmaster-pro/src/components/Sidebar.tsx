@@ -5,9 +5,10 @@ import {
   Activity, History, BarChart2, Map, Beaker, Trophy, BookOpen, Goal,
   ShieldAlert, Wallet, PieChart, Video, Calendar, DollarSign, Users,
   Link as LinkIcon, Award, Send, Bell, User, Settings, LogOut, Home,
-  Menu, X, ChevronDown, ChevronRight, Brain
+  Menu, X, ChevronDown, ChevronRight, Brain, RadioTower, ChevronDown as ChevDown
 } from "lucide-react";
 import { getCurrentSession } from "@/lib/signalEngine";
+import { useAccountMode, KNOWN_BROKERS } from "@/lib/useAccountMode";
 
 const SESSION_INFO: Record<string, { label: string; emoji: string; color: string }> = {
   london: { label: 'Londres', emoji: '🇬🇧', color: 'text-blue-400' },
@@ -84,6 +85,8 @@ export function Sidebar() {
   };
 
   const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'financeiro' || currentUser?.role === 'gerente';
+  const { mode, isReal, broker, setMode, setBroker } = useAccountMode();
+  const [brokerOpen, setBrokerOpen] = useState(false);
 
   const groups = [
     {
@@ -246,6 +249,64 @@ export function Sidebar() {
             <div className={`text-xs font-bold ${streak > 0 ? 'text-orange-400' : streak < 0 ? 'text-[var(--red)]' : 'text-gray-500'}`}>
               {streak !== 0 ? `${Math.abs(streak)}${streak > 0 ? '🔥' : '❄️'}` : '—'}
             </div>
+          </div>
+        </div>
+
+        {/* ── Real / Demo toggle ── */}
+        <div className="mt-3 space-y-2">
+          {/* Mode toggle pill */}
+          <div className="flex rounded-xl overflow-hidden border border-white/8 text-[11px] font-black">
+            <button
+              onClick={() => setMode('demo')}
+              className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-all ${
+                !isReal
+                  ? 'bg-blue-500/20 text-blue-300 border-r border-blue-500/20'
+                  : 'text-gray-600 hover:text-gray-400 border-r border-white/8'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              DEMO
+            </button>
+            <button
+              onClick={() => setMode('real')}
+              className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-all ${
+                isReal
+                  ? 'bg-red-500/20 text-red-300'
+                  : 'text-gray-600 hover:text-gray-400'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full bg-current ${isReal ? 'animate-pulse' : ''}`} />
+              REAL
+            </button>
+          </div>
+
+          {/* Broker selector */}
+          <div className="relative">
+            <button
+              onClick={() => setBrokerOpen(p => !p)}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/8 hover:bg-white/8 transition text-[10px] text-gray-400"
+            >
+              <RadioTower size={10} className="text-gray-600 shrink-0" />
+              <span className="flex-1 text-left truncate font-semibold">{broker}</span>
+              <ChevDown size={9} className={`text-gray-600 transition-transform ${brokerOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {brokerOpen && (
+              <div className="absolute bottom-full mb-1 left-0 right-0 z-50 rounded-xl border border-white/10 overflow-hidden shadow-2xl"
+                style={{ background: 'rgba(10,10,20,0.98)', backdropFilter: 'blur(20px)' }}>
+                {KNOWN_BROKERS.map(b => (
+                  <button
+                    key={b}
+                    onClick={() => { setBroker(b); setBrokerOpen(false); }}
+                    className={`w-full text-left px-3 py-2 text-[11px] flex items-center gap-2 transition hover:bg-white/5 ${
+                      broker === b ? 'text-[var(--green)] font-bold' : 'text-gray-400'
+                    }`}
+                  >
+                    {broker === b && <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)]" />}
+                    {b}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
