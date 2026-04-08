@@ -1,6 +1,9 @@
+import { createServer } from 'http';
+import { Server as IOServer } from 'socket.io';
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { seedUsers } from "./lib/seed.js";
+import { initSignalEngine } from "./lib/backendSignalEngine.js";
 
 const rawPort = process.env["PORT"];
 
@@ -14,7 +17,14 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, async (err?: Error) => {
+const httpServer = createServer(app);
+
+const io = new IOServer(httpServer, {
+  cors: { origin: true, credentials: true },
+  transports: ['websocket', 'polling'],
+});
+
+httpServer.listen(port, async (err?: Error) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
@@ -26,4 +36,5 @@ app.listen(port, async (err?: Error) => {
   } catch (e) {
     logger.error({ err: e }, "Erro no seed de usuários");
   }
+  initSignalEngine(io);
 });

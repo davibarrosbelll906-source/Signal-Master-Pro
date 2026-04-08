@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAppStore, initStore } from "@/lib/store";
 import { useEffect } from "react";
+import "@/lib/socket"; // initialise Socket.io connection
 import { AnimatePresence } from "framer-motion";
 import { Sidebar } from "@/components/Sidebar";
 import { usePinLock, PinLockScreen } from "@/components/PinLock";

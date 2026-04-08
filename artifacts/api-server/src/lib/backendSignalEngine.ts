@@ -1,0 +1,91 @@
+/**
+ * BackendSignalEngine — Orchestrator
+ * Runs every second, fires runEngine at :48 for all active assets,
+ * emits signals via Socket.io.
+ */
+
+import type { Server as IOServer } from 'socket.io';
+import { getBuffer, onBufferUpdate, initAllAssets } from './assetDataManager.js';
+import { runEngine, ASSET_CATEGORIES, type SignalResult } from './signalEngine.js';
+
+const ALL_ASSETS = [
+  'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD',
+  'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY',
+  'XAUUSD', 'XAGUSD', 'USOIL'
+];
+
+// Anti-spam: minimum 3 minutes between signals for the same pair
+const lastSignalTime = new Map<string, number>();
+
+// Latest signal per asset (for REST fallback)
+const latestSignals = new Map<string, SignalResult>();
+
+export function getLatestSignals() {
+  return Object.fromEntries(latestSignals);
+}
+
+function shouldThrottle(asset: string): boolean {
+  const last = lastSignalTime.get(asset) || 0;
+  return Date.now() - last < 180_000; // 3 minutes
+}
+
+export function initSignalEngine(io: IOServer) {
+  // Start data feeds
+  initAllAssets(ALL_ASSETS);
+
+  // Broadcast price ticks to connected clients
+  onBufferUpdate((asset, buf) => {
+    io.emit('price_update', {
+      asset,
+      price: buf.price,
+      connected: buf.connected,
+      bufSize: buf.m1.length
+    });
+  });
+
+  // Run signal engine every second
+  setInterval(() => {
+    const now = new Date();
+    const second = now.getSeconds();
+    if (second !== 48) return;
+
+    for (const asset of ALL_ASSETS) {
+      const buf = getBuffer(asset);
+      if (!buf || buf.m1.length < 30) continue;
+      if (shouldThrottle(asset)) continue;
+
+      try {
+        const result = runEngine(buf.m1, asset);
+        if (!result) continue;
+
+        // Always broadcast the result (frontend applies user-specific filters)
+        latestSignals.set(asset, result);
+        io.emit('new_signal', result);
+
+        if (result.passed) {
+          lastSignalTime.set(asset, Date.now());
+          console.log(`[SignalEngine] ${asset} → ${result.direction} ${result.score}% (${result.quality})`);
+        }
+      } catch (e) {
+        // Swallow individual asset errors
+      }
+    }
+  }, 1000);
+
+  // REST endpoint helper: send current signals on client connect
+  io.on('connection', (socket) => {
+    // Send all current signals to newly connected client
+    for (const [asset, signal] of latestSignals) {
+      socket.emit('new_signal', signal);
+    }
+    // Send current price snapshots
+    for (const asset of ALL_ASSETS) {
+      const buf = getBuffer(asset);
+      if (buf) {
+        socket.emit('price_update', { asset, price: buf.price, connected: buf.connected, bufSize: buf.m1.length });
+      }
+    }
+  });
+
+  console.log('[SignalEngine] Backend signal engine started');
+}

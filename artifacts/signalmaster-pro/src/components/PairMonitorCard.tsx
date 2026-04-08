@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Copy, CheckCheck, X, HelpCircle, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { usePlanGuard } from "@/lib/usePlanGuard";
 import { useLocation } from "wouter";
 import {
   ASSET_CATEGORIES,
-  runEngine, runEngineDiag,
   playSignalSound, vibrate, updateMLWeights, explainSignal,
-  type CandleBuffer, type SignalResult
+  type SignalResult
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
+import { useSignalStore } from "@/lib/signalStore";
 
 function PairMonitorIAButton({ showExplain, setShowExplain }: { showExplain: boolean; setShowExplain: (v: (p: boolean) => boolean) => void }) {
   const allowed = usePlanGuard("pro");
@@ -71,94 +71,55 @@ interface Props {
 }
 
 export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: Props) {
-  const [signal, setSignal] = useState<SignalResult | null>(null);
-  const [pendingSignal, setPendingSignal] = useState<SignalResult | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [prevPrice, setPrevPrice] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [bufferSize, setBufferSize] = useState(0);
   const [resultSaved, setResultSaved] = useState<'win' | 'loss' | null>(null);
+  const [markedTs, setMarkedTs] = useState<number | null>(null);
   const [seconds, setSeconds] = useState(new Date().getSeconds());
-  const [blockReason, setBlockReason] = useState<string | null>(null);
-  const [lastRunMin, setLastRunMin] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
-  const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [showExplain, setShowExplain] = useState(false);
 
-  const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
-  const fireMinuteRef = useRef<number>(-1);
-  const hasInitFired = useRef(false);
   const category = ASSET_CATEGORIES[asset] as 'crypto' | 'forex' | 'commodity';
 
-  const runAnalysis = useCallback(() => {
-    const buf = bufRef.current;
-    if (buf.m1.length < 30) return;
-    try {
-      const diag = runEngineDiag(buf, asset);
-      const result = runEngine(buf, asset);
-      setHasAnalyzed(true);
-      if (result) {
-        setSignal(result);
-        setPendingSignal(result);
-        setResultSaved(null);
-        setBlockReason(null);
-        playSignalSound(result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte');
-        vibrate('forte');
-      } else {
-        setBlockReason(diag?.blockedBy || 'condições insuficientes');
-      }
-    } catch {
-      setBlockReason('erro no motor');
-    }
-  }, [asset, category]);
+  // ── Backend signal from Socket.io ──────────────────────────────────────────
+  const backendSignal = useSignalStore(s => s.signals[asset]) || null;
+  const pendingSignal = backendSignal && backendSignal.ts !== markedTs && backendSignal.passed
+    ? backendSignal : null;
+  const blockReason = backendSignal?.blockedBy || null;
 
-  // Subscribe to shared asset data manager
+  // Notify user when a new passing signal arrives
+  const prevTsRef = useRef<number | null>(null);
   useEffect(() => {
-    setSignal(null);
-    setPendingSignal(null);
+    if (pendingSignal && pendingSignal.ts !== prevTsRef.current) {
+      prevTsRef.current = pendingSignal.ts;
+      setResultSaved(null);
+      playSignalSound(pendingSignal.quality === 'PREMIUM' || pendingSignal.quality === 'ELITE'
+        ? 'premium' : category === 'crypto' ? 'crypto' : 'forte');
+      vibrate('forte');
+    }
+  }, [pendingSignal?.ts]);
+
+  // Subscribe to shared asset data manager for live price display
+  useEffect(() => {
     setResultSaved(null);
-    setBlockReason(null);
-    setHasAnalyzed(false);
-    hasInitFired.current = false;
-    fireMinuteRef.current = -1;
-    bufRef.current = { m1: [], m5: [], m15: [] };
+    setMarkedTs(null);
 
     const id = `pair-card-${asset}-${Math.random().toString(36).slice(2)}`;
-    const unsub = subscribeAsset(asset, id, (buf, p, _dir, connected, bufSize) => {
-      bufRef.current = buf;
+    const unsub = subscribeAsset(asset, id, (_buf, p, _dir, connected, bufSize) => {
       if (p) {
         setPrevPrice(prev => prev);
         setPrice(p);
       }
       setIsConnected(connected);
       setBufferSize(bufSize);
-
-      // Fire immediately when we first have enough data
-      if (!hasInitFired.current && connected && bufSize >= 30) {
-        hasInitFired.current = true;
-        setTimeout(runAnalysis, 300);
-      }
     });
 
     return () => { unsub(); };
   }, [asset]);
 
-  // Re-run analysis when runAnalysis function changes (asset/category change)
-  useEffect(() => {
-    if (hasInitFired.current && bufRef.current.m1.length >= 30) {
-      hasInitFired.current = false;
-    }
-  }, [asset]);
-
-  // 1-second ticker for periodic re-analysis at :48
-  const shouldFireNow = useCallback((sec: number, min: number): boolean => {
-    if (sec !== 48) return false;
-    if (timeframe === 'M1') return true;
-    if (timeframe === 'M5') return min % 5 === 0;
-    if (timeframe === 'M15') return min % 15 === 0;
-    return false;
-  }, [timeframe]);
-
+  // 1-second ticker for countdown display
   const getSecsToNext = (min: number, sec: number): number => {
     if (timeframe === 'M1') return sec <= 48 ? 48 - sec : 60 - sec + 48;
     const interval = timeframe === 'M5' ? 5 : 15;
@@ -170,29 +131,20 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
     return next - cur;
   };
 
+  const shouldFireNow = (sec: number, min: number): boolean => {
+    if (sec !== 48) return false;
+    if (timeframe === 'M1') return true;
+    if (timeframe === 'M5') return min % 5 === 0;
+    if (timeframe === 'M15') return min % 15 === 0;
+    return false;
+  };
+
   useEffect(() => {
     const tick = setInterval(() => {
-      const now = new Date();
-      const sec = now.getSeconds();
-      const min = now.getMinutes();
-      setSeconds(sec);
-
-      if (!shouldFireNow(sec, min)) return;
-
-      const thisMinute = Math.floor(Date.now() / 60000);
-      const bucketKey = timeframe === 'M1' ? thisMinute
-        : timeframe === 'M5' ? Math.floor(min / 5) + thisMinute * 100
-        : Math.floor(min / 15) + thisMinute * 100;
-      if (fireMinuteRef.current === bucketKey) return;
-      fireMinuteRef.current = bucketKey;
-
-      if (bufRef.current.m1.length < 30) return;
-      setLastRunMin(min);
-      runAnalysis();
+      setSeconds(new Date().getSeconds());
     }, 1000);
-
     return () => clearInterval(tick);
-  }, [asset, category, timeframe, shouldFireNow, runAnalysis]);
+  }, []);
 
   const handleResult = (type: 'win' | 'loss') => {
     if (!pendingSignal) return;
@@ -204,9 +156,9 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
       hist.push(entry);
       localStorage.setItem('smpH7', JSON.stringify(hist));
     } catch {}
-    updateMLWeights(pendingSignal, type);
+    updateMLWeights(pendingSignal as unknown as SignalResult, type);
     setResultSaved(type);
-    setPendingSignal(null);
+    setMarkedTs(pendingSignal.ts);
   };
 
   const fmtPrice = (p: number) =>
@@ -222,14 +174,14 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
   const priceDown = price !== null && prevPrice !== null && price < prevPrice;
 
   const handleCopy = () => {
-    const s = pendingSignal || signal;
+    const s = pendingSignal || backendSignal;
     if (!s) return;
     const txt = `📊 ${asset} — ${s.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}\nQualidade: ${s.quality} | Score: ${s.score}%\n${timeframe} | ${new Date(s.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n— SignalMaster Pro`;
     navigator.clipboard.writeText(txt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }).catch(() => {});
   };
 
   const qualCfg = pendingSignal ? QUALITY_CONFIG[pendingSignal.quality] : null;
-  const lastQualCfg = signal ? QUALITY_CONFIG[signal.quality] : null;
+  const lastQualCfg = backendSignal ? QUALITY_CONFIG[backendSignal.quality] : null;
 
   return (
     <motion.div
@@ -310,8 +262,8 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
                 </span>
               </span>
             )}
-            {lastRunMin !== null && (
-              <span className="text-gray-700">ult: {String(lastRunMin).padStart(2,'0')}m</span>
+            {backendSignal && (
+              <span className="text-gray-700">ult: {new Date(backendSignal.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
             )}
           </div>
           <div className="h-1 bg-white/5 rounded-full overflow-hidden">
@@ -357,7 +309,7 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
 
               <AnimatePresence>
                 {showExplain && (() => {
-                  const exp = explainSignal(pendingSignal);
+                  const exp = explainSignal(pendingSignal as unknown as SignalResult);
                   return (
                     <motion.div
                       key="explain"
@@ -414,21 +366,21 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
             </motion.div>
           )}
 
-          {/* Last signal (already resolved) */}
-          {!pendingSignal && !resultSaved && signal && (
+          {/* Last signal (already resolved or blocked) */}
+          {!pendingSignal && !resultSaved && backendSignal?.passed && backendSignal?.ts === markedTs && (
             <motion.div key="last" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className={`rounded-xl px-3 py-2.5 border flex items-center gap-3 ${
-                signal.direction === 'CALL' ? 'bg-[var(--green)]/5 border-[var(--green)]/15' : 'bg-[var(--red)]/5 border-[var(--red)]/15'
+                backendSignal.direction === 'CALL' ? 'bg-[var(--green)]/5 border-[var(--green)]/15' : 'bg-[var(--red)]/5 border-[var(--red)]/15'
               }`}>
-              <span className={`text-lg font-black ${signal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
-                {signal.direction === 'CALL' ? '▲' : '▼'}
+              <span className={`text-lg font-black ${backendSignal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                {backendSignal.direction === 'CALL' ? '▲' : '▼'}
               </span>
               <div className="flex-1 min-w-0">
-                <div className={`text-xs font-black ${signal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
-                  {signal.direction} — {lastQualCfg?.label || signal.quality}
+                <div className={`text-xs font-black ${backendSignal.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                  {backendSignal.direction} — {lastQualCfg?.label || backendSignal.quality}
                 </div>
                 <div className="text-[9px] text-gray-600 tabular-nums">
-                  {new Date(signal.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {signal.score}%
+                  {new Date(backendSignal.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {backendSignal.score}%
                 </div>
               </div>
               <button onClick={handleCopy} className="text-gray-600 hover:text-gray-400 transition">
@@ -438,7 +390,7 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
           )}
 
           {/* Block reason */}
-          {!pendingSignal && !resultSaved && !signal && blockReason && (
+          {!pendingSignal && !resultSaved && !backendSignal?.passed && blockReason && (
             <motion.div key="blocked" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="flex items-start gap-2 px-3 py-2 rounded-xl bg-orange-500/5 border border-orange-500/15 text-[10px] text-orange-400/80">
               <span className="shrink-0 mt-0.5">⚠</span>
