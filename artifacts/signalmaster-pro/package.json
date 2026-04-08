@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@stripe/stripe-js": "^9.1.0",
+    "html2canvas": "^1.4.1",
     "lightweight-charts": "^5.1.0",
     "vite-plugin-pwa": "^1.2.0",
     "zustand": "^5.0.12"

@@ -8,6 +8,7 @@ import { AnimatePresence } from "framer-motion";
 import { Sidebar } from "@/components/Sidebar";
 import { usePinLock, PinLockScreen } from "@/components/PinLock";
 
+import LunaChat from "@/components/LunaChat";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -63,6 +64,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      <LunaChat />
     </div>
   );
 }
