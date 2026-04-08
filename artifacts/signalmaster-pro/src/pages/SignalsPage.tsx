@@ -207,8 +207,11 @@ export default function SignalsPage() {
   const shouldFireNow = (sec: number, min: number, tf: 'M1' | 'M5' | 'M15'): boolean => {
     if (sec !== 48) return false;
     if (tf === 'M1') return true;
-    if (tf === 'M5') return min % 5 === 0;
-    if (tf === 'M15') return min % 15 === 0;
+    // Dispara no segundo :48 do ÚLTIMO minuto do período (antes do fechamento do candle)
+    // M5:  minutos 4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59
+    // M15: minutos 14, 29, 44, 59
+    if (tf === 'M5') return min % 5 === 4;
+    if (tf === 'M15') return min % 15 === 14;
     return false;
   };
 
@@ -217,11 +220,13 @@ export default function SignalsPage() {
     if (tf === 'M1') return sec <= 48 ? 48 - sec : 60 - sec + 48;
     const interval = tf === 'M5' ? 5 : 15;
     const intervalSecs = interval * 60;
-    const cur = min * 60 + sec;
-    let n = Math.floor(cur / intervalSecs);
-    let next = n * intervalSecs + 48;
-    if (next <= cur) { n++; next = n * intervalSecs + 48; }
-    return next - cur;
+    // Posição dentro do período atual (em segundos)
+    const posInPeriod = (min % interval) * 60 + sec;
+    // Alvo: segundo :48 do último minuto do período
+    const targetInPeriod = (interval - 1) * 60 + 48;
+    let secsLeft = targetInPeriod - posInPeriod;
+    if (secsLeft <= 0) secsLeft += intervalSecs; // já passou → próximo período
+    return secsLeft;
   };
 
   // 1-second tick — emit signal based on selected timeframe
