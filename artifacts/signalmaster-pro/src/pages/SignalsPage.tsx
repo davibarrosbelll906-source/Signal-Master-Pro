@@ -858,8 +858,8 @@ export default function SignalsPage() {
                 </div>
 
                 {/* Direction */}
-                <div className="text-center my-6">
-                  <div className={`text-7xl font-black tracking-tight mb-2 ${
+                <div className="text-center my-4">
+                  <div className={`text-5xl xl:text-6xl font-black tracking-tight mb-2 ${
                     signal.direction === 'CALL'
                       ? 'text-[var(--green)] drop-shadow-[0_0_20px_rgba(0,255,136,0.5)]'
                       : 'text-[var(--red)] drop-shadow-[0_0_20px_rgba(255,68,102,0.5)]'
@@ -984,10 +984,6 @@ export default function SignalsPage() {
             </div>{/* end RIGHT SUB */}
           </div>{/* end INTERNAL GRID */}
 
-          {/* CHART — full width of center */}
-          <div className="glass-card p-1">
-            <TradingViewWidget symbol={asset} height={380} />
-          </div>
         </div>
 
         {/* RIGHT PANEL */}
@@ -1066,6 +1062,13 @@ export default function SignalsPage() {
           )}
         </div>
       </div>}
+
+      {/* CHART — full width below all columns, só no modo single */}
+      {!multiPairMode && (
+        <div className="glass-card p-1">
+          <TradingViewWidget symbol={asset} height={400} />
+        </div>
+      )}
 
       {/* MINI TRADE HISTORY */}
       {recentTrades.length > 0 && (
