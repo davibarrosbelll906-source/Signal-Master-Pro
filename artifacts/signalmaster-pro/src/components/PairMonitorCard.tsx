@@ -399,7 +399,7 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
           )}
 
           {/* Initial loading */}
-          {!pendingSignal && !resultSaved && !signal && !blockReason && (
+          {!pendingSignal && !resultSaved && !backendSignal?.passed && !blockReason && (
             <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="py-3 text-center space-y-1">
               {!isConnected || bufferSize < 30 ? (
