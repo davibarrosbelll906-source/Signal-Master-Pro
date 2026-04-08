@@ -88,8 +88,18 @@ const authLimiter = rateLimit({
   message: { error: "Muitas tentativas de login. Aguarde 15 minutos." },
 });
 
+// OTP limiter: máximo 5 envios de código por IP / 15min
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitas solicitações de código. Aguarde 15 minutos." },
+});
+
 app.use("/api", limiter);
 app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/send-otp", otpLimiter);
 app.use("/api", router);
 
 // 404 — rota não encontrada

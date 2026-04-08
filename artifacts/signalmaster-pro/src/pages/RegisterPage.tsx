@@ -2,7 +2,8 @@ import { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ShieldAlert, ArrowRight, Loader2, Mail, RefreshCw, X } from "lucide-react";
-import { useAppStore, initStore } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
+import { setToken } from "@/lib/apiClient";
 
 async function apiPost(path: string, body: object) {
   const res = await fetch(`/api${path}`, {
@@ -56,7 +57,7 @@ export default function RegisterPage() {
     if (!riskProfile || !termsAccepted) return;
     setLoading(true);
     try {
-      await apiPost("/send-otp", { email, name });
+      await apiPost("/auth/send-otp", { email, name });
       setOtpSent(true);
       setStep(3);
       startResendCooldown(60);
@@ -83,7 +84,7 @@ export default function RegisterPage() {
     setLoading(true);
     setOtpError("");
     try {
-      await apiPost("/send-otp", { email, name });
+      await apiPost("/auth/send-otp", { email, name });
       setOtp(["", "", "", "", "", ""]);
       startResendCooldown(60);
       otpRefs.current[0]?.focus();
@@ -125,32 +126,31 @@ export default function RegisterPage() {
     setLoading(true);
     setOtpError("");
     try {
-      await apiPost("/verify-otp", { email, code });
-      createAccount();
+      // 1. Verificar OTP
+      await apiPost("/auth/verify-otp", { email, code });
+      // 2. Criar conta no banco
+      await createAccount();
     } catch (err: any) {
       setOtpError(err.message);
       setLoading(false);
     }
   };
 
-  const createAccount = () => {
-    initStore();
-    const usersStr = localStorage.getItem("smpU7");
-    const users = usersStr ? JSON.parse(usersStr) : [];
+  const createAccount = async () => {
+    // Gera username a partir do e-mail
     const base = email.split("@")[0].replace(/[^a-z0-9]/gi, "").toLowerCase();
-    const username = base || "user" + Math.floor(Math.random() * 9999);
-    const newUser = {
-      user: username,
-      pass,
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      role: "user",
-      plan: "basico",
-      trialEndsAt: Date.now() + 3 * 24 * 60 * 60 * 1000,
-    };
-    users.push(newUser);
-    localStorage.setItem("smpU7", JSON.stringify(users));
-    setCurrentUser(newUser);
+    const username = (base || "user") + Math.floor(Math.random() * 999);
+
+    const data = await apiPost("/auth/register", { username, name: name.trim(), password: pass });
+
+    // Salva tokens e loga automaticamente
+    setToken(data.accessToken, data.refreshToken);
+    setCurrentUser({
+      user: data.user.username,
+      name: data.user.name,
+      role: data.user.role,
+      plan: data.user.plan,
+    });
     setLocation("/dashboard/signals");
   };
 
