@@ -34,6 +34,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { usePinLock, PinLockScreen } from "@/components/PinLock";
 
 import LunaChat from "@/components/LunaChat";
+import { NexusOverlay } from "@/components/NexusOverlay";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -91,6 +92,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
       <LunaChat />
+      <NexusOverlay />
     </div>
   );
 }

@@ -146,6 +146,21 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - **Frontend**: Oracle badge `ShieldCheck` purple on approved signals. `oraclePending` spinner animation while Oracle evaluates. Card border glows purple when Oracle-approved.
 - **Entropy exemption**: TRENDING + ADX >= 22 → entropy not a hard block (only penalty). High-entropy ranging markets still blocked.
 - **Proven results**: Oracle correctly blocked SOLUSD RSI=82, XRPUSD RSI=83, ADAUSD RSI=88 (all dangerous binary overbought). Approved USOIL 91%.
+- **Luna Nexus integrated** (see below)
+
+### Luna Nexus — The Eternal Oracle (5th Layer)
+- **File**: `artifacts/api-server/src/lib/lunaNexus.ts` (class `LunaNexus`)
+- **Trigger**: Called AFTER Oracle approves a signal (fire-and-forget). Never blocks signal emission.
+- **Soul analysis**: `analyzeQuantitativeSoul()` uses REAL signal data (adx, rsi, consensus, confirmed, marketRegime) mapped to mystical fields (emaHarmony, rsiSoul, adxSpirit, volumeBreath).
+- **Cosmic alignment**: `Math.sin(Date.now() / 1_000_000) * 20 + 75` — oscillates 55-95 over time (minutes interval update).
+- **Temporal echo**: Per-pair memory updated by WIN/LOSS results (same `signal_result` socket event). Persists winRate + resonance.
+- **AI invocation**: Claude Haiku via same Anthropic proxy. Prompt: mystical + poetic language. Returns `{approved, confidence, direction, reason, nexusMessage}`.
+- **Socket events emitted**: `nexus_signal` (full NexusSignal object) + `cosmic_event` (notification payload).
+- **Cooldown**: 5 min per pair×timeframe (avoids redundant calls).
+- **Divine tiers**: DIVINE(≥96) > CELESTIAL(≥92) > ETHEREAL(≥88) > ASTRAL(≥60).
+- **Sacred symbols**: Per-asset emoji (👑 XAUUSD, ₿ BTCUSD, ⚖️ EURUSD, etc.)
+- **Frontend**: `NexusOverlay.tsx` — floating toast bottom-right. Star particles animation, tier-colored glow, poetic message, auto-dismiss 12s. Added to `App.tsx` globally.
+- **Frontend store**: `signalStore.ts` has `nexusSignals: NexusSignal[]` + `latestCosmicEvent`. `socket.ts` listens for both events.
 
 ### Signal Quality Engine v7.3 (3 High-Impact Solutions)
 - **Solução 1 — MTF Confluence Gate**: EMA M1/M5/M15 alignment scoring: +7% when all 3 agree, +3% for 2/3, -16% for full conflict (all 3 disagree → hard block). Frontend: hard block on full conflict.

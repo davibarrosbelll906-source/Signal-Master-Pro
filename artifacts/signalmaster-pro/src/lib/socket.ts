@@ -4,7 +4,7 @@
  */
 
 import { io } from 'socket.io-client';
-import { useSignalStore, type LunaExplanation, type NewsBlackout } from './signalStore';
+import { useSignalStore, type LunaExplanation, type NewsBlackout, type NexusSignal, type CosmicEvent } from './signalStore';
 
 const BASE_URL = import.meta.env.BASE_URL || '/';
 
@@ -43,6 +43,14 @@ socket.on('news_blackout', (blackout: Omit<NewsBlackout, 'at'>) => {
 
 socket.on('timeframe_changed', (data: { timeframe: string }) => {
   console.log(`[Socket] Timeframe confirmado pelo backend: ${data.timeframe}`);
+});
+
+socket.on('nexus_signal', (signal: NexusSignal) => {
+  useSignalStore.getState().addNexusSignal(signal);
+});
+
+socket.on('cosmic_event', (event: CosmicEvent) => {
+  useSignalStore.getState().setCosmicEvent(event);
 });
 
 export default socket;

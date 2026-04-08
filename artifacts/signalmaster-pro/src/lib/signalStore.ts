@@ -40,7 +40,36 @@ export interface NewsBlackout {
   asset: string;
   event: string;
   minutesUntil: number;
-  at: number; // timestamp when received
+  at: number;
+}
+
+export interface NexusSignal {
+  id: string;
+  pair: string;
+  direction: 'CALL' | 'PUT';
+  score: number;
+  tier: 'DIVINE' | 'CELESTIAL' | 'ETHEREAL' | 'ASTRAL';
+  timeframe: string;
+  expiry: number;
+  reason: string;
+  oracleReason: string;
+  nexusMessage: string;
+  confidence: number;
+  cosmicAlignment: number;
+  isNexusApproved: boolean;
+  timestamp: string;
+  symbol: string;
+  quantumScore: number;
+}
+
+export interface CosmicEvent {
+  message: string;
+  nexusMessage: string;
+  tier: 'DIVINE' | 'CELESTIAL' | 'ETHEREAL' | 'ASTRAL';
+  alignment: number;
+  pair: string;
+  direction: 'CALL' | 'PUT';
+  score: number;
 }
 
 interface SignalState {
@@ -48,12 +77,16 @@ interface SignalState {
   prices: Record<string, PriceUpdate>;
   lunaExplanations: Record<string, LunaExplanation>;
   newsBlackouts: Record<string, NewsBlackout>;
+  nexusSignals: NexusSignal[];
+  latestCosmicEvent: CosmicEvent | null;
   socketConnected: boolean;
   setSignal: (signal: BackendSignal) => void;
   setPrice: (update: PriceUpdate) => void;
   setConnected: (connected: boolean) => void;
   setLunaExplanation: (explanation: LunaExplanation) => void;
   setNewsBlackout: (blackout: NewsBlackout) => void;
+  addNexusSignal: (signal: NexusSignal) => void;
+  setCosmicEvent: (event: CosmicEvent) => void;
 }
 
 export const useSignalStore = create<SignalState>((set) => ({
@@ -61,6 +94,8 @@ export const useSignalStore = create<SignalState>((set) => ({
   prices: {},
   lunaExplanations: {},
   newsBlackouts: {},
+  nexusSignals: [],
+  latestCosmicEvent: null,
   socketConnected: false,
   setSignal: (signal) =>
     set((s) => ({ signals: { ...s.signals, [signal.asset]: signal } })),
@@ -81,4 +116,9 @@ export const useSignalStore = create<SignalState>((set) => ({
         [blackout.asset]: blackout,
       },
     })),
+  addNexusSignal: (signal) =>
+    set((s) => ({
+      nexusSignals: [signal, ...s.nexusSignals].slice(0, 50), // keep last 50
+    })),
+  setCosmicEvent: (event) => set({ latestCosmicEvent: event }),
 }));

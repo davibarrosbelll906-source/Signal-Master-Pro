@@ -11,6 +11,7 @@ import { runEngine, ASSET_CATEGORIES, type SignalResult } from './signalEngine.j
 import { generateLunaExplanation } from './lunaExplainer.js';
 import { initNewsFilter, checkNewsBlackoutSync } from './newsFilter.js';
 import { askLunaOracle, ORACLE_MIN_SCORE } from './lunaOracle.js';
+import { LunaNexus } from './lunaNexus.js';
 
 const ALL_ASSETS = [
   'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD',
@@ -84,6 +85,9 @@ export function suggestExpiry(timeframe: string): number {
 }
 
 export function initSignalEngine(io: IOServer) {
+  // Luna Nexus — The Eternal Oracle (camada cósmica após Oracle)
+  const lunaNexus = new LunaNexus(io);
+
   // Start data feeds
   initAllAssets(ALL_ASSETS);
 
@@ -127,10 +131,11 @@ export function initSignalEngine(io: IOServer) {
       }
     });
 
-    // Recebe resultado WIN/LOSS do frontend → atualiza memória adaptativa
+    // Recebe resultado WIN/LOSS do frontend → atualiza memória adaptativa + Nexus echo
     socket.on('signal_result', (data: { asset: string; timeframe: string; isWin: boolean }) => {
       if (data?.asset && data?.timeframe && typeof data.isWin === 'boolean') {
         updatePerformance(data.asset, data.timeframe, data.isWin);
+        lunaNexus.updateTemporalEcho(data.asset, data.timeframe, data.isWin);
         const wr = Math.round(getPerformanceWR(data.asset, data.timeframe) * 100);
         console.log(`[Memory] ${data.asset}/${data.timeframe} ${data.isWin ? '✅ WIN' : '❌ LOSS'} → WR: ${wr}%`);
       }
@@ -220,6 +225,9 @@ export function initSignalEngine(io: IOServer) {
         latestSignals.set(asset, approved as any);
         io.emit('new_signal', approved);
         console.log(`[Oracle] ✅ ${asset} APROVADO — ${oracle.reason} | Oracle: ${oracle.confidence}% | Score final: ${Math.round(finalScore)}%`);
+
+        // Luna Nexus: bênção cósmica (fire-and-forget, não bloqueia emissão)
+        lunaNexus.divineSignal(approved, tf).catch(() => {});
 
         // Explicação da Luna (fire-and-forget, não bloqueia)
         generateLunaExplanation({
