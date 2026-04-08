@@ -1,0 +1,213 @@
+PACOTE COMPLETO DE SEGURANÇA – SignalMaster Pro v7
+1. Dependências necessárias (Backend)
+No seu artifacts/api-server:
+Bashpnpm add prisma @prisma/client bcryptjs jsonwebtoken zod helmet cors express-rate-limit dotenv
+pnpm add -D @types/bcryptjs @types/jsonwebtoken @types/cors
+
+2. Estrutura de Pastas Recomendada
+textapi-server/
+├── prisma/
+│   └── schema.prisma
+├── src/
+│   ├── config/
+│   │   └── auth.ts
+│   ├── middleware/
+│   │   ├── auth.ts
+│   │   ├── security.ts
+│   │   └── validate.ts
+│   ├── routes/
+│   │   ├── auth.ts
+│   │   └── protected.ts
+│   ├── lib/
+│   │   └── prisma.ts
+│   └── server.ts
+
+3. Configuração do Prisma (prisma/schema.prisma)
+prismagenerator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"   // ou "sqlite" para teste rápido
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  name         String?
+  avatarColor  String   @default("#3b82f6")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Dados de trading
+  balance      Float    @default(1000)
+  winRate      Float    @default(0)
+  totalTrades  Int      @default(0)
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  GERENTE
+  SUPORTE
+  ANALISTA
+  FINANCEIRO
+  MODERADOR
+  USER
+}
+Rode depois:
+Bashnpx prisma generate
+npx prisma db push
+
+4. Configuração de Segurança (src/middleware/security.ts)
+TypeScriptimport helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cors from 'cors';
+
+export const securityMiddleware = [
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+      },
+    },
+  }),
+
+  cors({
+    origin: ['http://localhost:18264', 'https://seu-dominio.com'], // ajuste
+    credentials: true,
+  }),
+
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100,                 // máximo 100 requisições por IP
+    message: { error: "Muitas requisições. Tente novamente mais tarde." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+];
+
+5. Middleware de Autenticação (src/middleware/auth.ts)
+TypeScriptimport jwt from 'jsonwebtoken';
+import { Request, Response, NextFunction } from 'express';
+
+export interface AuthRequest extends Request {
+  user?: any;
+}
+
+export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Acesso negado. Token não fornecido." });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
+    if (err) return res.status(403).json({ error: "Token inválido ou expirado." });
+    req.user = user;
+    next();
+  });
+};
+
+export const authorizeRole = (roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Acesso negado. Permissão insuficiente." });
+    }
+    next();
+  };
+};
+
+6. Rota de Login Segura (src/routes/auth.ts)
+TypeScriptimport express from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { prisma } from '../lib/prisma';
+import { z } from 'zod';
+
+const router = express.Router();
+
+const loginSchema = z.object({
+  username: z.string().min(3),
+  password: z.string().min(6),
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = loginSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user) return res.status(401).json({ error: "Usuário ou senha incorretos" });
+
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) return res.status(401).json({ error: "Usuário ou senha incorretos" });
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      process.env.JWT_SECRET!,
+      { expiresIn: '15m' }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      process.env.REFRESH_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      refreshToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        balance: user.balance,
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: "Dados inválidos" });
+  }
+});
+
+export default router;
+
+7. Configuração do Server (src/server.ts)
+TypeScriptimport express from 'express';
+import dotenv from 'dotenv';
+import { securityMiddleware } from './middleware/security';
+import authRoutes from './routes/auth';
+import { authenticateToken } from './middleware/auth';
+
+dotenv.config();
+
+const app = express();
+
+app.use(express.json());
+app.use(securityMiddleware);
+
+// Rotas públicas
+app.use('/api/auth', authRoutes);
+
+// Rotas protegidas
+app.use('/api/protected', authenticateToken, /* suas rotas */);
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor seguro rodando na porta ${PORT}`);
+});
+
+Próximos passos que eu recomendo:
+
+Criar o banco no Railway ou Neon (PostgreSQL gratuito)
+Configurar o .env com:envDATABASE_URL="..."
+JWT_SECRET=uma_chave_muito_longa_e_segura_aqui
+REFRESH_SECRET=outra_chave_diferente_e_mais_longa
+Migrar os usuários existentes (admin, gerente, etc.) com senhas hasheadas
