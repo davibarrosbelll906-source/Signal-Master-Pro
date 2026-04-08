@@ -10,6 +10,7 @@ import {
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
 import { useSignalStore } from "@/lib/signalStore";
+import { socket } from "@/lib/socket";
 
 function PairMonitorIAButton({ showExplain, setShowExplain }: { showExplain: boolean; setShowExplain: (v: (p: boolean) => boolean) => void }) {
   const allowed = usePlanGuard("pro");
@@ -157,6 +158,8 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
       localStorage.setItem('smpH7', JSON.stringify(hist));
     } catch {}
     updateMLWeights(pendingSignal as unknown as SignalResult, type);
+    // Envia resultado para o backend atualizar a memória adaptativa
+    socket.emit('signal_result', { asset, timeframe, isWin: type === 'win' });
     setResultSaved(type);
     setMarkedTs(pendingSignal.ts);
   };

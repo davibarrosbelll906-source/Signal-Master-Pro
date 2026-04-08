@@ -29,6 +29,22 @@ const socketTimeframes = new Map<string, string>();
 // Global default timeframe (used when no socket preference is known)
 let globalTimeframe: string = 'M1';
 
+// ── Adaptive Performance Memory (Solução 3) ───────────────────────────────
+// Chave: "EURUSD-M5" → win rate (0.45–0.92), inicializa em 0.65 (neutro)
+const performanceMemory = new Map<string, number>();
+
+function getPerformanceWR(asset: string, timeframe: string): number {
+  return performanceMemory.get(`${asset}-${timeframe}`) ?? 0.65;
+}
+
+export function updatePerformance(asset: string, timeframe: string, isWin: boolean) {
+  const key = `${asset}-${timeframe}`;
+  let current = performanceMemory.get(key) ?? 0.65;
+  current = isWin ? current + 0.015 : current - 0.012;
+  current = Math.max(0.45, Math.min(0.92, current));
+  performanceMemory.set(key, current);
+}
+
 export function getLatestSignals() {
   return Object.fromEntries(latestSignals);
 }
@@ -110,6 +126,15 @@ export function initSignalEngine(io: IOServer) {
       }
     });
 
+    // Recebe resultado WIN/LOSS do frontend → atualiza memória adaptativa
+    socket.on('signal_result', (data: { asset: string; timeframe: string; isWin: boolean }) => {
+      if (data?.asset && data?.timeframe && typeof data.isWin === 'boolean') {
+        updatePerformance(data.asset, data.timeframe, data.isWin);
+        const wr = Math.round(getPerformanceWR(data.asset, data.timeframe) * 100);
+        console.log(`[Memory] ${data.asset}/${data.timeframe} ${data.isWin ? '✅ WIN' : '❌ LOSS'} → WR: ${wr}%`);
+      }
+    });
+
     socket.on('disconnect', () => {
       socketTimeframes.delete(socket.id);
     });
@@ -146,7 +171,8 @@ export function initSignalEngine(io: IOServer) {
       }
 
       try {
-        const result = runEngine(buf.m1, asset);
+        const pairWR = getPerformanceWR(asset, globalTimeframe);
+        const result = runEngine(buf.m1, asset, pairWR);
         if (!result) continue;
 
         // Tag signal with the timeframe it was generated for

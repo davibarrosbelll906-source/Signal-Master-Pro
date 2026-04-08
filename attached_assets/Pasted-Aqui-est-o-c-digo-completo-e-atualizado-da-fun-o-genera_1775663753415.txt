@@ -1,0 +1,176 @@
+Aqui está o código completo e atualizado da função generateSignals() com as 3 primeiras soluções de alto impacto implementadas:
+
+Multi-Timeframe Confluence
+Market Regime Detector
+Adaptive Performance Memory
+
+signalEngine.ts — Versão Melhorada (Parte Principal)
+TypeScript// ====================== SIGNAL ENGINE - VERSÃO MELHORADA (Assertividade Alta) ======================
+export class SignalEngine {
+  private io: Server;
+  private buffers: Map<string, any[]> = new Map();
+  private lastSignalTime: Map<string, number> = new Map();
+  private currentTimeframe: string = 'M1';
+
+  // Memória adaptativa de performance
+  private performanceMemory: Map<string, number> = new Map(); // chave: "EURUSD-M5"
+
+  constructor(io: Server) {
+    this.io = io;
+    this.startEngine();
+  }
+
+  private startEngine() {
+    setInterval(() => this.generateSignals(), 1000);
+  }
+
+  // ====================== FUNÇÃO PRINCIPAL ======================
+  private async generateSignals() {
+    const now = new Date();
+    const currentSecond = now.getSeconds();
+    const currentMinute = now.getMinutes();
+
+    if (currentSecond !== 48) return;
+
+    const activePairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSDT', 'ETHUSDT'];
+
+    for (const pair of activePairs) {
+      const candles = this.buffers.get(pair) || [];
+      if (candles.length < 80) continue;
+
+      // === 1. Verifica se deve disparar no timeframe atual ===
+      if (!this.shouldTriggerSignal(currentMinute, this.currentTimeframe)) {
+        continue;
+      }
+
+      // === 2. Análise Quantitativa Completa ===
+      const analysis = this.runFullQuantitativeAnalysis(candles, pair, this.currentTimeframe);
+
+      // Filtro mínimo de score
+      if (analysis.finalScore < 68) continue;
+
+      // === 3. Multi-Timeframe Confluence (Solução 1) ===
+      if (!this.hasMultiTimeframeConfluence(pair)) {
+        continue; // Bloqueia se os timeframes não concordarem
+      }
+
+      // === 4. Market Regime Detector (Solução 2) ===
+      const regime = this.getMarketRegime(candles);
+      if (regime === 'CHOPPY') continue; // Mercado ruim = sem sinal
+
+      let finalScore = analysis.finalScore;
+
+      // Ajuste baseado no regime de mercado
+      if (regime === 'RANGING') {
+        finalScore -= 18; // penaliza sinais em mercado lateral
+      }
+
+      // === 5. Adaptive Performance Memory (Solução 3) ===
+      const memoryKey = `${pair}-${this.currentTimeframe}`;
+      const memoryWR = this.performanceMemory.get(memoryKey) || 65;
+      finalScore += (memoryWR - 65) * 0.7; // bônus ou penalidade
+
+      if (finalScore < 70) continue;
+
+      // Cria o sinal final
+      const signal = {
+        id: Date.now().toString(),
+        pair,
+        direction: analysis.direction,
+        score: Math.round(Math.min(98, finalScore)),
+        tier: this.getTier(finalScore),
+        timeframe: this.currentTimeframe,
+        expiry: this.suggestExpiry(this.currentTimeframe),
+        reason: analysis.mainReason,
+        session: this.getCurrentSession(now),
+        confidence: Math.round(finalScore * 0.92),
+        marketRegime: regime,
+        timestamp: now.toISOString(),
+      };
+
+      // Envia o sinal
+      this.io.emit('new_signal', signal);
+
+      // Explicação educativa da Luna
+      this.sendLunaEducationalExplanation(signal, analysis);
+
+      this.lastSignalTime.set(pair, Date.now());
+
+      console.log(`✅ SINAL GERADO → ${pair} ${signal.direction} ${signal.score}% (${regime})`);
+    }
+  }
+
+  // ====================== MÉTODOS AUXILIARES ======================
+
+  private shouldTriggerSignal(currentMinute: number, timeframe: string): boolean {
+    switch (timeframe) {
+      case 'M1':  return true;
+      case 'M5':  return currentMinute % 5 === 0;
+      case 'M15': return currentMinute % 15 === 0;
+      default:    return true;
+    }
+  }
+
+  private hasMultiTimeframeConfluence(pair: string): boolean {
+    const candles = this.buffers.get(pair) || [];
+    if (candles.length < 80) return false;
+
+    const trendM1 = this.calculateTrend(candles.slice(-30));
+    const trendM5 = this.calculateTrend(this.getHigherTimeframeCandles(candles, 5));
+    const trendM15 = this.calculateTrend(this.getHigherTimeframeCandles(candles, 15));
+
+    return trendM1.direction === trendM5.direction &&
+           trendM5.direction === trendM15.direction &&
+           trendM1.strength > 0.6;
+  }
+
+  private getMarketRegime(candles: any[]): 'TRENDING' | 'RANGING' | 'CHOPPY' {
+    const adx = this.calculateADX(candles);
+    const squeeze = this.detectBollingerSqueeze(candles);
+    const volatility = this.calculateVolatility(candles);
+
+    if (adx > 25 && volatility > 0.0008) return 'TRENDING';
+    if (adx < 20 || squeeze) return 'RANGING';
+    return 'CHOPPY';
+  }
+
+  // Atualiza a memória de performance (chame isso quando o usuário marcar WIN ou LOSS)
+  public updatePerformance(pair: string, timeframe: string, isWin: boolean) {
+    const key = `${pair}-${timeframe}`;
+    let current = this.performanceMemory.get(key) || 65;
+
+    current = isWin ? current + 1.5 : current - 1.2;
+    current = Math.max(45, Math.min(92, current));
+
+    this.performanceMemory.set(key, current);
+  }
+
+  // ====================== MÉTODOS QUE VOCÊ JÁ DEVE TER ======================
+  private runFullQuantitativeAnalysis(/* ... */) { /* sua lógica atual de RSI, ADX, EMA, etc. */ }
+  private calculateTrend(candles: any[]) { /* retorne { direction: 'BULLISH'|'BEARISH', strength: number } */ }
+  private calculateADX(candles: any[]) { /* ... */ }
+  private detectBollingerSqueeze(candles: any[]) { /* ... */ }
+  private calculateVolatility(candles: any[]) { /* ... */ }
+  private getHigherTimeframeCandles(candles: any[], factor: number) { /* agrupa candles */ }
+  private getTier(score: number) { /* ... */ }
+  private suggestExpiry(tf: string) { /* ... */ }
+  private getCurrentSession(now: Date) { /* ... */ }
+  private sendLunaEducationalExplanation(signal: any, analysis: any) { /* ... */ }
+
+  // Métodos públicos para o frontend controlar
+  public updateTimeframe(newTimeframe: string) {
+    if (['M1', 'M5', 'M15'].includes(newTimeframe)) {
+      this.currentTimeframe = newTimeframe;
+    }
+  }
+
+  public getCurrentTimeframe(): string {
+    return this.currentTimeframe;
+  }
+}
+
+Como usar:
+
+Substitua sua função generateSignals() atual por esta versão.
+Chame signalEngine.updatePerformance(pair, timeframe, isWin) toda vez que o usuário marcar WIN ou LOSS.
+Quando o usuário mudar o timeframe no frontend, envie via Socket.io:TypeScriptsocket.emit('change_timeframe', newTimeframe);

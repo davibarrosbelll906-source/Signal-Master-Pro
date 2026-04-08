@@ -668,8 +668,9 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   // MACD momentum growing bonus
   if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
 
-  // Entropy penalty
-  if (entropy > 0.6) rawScore = Math.max(0.35, rawScore - 0.08);
+  // Entropy penalty (0.72–0.82 = ruído alto; >0.82 = completamente aleatório)
+  if (entropy > 0.72) rawScore = Math.max(0.35, rawScore - 0.06);
+  if (entropy > 0.82) rawScore = Math.max(0.35, rawScore - 0.12);
 
   // ── ATR Volatility Filter: 0.03%–1.2% of price ───────────────────────
   const atrPct = lastClose > 0 ? atr / lastClose : 0;
@@ -681,13 +682,25 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   if (confluenceFactors >= 3) rawScore = Math.min(0.95, rawScore + 0.06);
   else if (confluenceFactors <= 1) rawScore = Math.max(0.35, rawScore - 0.05);
 
-  // ── Pair Performance Memory ───────────────────────────────────────────
+  // ── Pair Performance Memory (Solução 3) ──────────────────────────────
   rawScore = Math.min(0.95, Math.max(0.35, rawScore + pairMemoryBonus));
 
-  const score = Math.round(rawScore * 100);
-
-  // — Market Regime —
+  // ── Market Regime Detector (Solução 2) ───────────────────────────────
   const marketRegime = detectMarketRegime(highs, lows, closes);
+  if (marketRegime === 'RANGING')  rawScore = Math.max(0.35, rawScore - 0.08);
+  if (marketRegime === 'TRENDING') rawScore = Math.min(0.95, rawScore + 0.06);
+
+  // ── Multi-Timeframe Confluence Gate (Solução 1) ───────────────────────
+  // Conta quantos timeframes (M1/M5/M15) discordam ativamente da direção
+  const tfDisagreeCount = [votes.ema, votes.htf, votes.m15]
+    .filter(v => v !== 'NEUTRAL' && v !== direction).length;
+  const tfAgreeCount = [votes.ema, votes.htf, votes.m15]
+    .filter(v => v === direction).length;
+  if (tfAgreeCount === 3) rawScore = Math.min(0.95, rawScore + 0.07);  // todos alinham — bônus alto
+  else if (tfAgreeCount === 2) rawScore = Math.min(0.95, rawScore + 0.03); // 2/3 alinham
+  else if (tfDisagreeCount === 3) rawScore = Math.max(0.35, rawScore - 0.16); // conflito total
+
+  const score = Math.round(rawScore * 100);
 
   // — Quality (7 levels: FRACO → ULTRA) —
   let quality: SignalResult['quality'] = 'EVITAR';
@@ -714,6 +727,12 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   if (atrPct < 0.0003) return null;  // mercado morto (menos de 3 bps)
   if (atrPct > 0.012) return null;   // mercado caótico (mais de 120 bps)
 
+  // Solução 2: Mercado CHOPPY bloqueado completamente
+  if (marketRegime === 'CHOPPY') return null;
+
+  // Solução 1: MTF conflito total — todos os 3 timeframes contra a direção
+  if (tfDisagreeCount === 3) return null;
+
   // Confluência mínima de 2/3 fatores (tendência, RSI, volume)
   if (confluenceFactors < 2) return null;
 
@@ -726,8 +745,8 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const confirms = main5.filter(k => votes[k] === direction).length;
   if (confirms < 3) return null;
 
-  // Entropy block
-  if (entropy > 0.65) return null;
+  // Entropy block — apenas mercados completamente aleatórios
+  if (entropy > 0.82) return null;
 
   // — Consensus (5 universes with updated weight sets) —
   const variations = [
@@ -896,13 +915,29 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   if (srBounce.nearSupport || srBounce.nearResistance) rawScore = Math.min(0.95, rawScore + 0.05);
   if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
   if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
-  if (entropy > 0.6) rawScore = Math.max(0.35, rawScore - 0.08);
+  if (entropy > 0.72) rawScore = Math.max(0.35, rawScore - 0.06);
+  if (entropy > 0.82) rawScore = Math.max(0.35, rawScore - 0.12);
   const atrPct = lastClose > 0 ? atr / lastClose : 0;
   if (atrPct < 0.0003) rawScore = Math.max(0.35, rawScore - 0.10);
   else if (atrPct > 0.012) rawScore = Math.max(0.35, rawScore - 0.08);
   else if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
   if (diagConfluenceFactors >= 3) rawScore = Math.min(0.95, rawScore + 0.06);
   else if (diagConfluenceFactors <= 1) rawScore = Math.max(0.35, rawScore - 0.05);
+
+  // Solução 2: Market Regime
+  const diagRegime = detectMarketRegime(highs, lows, closes);
+  if (diagRegime === 'RANGING')  rawScore = Math.max(0.35, rawScore - 0.08);
+  if (diagRegime === 'TRENDING') rawScore = Math.min(0.95, rawScore + 0.06);
+
+  // Solução 1: MTF Confluence Gate
+  const diagTfDisagree = [votes.ema, votes.htf, votes.m15]
+    .filter(v => v !== 'NEUTRAL' && v !== direction).length;
+  const diagTfAgree = [votes.ema, votes.htf, votes.m15]
+    .filter(v => v === direction).length;
+  if (diagTfAgree === 3) rawScore = Math.min(0.95, rawScore + 0.07);
+  else if (diagTfAgree === 2) rawScore = Math.min(0.95, rawScore + 0.03);
+  else if (diagTfDisagree === 3) rawScore = Math.max(0.35, rawScore - 0.16);
+
   const score = Math.round(rawScore * 100);
 
   let quality = 'EVITAR';
@@ -955,7 +990,9 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   else if (adx < 18) blockedBy = `ADX fraco (${Math.round(adx)} < 18) — mercado lateral`;
   else if (atrPct < 0.0003) blockedBy = `Mercado morto — ATR ${(atrPct * 10000).toFixed(1)} bps (< 3 bps)`;
   else if (atrPct > 0.012) blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps (> 120 bps)`;
-  else if (entropy > 0.65) blockedBy = `Entropia alta (${Math.round(entropy * 100)}%) — mercado aleatório`;
+  else if (diagRegime === 'CHOPPY') blockedBy = `Regime CHOPPY — mercado sem direcionalidade`;
+  else if (diagTfDisagree === 3) blockedBy = `Conflito MTF total — todos os 3 timeframes contra a direção`;
+  else if (entropy > 0.82) blockedBy = `Entropia muito alta (${Math.round(entropy * 100)}%) — mercado completamente aleatório`;
   else if (diagConfluenceFactors < 2) blockedBy = `Confluência insuficiente (${diagConfluenceFactors}/3 fatores)`;
   else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
