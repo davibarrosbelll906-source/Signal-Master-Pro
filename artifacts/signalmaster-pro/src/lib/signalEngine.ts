@@ -1038,3 +1038,118 @@ export function vibrate(type: string) {
   };
   try { navigator.vibrate?.(patterns[type] || [200]); } catch {}
 }
+
+/**
+ * explainSignal — gera explicação em linguagem simples do motivo do sinal.
+ * Para o botão "Por que este sinal?" no frontend.
+ */
+export function explainSignal(signal: SignalResult): { summary: string; bullets: string[]; warning?: string } {
+  const dir = signal.direction === 'CALL' ? '📈 CALL (Alta)' : '📉 PUT (Queda)';
+  const { votes, rsi, adx, entropy, dnaMatch, consensus, marketRegime, mmTrap, mmTrapType, score, quality } = signal;
+
+  const bullets: string[] = [];
+
+  // EMA alignment
+  if (votes.ema !== 'NEUTRAL') {
+    bullets.push(votes.ema === 'CALL'
+      ? '📐 EMAs 9/21/50 alinhadas em tendência de alta — momentum favorável'
+      : '📐 EMAs 9/21/50 alinhadas em tendência de baixa — pressão vendedora');
+  }
+
+  // RSI
+  if (rsi < 30) bullets.push(`📊 RSI em ${rsi.toFixed(0)} — zona de sobrevenda, reversão provável para cima`);
+  else if (rsi > 70) bullets.push(`📊 RSI em ${rsi.toFixed(0)} — zona de sobrecompra, reversão provável para baixo`);
+  else if (votes.rsi !== 'NEUTRAL') {
+    bullets.push(`📊 RSI em ${rsi.toFixed(0)} — momentum ${votes.rsi === 'CALL' ? 'comprador' : 'vendedor'} moderado`);
+  }
+
+  // RSI Divergence
+  if (votes.rsidiv !== 'NEUTRAL') {
+    bullets.push(votes.rsidiv === 'CALL'
+      ? '🔀 Divergência altista no RSI — preço caiu mas RSI subiu (sinal de inversão forte)'
+      : '🔀 Divergência baixista no RSI — preço subiu mas RSI caiu (sinal de inversão forte)');
+  }
+
+  // MACD
+  if (votes.macd !== 'NEUTRAL') {
+    bullets.push(votes.macd === 'CALL'
+      ? '⚡ MACD com histograma positivo — momentum de compra acelerando'
+      : '⚡ MACD com histograma negativo — momentum de venda acelerando');
+  }
+
+  // Bollinger
+  if (votes.bb === 'CALL') bullets.push('🎯 Preço na banda inferior de Bollinger — zona de suporte estatístico');
+  if (votes.bb === 'PUT') bullets.push('🎯 Preço na banda superior de Bollinger — zona de resistência estatística');
+  if (votes.bsq !== 'NEUTRAL') {
+    bullets.push(votes.bsq === 'CALL'
+      ? '💥 Squeeze de Bollinger com rompimento altista — expansão de volatilidade para cima'
+      : '💥 Squeeze de Bollinger com rompimento baixista — expansão de volatilidade para baixo');
+  }
+
+  // ADX
+  if (adx >= 28) bullets.push(`💪 ADX em ${adx.toFixed(0)} — tendência forte confirmada, sinal de maior confiança`);
+  else if (adx < 18) bullets.push(`⚠️ ADX em ${adx.toFixed(0)} — mercado sem tendência clara, maior risco de falso sinal`);
+
+  // Support/Resistance
+  if (votes.sr !== 'NEUTRAL') {
+    bullets.push(votes.sr === 'CALL'
+      ? '🧱 Preço em suporte chave — zona de compra identificada'
+      : '🧱 Preço em resistência chave — zona de venda identificada');
+  }
+
+  // Candle pattern
+  const candleNames: Record<string, string> = {
+    hammer: 'Hammer (martelo)',
+    shootingStar: 'Shooting Star (estrela cadente)',
+    bullEngulfing: 'Engolfo altista',
+    bearEngulfing: 'Engolfo baixista',
+    threeWhiteSoldiers: 'Três soldados brancos',
+    threeBlackCrows: 'Três corvos negros',
+    doji: 'Doji (indecisão)',
+  };
+  if (votes.candle !== 'NEUTRAL') {
+    const cpName = candleNames['none'] || 'Padrão de vela';
+    bullets.push(`🕯️ Padrão de candle ${votes.candle === 'CALL' ? 'altista' : 'baixista'} identificado`);
+  }
+
+  // Volume
+  if (votes.volume !== 'NEUTRAL') {
+    bullets.push(votes.volume === 'CALL'
+      ? '📊 Volume acima da média — compradores com força'
+      : '📊 Volume acima da média — vendedores com força');
+  }
+
+  // OBV
+  if (votes.obv !== 'NEUTRAL') {
+    bullets.push(votes.obv === 'CALL'
+      ? '💰 OBV em tendência de alta — fluxo de dinheiro entrando no ativo'
+      : '💰 OBV em tendência de queda — fluxo de dinheiro saindo do ativo');
+  }
+
+  // DNA Match
+  if (dnaMatch > 0.6) bullets.push(`🧬 DNA de mercado ${Math.round(dnaMatch * 100)}% compatível com padrões históricos de ${signal.direction}`);
+
+  // Market regime
+  if (marketRegime === 'TRENDING') bullets.push('🌊 Regime de mercado: TENDÊNCIA — condição ideal para opções binárias');
+  else if (marketRegime === 'CHOPPY') bullets.push('🌀 Regime de mercado: LATERAL — maior cuidado, sinal de menor confiança');
+
+  // MM Trap
+  if (mmTrap) {
+    bullets.push(`🎣 Armadilha de market maker detectada: ${mmTrapType} — sinal contra o movimento falso`);
+  }
+
+  // Consensus
+  const pct = Math.round(consensus * 100);
+  const totalInd = Object.values(votes).filter(v => v !== 'NEUTRAL').length;
+  const agreeing = Object.values(votes).filter(v => v === signal.direction).length;
+
+  const summary = `Sinal ${dir} gerado com score ${Math.round(score * 100)}% (${quality}). ${agreeing} de ${totalInd} indicadores ativos apontam na mesma direção (${pct}% de consenso).`;
+
+  // Warning
+  let warning: string | undefined;
+  if (entropy > 0.6) warning = '⚠️ Alta entropia no mercado — volatilidade irregular detectada. Considere reduzir o valor de entrada.';
+  else if (adx < 18) warning = '⚠️ Tendência fraca (ADX baixo). Probabilidade de mercado lateral — opere com cautela.';
+  else if (rsi > 80 || rsi < 20) warning = '⚠️ RSI em extremo — o preço pode já ter movido demais antes da entrada.';
+
+  return { summary, bullets: bullets.slice(0, 8), warning };
+}

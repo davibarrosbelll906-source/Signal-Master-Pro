@@ -64,6 +64,14 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   return res.json() as Promise<T>;
 }
 
+export const apiClient = {
+  get<T>(path: string) { return request<T>(path); },
+  post<T>(path: string, body: unknown) {
+    return request<T>(path, { method: "POST", body: JSON.stringify(body) });
+  },
+  delete<T>(path: string) { return request<T>(path, { method: "DELETE" }); },
+};
+
 export const api = {
   get<T>(path: string) { return request<T>(path); },
   post<T>(path: string, body: unknown) {
@@ -95,5 +103,25 @@ export const api = {
     },
     clearToday() { return request<{ ok: boolean }>("/trades/today", { method: "DELETE" }); },
     clearAll() { return request<{ ok: boolean }>("/trades/all", { method: "DELETE" }); },
+  },
+
+  email: {
+    dailyReport(data: {
+      email: string; name?: string; wins: number; losses: number;
+      winRate: number; banca?: number; drawdown?: number; bestAsset?: string;
+    }) {
+      return request<{ ok: boolean }>("/email/daily-report", { method: "POST", body: JSON.stringify(data) });
+    },
+    alert(data: {
+      email: string; name?: string; type: "meta" | "stop"; value: number; wins: number; losses: number;
+    }) {
+      return request<{ ok: boolean }>("/email/alert", { method: "POST", body: JSON.stringify(data) });
+    },
+  },
+
+  leaderboard: {
+    get(period: "7d" | "30d" | "all" = "30d") {
+      return request<any[]>(`/leaderboard?period=${period}`);
+    },
   },
 };

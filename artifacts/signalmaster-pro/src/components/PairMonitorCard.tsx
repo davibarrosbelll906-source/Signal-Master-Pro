@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, CheckCheck, X } from "lucide-react";
+import { Copy, CheckCheck, X, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import {
   ASSET_CATEGORIES,
   runEngine, runEngineDiag,
-  playSignalSound, vibrate, updateMLWeights,
+  playSignalSound, vibrate, updateMLWeights, explainSignal,
   type CandleBuffer, type SignalResult
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
@@ -49,6 +49,7 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
   const [lastRunMin, setLastRunMin] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const fireMinuteRef = useRef<number>(-1);
@@ -316,6 +317,46 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
                 <div className="h-full rounded-full bg-gradient-to-r from-[var(--green)] to-[var(--blue)]"
                   style={{ width: `${pendingSignal.score}%` }} />
               </div>
+
+              {/* Por que este sinal? */}
+              <button
+                onClick={() => setShowExplain(v => !v)}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/3 hover:bg-white/6 border border-white/8 transition-all text-[10px] text-gray-500 hover:text-gray-300"
+              >
+                <span className="flex items-center gap-1 font-bold">
+                  <HelpCircle size={10} /> Por que este sinal?
+                </span>
+                {showExplain ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              </button>
+
+              <AnimatePresence>
+                {showExplain && (() => {
+                  const exp = explainSignal(pendingSignal);
+                  return (
+                    <motion.div
+                      key="explain"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-2 pb-1">
+                        <p className="text-[10px] text-gray-400 leading-relaxed">{exp.summary}</p>
+                        <div className="space-y-1">
+                          {exp.bullets.map((b, i) => (
+                            <div key={i} className="text-[10px] text-gray-500 leading-snug pl-1">{b}</div>
+                          ))}
+                        </div>
+                        {exp.warning && (
+                          <div className="mt-1 px-2 py-1.5 rounded-lg bg-orange-500/8 border border-orange-500/20 text-[10px] text-orange-400 leading-snug">
+                            {exp.warning}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
 
               {/* WIN/LOSS buttons */}
               <div className="grid grid-cols-2 gap-2">
