@@ -1,0 +1,161 @@
+Nova Estratégia Correta (2026)
+Vamos mudar completamente a abordagem:
+Luna NÃO vai validar o sinal.
+Luna vai apenas EXPLICAR e AUMENTAR o contexto educacional.
+O motor continua sendo 100% quantitativo e determinístico (mais forte e assertivo).
+A Luna entra depois do sinal ser gerado, só para ensinar o usuário.
+Objetivo Real para Aumentar Assertividade
+Focar em melhorar o motor matemático + adicionar camadas inteligentes que ainda não existem na maioria dos sinalizadores.
+Aqui está a estrutura revisada e corrigida do signalEngine.ts (backend):
+TypeScript// artifacts/api-server/src/lib/signalEngine.ts
+import { Server } from 'socket.io';
+import { assetDataManager } from './assetDataManager';
+import { lunaAgent } from './lunaAgent';   // só para explicação
+
+export class SignalEngine {
+  private io: Server;
+  private buffers: Map<string, any[]> = new Map();
+  private lastSignalTime: Map<string, number> = new Map();
+
+  constructor(io: Server) {
+    this.io = io;
+    this.startEngine();
+  }
+
+  private startEngine() {
+    setInterval(() => this.generateSignals(), 1000);
+  }
+
+  private async generateSignals() {
+    const now = new Date();
+    if (now.getSeconds() !== 48) return;
+
+    const activePairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSDT', 'ETHUSDT', /* seus pares */];
+
+    for (const pair of activePairs) {
+      const candles = this.buffers.get(pair) || [];
+      if (candles.length < 80) continue;
+
+      const timeframe = this.getTimeframe(now.getMinutes());
+
+      // ==================== NOVA LÓGICA DE SCORE (mais assertiva) ====================
+      const analysis = this.runFullQuantitativeAnalysis(candles, pair, timeframe);
+
+      if (analysis.finalScore < 68) continue;                    // filtro mínimo mais alto
+      if (!this.isValidConfluence(analysis)) continue;           // exige confluência real
+      if (this.isTooFrequent(pair)) continue;
+
+      const signal = {
+        id: Date.now().toString(),
+        pair,
+        direction: analysis.direction,
+        score: Math.round(analysis.finalScore),
+        tier: this.getTier(analysis.finalScore),
+        timeframe,
+        expiry: this.suggestExpiry(timeframe),
+        reason: analysis.mainReason,           // motivo claro e humano
+        indicators: analysis.keyIndicators,    // dados dos indicadores principais
+        timestamp: now.toISOString(),
+        session: this.getCurrentSession(now),
+        confidence: analysis.confidence        // confiança matemática real
+      };
+
+      // Envia o sinal imediatamente (sem latência da Luna)
+      this.io.emit('new_signal', signal);
+
+      // Luna só entra DEPOIS para explicar (não valida)
+      this.sendLunaEducationalExplanation(signal, analysis);
+
+      this.lastSignalTime.set(pair, Date.now());
+    }
+  }
+
+  // ==================== ANÁLISE QUANTITATIVA FORTE (melhorada) ====================
+  private runFullQuantitativeAnalysis(candles: any[], pair: string, timeframe: string) {
+    // Aqui você coloca toda sua lógica atual (RSI, ADX, EMA, ATR, padrões de vela, divergência, squeeze, entropia, etc.)
+
+    const rsi = this.calculateRSI(candles);
+    const adx = this.calculateADX(candles);
+    const emaTrend = this.calculateEMATrend(candles);
+    const atr = this.calculateATR(candles);
+    const candlePattern = this.detectCandlePattern(candles);
+    const bollingerSqueeze = this.detectBollingerSqueeze(candles);
+    const divergence = this.detectRSIDivergence(candles);
+
+    // Nova pontuação ponderada e inteligente
+    let score = 40;
+
+    score += emaTrend.strength * 22;
+    score += (rsi.strength * 18);
+    score += (adx.trendStrength * 15);
+    score += (candlePattern.score * 12);
+    score += bollingerSqueeze ? 14 : 0;
+    score += divergence ? 10 : 0;
+
+    // Penalidades fortes
+    if (atr < 0.0006 || atr > 0.009) score -= 25;
+    if (adx.trendStrength < 18) score -= 12;        // mercado sem direção clara
+
+    const finalScore = Math.min(98, Math.max(40, score));
+
+    return {
+      finalScore,
+      direction: finalScore > 73 ? 'CALL' : 'PUT',
+      confidence: Math.round(finalScore * 0.95),     // confiança matemática
+      mainReason: this.generateHumanReason({ rsi, adx, emaTrend, candlePattern, bollingerSqueeze }),
+      keyIndicators: { rsi: rsi.value, adx: adx.value, emaTrend: emaTrend.direction, atr }
+    };
+  }
+
+  private isValidConfluence(analysis: any): boolean {
+    // Exige pelo menos 3 fatores fortes concordando
+    let confluences = 0;
+    if (analysis.emaTrend.strength > 0.7) confluences++;
+    if (analysis.rsi.strength > 0.65) confluences++;
+    if (analysis.adx.trendStrength > 22) confluences++;
+    if (analysis.bollingerSqueeze) confluences++;
+    return confluences >= 3;
+  }
+
+  // ==================== LUNA SÓ PARA EDUCAÇÃO ====================
+  private async sendLunaEducationalExplanation(signal: any, analysis: any) {
+    try {
+      const explanation = await lunaAgent.invoke({
+        messages: [{
+          role: "user",
+          content: `
+            Explique este sinal de forma clara e educativa para o usuário aprender:
+            Par: ${signal.pair} | Direção: ${signal.direction} | Score: ${signal.score}
+            Motivo principal: ${signal.reason}
+            
+            Use linguagem simples em português. Foque em:
+            - O que está acontecendo no gráfico
+            - Por que o sinal tem alta probabilidade
+            - O que o usuário deve observar para confirmar
+            - Risco principal
+          `
+        }]
+      });
+
+      this.io.emit('luna_signal_explanation', {
+        signalId: signal.id,
+        explanation: explanation.content
+      });
+    } catch (e) {
+      console.error('Luna explanation error', e);
+    }
+  }
+
+  // Métodos auxiliares (getTier, suggestExpiry, getTimeframe, etc.) continuam iguais
+}
+
+export let signalEngine: SignalEngine;
+export const initSignalEngine = (io: Server) => {
+  signalEngine = new SignalEngine(io);
+};
+Resumo das Mudanças
+
+Motor continua 100% quantitativo e mais forte (confluência obrigatória).
+Luna não valida, só explica (zero risco de rejeitar sinal bom).
+Assertividade sobe porque o motor ficou mais seletivo e exigente.
+Usuário ganha explicação educativa clara depois do sinal aparecer.
