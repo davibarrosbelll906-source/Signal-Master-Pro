@@ -19,8 +19,14 @@ if (Number.isNaN(port) || port <= 0) {
 
 const httpServer = createServer(app);
 
+const socketOrigins: (string | RegExp)[] = [/^http:\/\/localhost(:\d+)?$/];
+const replitDev = process.env["REPLIT_DEV_DOMAIN"];
+if (replitDev) socketOrigins.push(`https://${replitDev}`);
+const prodDomain = process.env["PRODUCTION_DOMAIN"];
+if (prodDomain) socketOrigins.push(`https://${prodDomain}`);
+
 const io = new IOServer(httpServer, {
-  cors: { origin: true, credentials: true },
+  cors: { origin: socketOrigins, credentials: true },
   transports: ['websocket', 'polling'],
 });
 

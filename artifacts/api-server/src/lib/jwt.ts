@@ -1,7 +1,17 @@
 import jwt from "jsonwebtoken";
 
-const SECRET = process.env.SESSION_SECRET || "smp7-dev-secret-change-in-prod";
-const ACCESS_EXPIRES = "8h";
+const ACCESS_SECRET =
+  process.env.SESSION_SECRET || "smp7-access-dev-secret-change-in-prod";
+
+const REFRESH_SECRET =
+  process.env.REFRESH_SECRET ||
+  process.env.SESSION_SECRET ||
+  "smp7-refresh-dev-secret-change-in-prod";
+
+// Access token curto — se vazar, expira rápido
+const ACCESS_EXPIRES = "15m";
+
+// Refresh token longo — usado apenas para emitir novo access token
 const REFRESH_EXPIRES = "30d";
 
 export interface TokenPayload {
@@ -12,13 +22,22 @@ export interface TokenPayload {
 }
 
 export function signAccess(payload: TokenPayload): string {
-  return jwt.sign(payload, SECRET, { expiresIn: ACCESS_EXPIRES });
+  return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
 }
 
 export function signRefresh(payload: TokenPayload): string {
-  return jwt.sign(payload, SECRET, { expiresIn: REFRESH_EXPIRES });
+  return jwt.sign(payload, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
 }
 
 export function verifyToken(token: string): TokenPayload {
-  return jwt.verify(token, SECRET) as TokenPayload;
+  // Tenta access secret primeiro, depois refresh secret
+  try {
+    return jwt.verify(token, ACCESS_SECRET) as TokenPayload;
+  } catch {
+    return jwt.verify(token, REFRESH_SECRET) as TokenPayload;
+  }
+}
+
+export function verifyRefresh(token: string): TokenPayload {
+  return jwt.verify(token, REFRESH_SECRET) as TokenPayload;
 }

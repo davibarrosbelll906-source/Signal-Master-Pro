@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { signAccess, signRefresh, verifyToken } from "../lib/jwt.js";
+import { signAccess, signRefresh, verifyRefresh } from "../lib/jwt.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { z } from "zod";
 
@@ -46,11 +46,11 @@ router.post("/refresh", (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) { res.status(400).json({ error: "refreshToken obrigatório" }); return; }
   try {
-    const payload = verifyToken(refreshToken);
+    const payload = verifyRefresh(refreshToken);
     const newPayload = { sub: payload.sub, username: payload.username, role: payload.role, plan: payload.plan };
     res.json({ accessToken: signAccess(newPayload) });
   } catch {
-    res.status(401).json({ error: "Refresh token inválido" });
+    res.status(401).json({ error: "Refresh token inválido ou expirado" });
   }
 });
 
