@@ -44,3 +44,22 @@ httpServer.listen(port, async (err?: Error) => {
   }
   initSignalEngine(io);
 });
+
+// Graceful shutdown — fecha conexões limpas ao receber SIGTERM (deploy, restart)
+function shutdown(signal: string) {
+  logger.info({ signal }, "Sinal recebido, encerrando servidor...");
+  io.close(() => {
+    httpServer.close(() => {
+      logger.info("Servidor encerrado com sucesso");
+      process.exit(0);
+    });
+  });
+  // Força saída após 10s se as conexões não fecharem
+  setTimeout(() => {
+    logger.warn("Timeout no shutdown, forçando saída");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

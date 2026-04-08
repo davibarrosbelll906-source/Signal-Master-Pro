@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
@@ -91,5 +91,27 @@ const authLimiter = rateLimit({
 app.use("/api", limiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api", router);
+
+// 404 — rota não encontrada
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ error: "Rota não encontrada" });
+});
+
+// Handler global de erros — captura qualquer erro não tratado nas rotas
+// Em produção: não vaza stack trace; em dev: inclui detalhes para debug
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const isProd = process.env["NODE_ENV"] === "production";
+
+  if (err instanceof Error) {
+    logger.error({ err }, "Unhandled error");
+    res.status(500).json({
+      error: isProd ? "Erro interno do servidor" : err.message,
+      ...(isProd ? {} : { stack: err.stack }),
+    });
+  } else {
+    logger.error({ err }, "Unknown error");
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
 
 export default app;
