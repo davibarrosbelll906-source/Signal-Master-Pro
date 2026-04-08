@@ -1,8 +1,9 @@
 import { create } from 'zustand';
+import { clearTokens } from './apiClient';
 
 export interface User {
+  id?: number;
   user: string;
-  pass: string;
   role: 'admin' | 'gerente' | 'suporte' | 'analista' | 'financeiro' | 'moderador' | 'user';
   plan: 'basico' | 'pro' | 'premium';
   name?: string;
@@ -17,22 +18,26 @@ export interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  currentUser: null,
-  setCurrentUser: (user) => set({ currentUser: user }),
-  logout: () => set({ currentUser: null }),
+  currentUser: (() => {
+    try {
+      const saved = localStorage.getItem('smpCurrentUser7');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  })(),
+  setCurrentUser: (user) => {
+    if (user) {
+      localStorage.setItem('smpCurrentUser7', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('smpCurrentUser7');
+    }
+    set({ currentUser: user });
+  },
+  logout: () => {
+    clearTokens();
+    localStorage.removeItem('smpCurrentUser7');
+    set({ currentUser: null });
+  },
 }));
 
-export const initStore = () => {
-  const defaultUsers: User[] = [
-    { user: 'admin', pass: 'admin123', role: 'admin', plan: 'premium' },
-    { user: 'gerente', pass: 'ger123', role: 'gerente', plan: 'premium' },
-    { user: 'suporte', pass: 'sup123', role: 'suporte', plan: 'pro' },
-    { user: 'analista', pass: 'ana123', role: 'analista', plan: 'pro' },
-    { user: 'financeiro', pass: 'fin123', role: 'financeiro', plan: 'premium' },
-    { user: 'moderador', pass: 'mod123', role: 'moderador', plan: 'basico' }
-  ];
-
-  if (!localStorage.getItem('smpU7')) {
-    localStorage.setItem('smpU7', JSON.stringify(defaultUsers));
-  }
-};
+/** Mantido para compatibilidade — não armazena mais senhas em texto claro */
+export const initStore = () => {};

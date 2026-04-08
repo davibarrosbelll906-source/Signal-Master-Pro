@@ -274,7 +274,16 @@ export default function SignalsPage() {
   };
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto">
+    <div className="space-y-4 max-w-7xl mx-auto relative">
+
+      {/* DEMO watermark overlay */}
+      {!isReal && (
+        <div className="pointer-events-none fixed inset-0 z-10 flex items-center justify-center overflow-hidden" style={{ top: 0, left: 240 }}>
+          <div className="text-[120px] font-black text-blue-500/[0.04] select-none rotate-[-30deg] tracking-widest whitespace-nowrap">
+            DEMO DEMO DEMO
+          </div>
+        </div>
+      )}
 
       {/* STATUS BAR */}
       <div className="glass-card p-3 flex flex-wrap items-center justify-between gap-3 text-sm">

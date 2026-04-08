@@ -26,6 +26,33 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+## Security Architecture (Updated)
+
+### Authentication
+- **Backend JWT auth**: `POST /api/auth/login` returns `accessToken` (8h) + `refreshToken` (30d)
+- **bcrypt**: All passwords hashed with cost factor 12 (never stored in plaintext)
+- **Rate limiting**: 200 req/15min global, 20 req/15min on `/api/auth/login`
+- **Auth middleware**: `requireAuth` verifies JWT on all protected routes
+- **Frontend**: `apiClient.ts` auto-injects Bearer token + handles refresh + redirects on 401
+- **Store**: No more plaintext passwords in localStorage — only JWT tokens
+
+### Database (PostgreSQL + Drizzle)
+- Tables: `smp_users`, `smp_trades` (schema in `lib/db/src/schema/`)
+- Seed: 6 default users created on server startup via `bcrypt.hash(password, 12)`
+- Push schema: `pnpm --filter @workspace/db run push`
+
+### API Routes
+- `POST /api/auth/login` — login, returns JWT pair
+- `POST /api/auth/refresh` — refresh access token
+- `GET /api/auth/me` — get current user (requires auth)
+- `GET /api/trades` — list trades for user (requires auth)
+- `POST /api/trades` — record a trade (requires auth)
+- `DELETE /api/trades/today` — clear today's trades
+- `DELETE /api/trades/all` — clear all trades
+
+### localStorage (UI-only, non-sensitive)
+Keys kept: `smpMode7`, `smpBroker7`, `smpMgmt7`, `smpTheme`, `smpTimeframe`, `smpWatchedPairs`, `smpPin7`, `smpPinEnabled7`, `smpCurrentUser7` (non-sensitive user object), `smpJwt7`, `smpRefresh7`
+
 ## SignalMaster Pro v7 Ultimate
 
 A full-featured, premium trading signals platform for binary options (Forex, Crypto, Commodities). Accessible at `/` preview path.

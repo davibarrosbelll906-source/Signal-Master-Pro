@@ -280,6 +280,18 @@ export default function ManagementPanel({ wins, losses, onResult }: Props) {
           </div>
         )}
 
+        {/* Mode-specific guidance */}
+        <div className={`mx-4 mb-2 px-3 py-2 rounded-xl border text-[10px] leading-relaxed ${
+          isReal
+            ? 'bg-red-500/5 border-red-500/15 text-red-300/70'
+            : 'bg-blue-500/5 border-blue-500/15 text-blue-300/70'
+        }`}>
+          {isReal
+            ? '⚠️ Conta REAL ativa. Certifique-se de que sua banca, meta e stop-loss estão configurados antes de operar. Nunca opere sob pressão emocional.'
+            : '🔵 Conta DEMO ativa. Use para treinar sua disciplina e testar estratégias sem risco. Mude para REAL na sidebar quando estiver pronto.'
+          }
+        </div>
+
         {/* Config fields (collapsible) */}
         <AnimatePresence>
           {editing && (
