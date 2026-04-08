@@ -1,0 +1,43 @@
+Escolhi ideias que não são comuns na maioria dos sinalizadores de opções binárias/forex em 2026.
+1. Multi-Timeframe Confluence Obrigatória (a mais recomendada agora)
+
+O sinal M5 só é liberado se M1 + M15 também estiverem na mesma direção.
+Se os 3 timeframes concordarem → +18 pontos de score.
+Se apenas 2 concordarem → sinal normal.
+Se divergirem → sinal bloqueado.
+Impacto: Reduz fakeouts em ~30-40% (muito comum em M1).
+
+2. Adaptive Performance Memory (o motor “aprende sozinho”)
+
+O sistema guarda o Win Rate real dos últimos 30-60 sinais de cada par + sessão + timeframe.
+Exemplo: EURUSD na London tem 78% WR nos últimos 30 dias → ganha +12 pontos automáticos.
+GBPUSD na Ásia tem só 51% WR → perde 15-20 pontos.
+Atualiza a cada hora (ou após 10 operações).
+Impacto: O motor fica mais inteligente com o tempo sem usar LLM.
+
+3. Market Regime Detector (Trending × Ranging)
+
+Usa ADX + Entropy + Bollinger Squeeze para detectar se o mercado está:
+Strong Trend → favorece sinais de continuação
+Ranging / Chop → bloqueia quase todos os sinais ou só libera reversões fortes
+
+Em mercado ranging (ADX < 20) o score cai 25-30 pontos.
+Impacto: Evita operar em mercado sem direção (principal causa de perda).
+
+4. Fakeout / Trap Protection
+
+Detecta padrões clássicos de armadilha (false breakout, wick longo contra a tendência, divergência oculta).
+Se detectar possível fakeout → sinal é bloqueado ou recebe penalidade forte (-22 pontos).
+Usa combinação de wick size + volume + RSI divergence.
+
+5. “Golden Window” Signals (sinais raros mas com assertividade altíssima)
+
+Quando todos os indicadores estiverem alinhados + Market Regime forte + Multi-Timeframe OK + Performance Memory alta.
+Esses sinais recebem tier ULTRA (novo tier) e score ≥ 94.
+O app pode tocar um som diferente ou destacar com borda dourada.
+Impacto: Usuário aprende a esperar os sinais realmente excepcionais.
+
+6. Correlation & News Filter (filtro externo)
+
+Evita operar pares altamente correlacionados ao mesmo tempo (ex: EURUSD + GBPUSD).
+Integra um calendário econômico simples (API gratuita) e pausa sinais 15 minutos antes/depois de notícias de alto impacto (NFP, CPI, taxa de juros).
