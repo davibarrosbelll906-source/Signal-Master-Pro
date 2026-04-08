@@ -15,7 +15,7 @@ import {
 } from "@/lib/signalEngine";
 import { subscribeAsset } from "@/lib/assetDataManager";
 import { useAccountMode } from "@/lib/useAccountMode";
-import { useSignalStore, type LunaExplanation } from "@/lib/signalStore";
+import { useSignalStore, type LunaExplanation, type NewsBlackout } from "@/lib/signalStore";
 const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
 const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
 const COMMODITY_ASSETS = ['XAUUSD', 'XAGUSD', 'USOIL'];
@@ -28,6 +28,7 @@ const ASSET_ICONS: Record<string, string> = {
 };
 
 const QUALITY_COLORS: Record<string, string> = {
+  ULTRA:   'text-amber-200 border-amber-400/60 bg-gradient-to-r from-amber-500/25 via-yellow-300/15 to-amber-500/25 shadow-[0_0_12px_rgba(251,191,36,0.4)]',
   ELITE:   'text-white border-white/40 bg-gradient-to-r from-yellow-400/20 via-white/10 to-yellow-400/20',
   PREMIUM: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
   FORTE:   'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/10',
@@ -74,6 +75,8 @@ export default function SignalsPage() {
   const [lunaExplanation, setLunaExplanation] = useState<LunaExplanation | null>(null);
   const [lunaLoading, setLunaLoading] = useState(false);
   const lunaExplanations = useSignalStore((s) => s.lunaExplanations);
+  const newsBlackouts = useSignalStore((s) => s.newsBlackouts);
+  const activeNewsBlackout: NewsBlackout | null = newsBlackouts[asset] ?? null;
 
   const MAX_PAIRS = 5;
   const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
@@ -247,7 +250,7 @@ export default function SignalsPage() {
             lastFiredByPairRef.current.set(asset, Date.now());
             setSignal(result);
             setPendingSignal(result);
-            const soundType = result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte';
+            const soundType = result.quality === 'ULTRA' ? 'ultra' : result.quality === 'ELITE' || result.quality === 'PREMIUM' ? 'premium' : category === 'crypto' ? 'crypto' : 'forte';
             playSignalSound(soundType);
             vibrate('forte');
             setEngineStatus(`sinal ${result.quality} ${timeframe} emitido — marque WIN ou LOSS`);
@@ -347,6 +350,16 @@ export default function SignalsPage() {
             <Cpu size={12} className="text-gray-500" />
             <span className="text-gray-400 text-xs">{engineStatus}</span>
           </div>
+          {/* News blackout warning */}
+          {activeNewsBlackout && (Date.now() - activeNewsBlackout.at < 900_000) && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20">
+              <span className="text-red-400 text-[10px]">📰</span>
+              <span className="text-red-400 text-[10px] font-bold">
+                {activeNewsBlackout.event.length > 20 ? activeNewsBlackout.event.slice(0, 20) + '…' : activeNewsBlackout.event}
+                {activeNewsBlackout.minutesUntil > 0 ? ` em ${activeNewsBlackout.minutesUntil}min` : ' agora'}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500">
           {/* Mode badge */}
@@ -848,11 +861,20 @@ export default function SignalsPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={`glass-card p-6 relative overflow-hidden border ${
-                  signal.direction === 'CALL' ? 'border-[var(--green)]/20 shadow-[0_0_30px_rgba(0,255,136,0.07)]' : 'border-[var(--red)]/20 shadow-[0_0_30px_rgba(255,68,102,0.07)]'
+                  signal.quality === 'ULTRA'
+                    ? 'border-amber-400/50 shadow-[0_0_40px_rgba(251,191,36,0.18),0_0_80px_rgba(251,191,36,0.06)]'
+                    : signal.direction === 'CALL' ? 'border-[var(--green)]/20 shadow-[0_0_30px_rgba(0,255,136,0.07)]' : 'border-[var(--red)]/20 shadow-[0_0_30px_rgba(255,68,102,0.07)]'
                 }`}
               >
+                {/* ULTRA golden shimmer overlay */}
+                {signal.quality === 'ULTRA' && (
+                  <div className="absolute inset-0 pointer-events-none rounded-2xl overflow-hidden">
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent animate-pulse" />
+                    <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent animate-pulse" />
+                  </div>
+                )}
                 {/* Glow bg */}
-                <div className={`absolute -top-8 -right-8 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none ${signal.direction === 'CALL' ? 'bg-[var(--green)]' : 'bg-[var(--red)]'}`} />
+                <div className={`absolute -top-8 -right-8 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none ${signal.quality === 'ULTRA' ? 'bg-amber-400' : signal.direction === 'CALL' ? 'bg-[var(--green)]' : 'bg-[var(--red)]'}`} />
 
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -864,8 +886,8 @@ export default function SignalsPage() {
                       <div className="text-xs text-gray-500">{sessLabels[signal.sess] || signal.sess}</div>
                     </div>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-bold border ${QUALITY_COLORS[signal.quality] || ''}`}>
-                    {signal.quality === 'ELITE' ? '👑' : signal.quality === 'PREMIUM' ? '💎' : signal.quality === 'FORTE' ? '🟢' : '🟡'} {signal.quality}
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold border ${QUALITY_COLORS[signal.quality] || ''} ${signal.quality === 'ULTRA' ? 'animate-pulse' : ''}`}>
+                    {signal.quality === 'ULTRA' ? '⚡' : signal.quality === 'ELITE' ? '👑' : signal.quality === 'PREMIUM' ? '💎' : signal.quality === 'FORTE' ? '🟢' : '🟡'} {signal.quality}
                   </div>
                   {/* Market Regime Badge */}
                   {signal.marketRegime && (() => {

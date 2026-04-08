@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export interface BackendSignal {
   direction: 'CALL' | 'PUT';
   score: number;
-  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE';
+  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE' | 'ULTRA';
   marketRegime: 'TRENDING' | 'RANGING' | 'CHOPPY';
   adx: number;
   rsi: number;
@@ -36,21 +36,31 @@ export interface LunaExplanation {
   riskNote: string;
 }
 
+export interface NewsBlackout {
+  asset: string;
+  event: string;
+  minutesUntil: number;
+  at: number; // timestamp when received
+}
+
 interface SignalState {
   signals: Record<string, BackendSignal>;
   prices: Record<string, PriceUpdate>;
   lunaExplanations: Record<string, LunaExplanation>;
+  newsBlackouts: Record<string, NewsBlackout>;
   socketConnected: boolean;
   setSignal: (signal: BackendSignal) => void;
   setPrice: (update: PriceUpdate) => void;
   setConnected: (connected: boolean) => void;
   setLunaExplanation: (explanation: LunaExplanation) => void;
+  setNewsBlackout: (blackout: NewsBlackout) => void;
 }
 
 export const useSignalStore = create<SignalState>((set) => ({
   signals: {},
   prices: {},
   lunaExplanations: {},
+  newsBlackouts: {},
   socketConnected: false,
   setSignal: (signal) =>
     set((s) => ({ signals: { ...s.signals, [signal.asset]: signal } })),
@@ -62,6 +72,13 @@ export const useSignalStore = create<SignalState>((set) => ({
       lunaExplanations: {
         ...s.lunaExplanations,
         [explanation.asset]: explanation,
+      },
+    })),
+  setNewsBlackout: (blackout) =>
+    set((s) => ({
+      newsBlackouts: {
+        ...s.newsBlackouts,
+        [blackout.asset]: blackout,
       },
     })),
 }));

@@ -8,6 +8,7 @@ import type { Server as IOServer } from 'socket.io';
 import { getBuffer, onBufferUpdate, initAllAssets } from './assetDataManager.js';
 import { runEngine, ASSET_CATEGORIES, type SignalResult } from './signalEngine.js';
 import { generateLunaExplanation } from './lunaExplainer.js';
+import { initNewsFilter, checkNewsBlackoutSync } from './newsFilter.js';
 
 const ALL_ASSETS = [
   'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD',
@@ -34,6 +35,9 @@ export function initSignalEngine(io: IOServer) {
   // Start data feeds
   initAllAssets(ALL_ASSETS);
 
+  // Initialize economic news calendar filter
+  initNewsFilter();
+
   // Broadcast price ticks to connected clients
   onBufferUpdate((asset, buf) => {
     io.emit('price_update', {
@@ -54,6 +58,16 @@ export function initSignalEngine(io: IOServer) {
       const buf = getBuffer(asset);
       if (!buf || buf.m1.length < 30) continue;
       if (shouldThrottle(asset)) continue;
+
+      // News blackout: skip if within 15 min of high-impact event
+      const newsCheck = checkNewsBlackoutSync(asset);
+      if (newsCheck.active) {
+        const dir = newsCheck.minutesUntil && newsCheck.minutesUntil > 0 ? 'em' : 'há';
+        const mins = Math.abs(newsCheck.minutesUntil ?? 0);
+        console.log(`[NewsFilter] ${asset} bloqueado — ${newsCheck.eventTitle} ${dir} ${mins}min`);
+        io.emit('news_blackout', { asset, event: newsCheck.eventTitle, minutesUntil: newsCheck.minutesUntil });
+        continue;
+      }
 
       try {
         const result = runEngine(buf.m1, asset);

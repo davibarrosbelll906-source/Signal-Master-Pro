@@ -43,7 +43,7 @@ export type MarketRegime = 'TRENDING' | 'RANGING' | 'CHOPPY';
 export interface SignalResult {
   direction: 'CALL' | 'PUT';
   score: number;
-  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE';
+  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE' | 'ULTRA';
   marketRegime: MarketRegime;
   adx: number;
   rsi: number;
@@ -540,7 +540,8 @@ export function runEngine(m1: Candle[], asset: string): SignalResult | null {
   const score = Math.round(rawScore * 100);
 
   let quality: SignalResult['quality'] = 'EVITAR';
-  if (score >= 92) quality = 'ELITE';
+  if (score >= 94) quality = 'ULTRA';
+  else if (score >= 88) quality = 'ELITE';
   else if (score >= 83) quality = 'PREMIUM';
   else if (score >= 74) quality = 'FORTE';
   else if (score >= 68) quality = 'MÉDIO';

@@ -51,7 +51,7 @@ export type MarketRegime = 'TRENDING' | 'RANGING' | 'CHOPPY';
 export interface SignalResult {
   direction: 'CALL' | 'PUT';
   score: number;
-  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE';
+  quality: 'EVITAR' | 'FRACO' | 'MÉDIO' | 'FORTE' | 'PREMIUM' | 'ELITE' | 'ULTRA';
   marketRegime: MarketRegime;
   adx: number;
   rsi: number;
@@ -689,9 +689,10 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   // — Market Regime —
   const marketRegime = detectMarketRegime(highs, lows, closes);
 
-  // — Quality (5 levels: FRACO → ELITE) —
+  // — Quality (7 levels: FRACO → ULTRA) —
   let quality: SignalResult['quality'] = 'EVITAR';
-  if (score >= 92) quality = 'ELITE';
+  if (score >= 94) quality = 'ULTRA';
+  else if (score >= 88) quality = 'ELITE';
   else if (score >= 83) quality = 'PREMIUM';
   else if (score >= 74) quality = 'FORTE';
   else if (score >= 68) quality = 'MÉDIO';
@@ -705,7 +706,7 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const forteOnly = cfg.forteOnly ?? true;
 
   if (score < minScore) return null;
-  if (forteOnly && quality !== 'FORTE' && quality !== 'PREMIUM') return null;
+  if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) return null;
   if (quality === 'EVITAR') return null;
   if (adx < 18) return null;
 
@@ -905,7 +906,9 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   const score = Math.round(rawScore * 100);
 
   let quality = 'EVITAR';
-  if (score >= 82) quality = 'PREMIUM';
+  if (score >= 94) quality = 'ULTRA';
+  else if (score >= 88) quality = 'ELITE';
+  else if (score >= 83) quality = 'PREMIUM';
   else if (score >= 74) quality = 'FORTE';
   else if (score >= 68) quality = 'MÉDIO';
   else if (score >= 62) quality = 'FRACO';
@@ -958,7 +961,7 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
   else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
   else if (score < minScore) blockedBy = `Score abaixo do mínimo (${score}% < ${minScore}%)`;
-  else if (forteOnly && quality !== 'FORTE' && quality !== 'PREMIUM') blockedBy = `Qualidade ${quality} bloqueada — "Apenas FORTE+" ativo`;
+  else if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) blockedBy = `Qualidade ${quality} bloqueada — "Apenas FORTE+" ativo`;
 
   return {
     direction, score, quality,
@@ -1053,6 +1056,8 @@ function _doPlaySound(ctx: AudioContext, type: string) {
     forte:   [[440, 0.00, 0.18], [550, 0.18, 0.18], [660, 0.36, 0.28]],
     premium: [[440, 0.00, 0.14], [550, 0.14, 0.14], [660, 0.28, 0.14], [880, 0.42, 0.40], [1100, 0.60, 0.35]],
     crypto:  [[880, 0.00, 0.12], [1100, 0.12, 0.12], [1320, 0.24, 0.30]],
+    // ULTRA: fanfara especial ascendente — 7 notas, som épico e único
+    ultra:   [[330, 0.00, 0.10], [415, 0.10, 0.10], [523, 0.20, 0.10], [659, 0.30, 0.12], [784, 0.42, 0.14], [988, 0.56, 0.20], [1319, 0.72, 0.55]],
     win:     [[523, 0.00, 0.14], [659, 0.14, 0.14], [784, 0.28, 0.30]],
     loss:    [[400, 0.00, 0.16], [350, 0.18, 0.16], [300, 0.36, 0.28]],
     alert:   [[880, 0.00, 0.12], [880, 0.18, 0.12]],

@@ -4,7 +4,7 @@
  */
 
 import { io } from 'socket.io-client';
-import { useSignalStore, type LunaExplanation } from './signalStore';
+import { useSignalStore, type LunaExplanation, type NewsBlackout } from './signalStore';
 
 const BASE_URL = import.meta.env.BASE_URL || '/';
 
@@ -35,6 +35,10 @@ socket.on('price_update', (update) => {
 
 socket.on('luna_signal_explanation', (explanation: LunaExplanation) => {
   useSignalStore.getState().setLunaExplanation(explanation);
+});
+
+socket.on('news_blackout', (blackout: Omit<NewsBlackout, 'at'>) => {
+  useSignalStore.getState().setNewsBlackout({ ...blackout, at: Date.now() });
 });
 
 export default socket;
