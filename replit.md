@@ -136,6 +136,17 @@ A full-featured, premium trading signals platform for binary options (Forex, Cry
 - **E-mail**: Resend daily-report + alertas meta/stop via `/api/email/`
 - **Stripe Assinaturas**: 3 planos (Básico grátis, PRO R$49,90, PREMIUM R$99,90), checkout, webhooks; PlansPage em `/dashboard/plans`
 
+### Luna Oracle Engine v7.4
+- **Architecture**: 4-layer hybrid signal pipeline: Quant Filter → MTF Gate → Regime Gate → Luna Oracle Gate
+- **Oracle flow**: After quant passes (score >= 74), Oracle (`askLunaOracle()` in `lunaOracle.ts`) calls Claude Haiku with full signal context. Returns `{approved, confidence, scoreBoost, reason}`.
+- **Oracle decision**: BLOCK signal if RSI extreme (>75 CALL or <25 PUT), Entropy >78%, Consensus <3/5, or ADX weak in non-TRENDING regime. APPROVE + BOOST when RSI ideal + ADX strong + high confluence.
+- **Parallelism**: All 19 assets processed in parallel via `Promise.allSettled`. Oracle calls concurrent per minute.
+- **Safety**: 9-second timeout per Oracle call. Oracle down → auto-approve (never blocks by failure). 3-min cooldown per pair (avoids redundant API calls).
+- **Pre-emit**: Signal emitted as `oraclePending: true` instantly for fast UI, then updated with Oracle verdict.
+- **Frontend**: Oracle badge `ShieldCheck` purple on approved signals. `oraclePending` spinner animation while Oracle evaluates. Card border glows purple when Oracle-approved.
+- **Entropy exemption**: TRENDING + ADX >= 22 → entropy not a hard block (only penalty). High-entropy ranging markets still blocked.
+- **Proven results**: Oracle correctly blocked SOLUSD RSI=82, XRPUSD RSI=83, ADAUSD RSI=88 (all dangerous binary overbought). Approved USOIL 91%.
+
 ### Signal Quality Engine v7.3 (3 High-Impact Solutions)
 - **Solução 1 — MTF Confluence Gate**: EMA M1/M5/M15 alignment scoring: +7% when all 3 agree, +3% for 2/3, -16% for full conflict (all 3 disagree → hard block). Frontend: hard block on full conflict.
 - **Solução 2 — Market Regime Detector**: `detectMarketRegime()` now active in scoring pipeline. TRENDING: +6% bonus. RANGING: -8% penalty. CHOPPY: hard block (no signal). Backend blockedBy messages updated.

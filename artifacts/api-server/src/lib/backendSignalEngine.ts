@@ -10,6 +10,7 @@ import { getBuffer, onBufferUpdate, initAllAssets } from './assetDataManager.js'
 import { runEngine, ASSET_CATEGORIES, type SignalResult } from './signalEngine.js';
 import { generateLunaExplanation } from './lunaExplainer.js';
 import { initNewsFilter, checkNewsBlackoutSync } from './newsFilter.js';
+import { askLunaOracle, ORACLE_MIN_SCORE } from './lunaOracle.js';
 
 const ALL_ASSETS = [
   'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD',
@@ -140,6 +141,125 @@ export function initSignalEngine(io: IOServer) {
     });
   });
 
+  // ── Async processor: quant + Oracle (parallel per asset) ─────────────────
+  async function processAsset(asset: string, tf: string): Promise<void> {
+    const buf = getBuffer(asset);
+    if (!buf || buf.m1.length < 30) return;
+    if (shouldThrottle(asset)) return;
+
+    const newsCheck = checkNewsBlackoutSync(asset);
+    if (newsCheck.active) {
+      const dir = newsCheck.minutesUntil && newsCheck.minutesUntil > 0 ? 'em' : 'há';
+      const mins = Math.abs(newsCheck.minutesUntil ?? 0);
+      console.log(`[NewsFilter] ${asset} bloqueado — ${newsCheck.eventTitle} ${dir} ${mins}min`);
+      io.emit('news_blackout', { asset, event: newsCheck.eventTitle, minutesUntil: newsCheck.minutesUntil });
+      return;
+    }
+
+    const pairWR = getPerformanceWR(asset, tf);
+    const result = runEngine(buf.m1, asset, pairWR);
+    if (!result) return;
+
+    // ── Signals that didn't pass quant — broadcast as blocked (no Oracle) ──
+    if (!result.passed) {
+      const tagged = { ...result, timeframe: tf, oracleApproved: false };
+      latestSignals.set(asset, tagged);
+      io.emit('new_signal', tagged);
+      if (result.blockedBy) {
+        console.log(`[SignalEngine] ${asset} ✗ ${result.score}% | ${result.blockedBy}`);
+      }
+      return;
+    }
+
+    // ── Signal passed quant filter ─────────────────────────────────────────
+    lastSignalTime.set(asset, Date.now());
+
+    // Emit immediately so UI shows FORTE/PREMIUM instantly (before Oracle)
+    const preOracle = { ...result, timeframe: tf, oracleApproved: false, oraclePending: true };
+    latestSignals.set(asset, preOracle);
+    io.emit('new_signal', preOracle);
+
+    console.log(`[SignalEngine] ${asset} → ${result.direction} ${result.score}% (${result.quality}) [${tf}] — enviando para Oracle...`);
+
+    // ── Luna Oracle: approval gate (only if score >= ORACLE_MIN_SCORE) ──────
+    if (result.score >= ORACLE_MIN_SCORE) {
+      try {
+        const oracle = await askLunaOracle(result);
+
+        if (!oracle.approved) {
+          // Oracle BLOQUEOU — atualiza sinal para rejected
+          const rejected: SignalResult = {
+            ...result,
+            timeframe: tf,
+            passed: false,
+            oracleApproved: false,
+            oracleConfidence: oracle.confidence,
+            oracleReason: oracle.reason,
+            blockedBy: `Luna Oracle bloqueou: ${oracle.reason}`,
+          } as SignalResult & { timeframe: string };
+
+          latestSignals.set(asset, rejected as any);
+          io.emit('new_signal', rejected);
+          console.log(`[Oracle] 🚫 ${asset} BLOQUEADO — ${oracle.reason}`);
+          return;
+        }
+
+        // Oracle APROVOU — calcula score final com boost
+        const rawFinal = result.score + oracle.scoreBoost;
+        const finalScore = Math.min(99, Math.max(result.score, rawFinal)); // boost só aumenta
+        const approved: SignalResult = {
+          ...result,
+          score: Math.round(finalScore),
+          timeframe: tf,
+          oracleApproved: true,
+          oracleConfidence: oracle.confidence,
+          oracleReason: oracle.reason,
+          oracleScore: Math.round(finalScore),
+        } as SignalResult & { timeframe: string };
+
+        latestSignals.set(asset, approved as any);
+        io.emit('new_signal', approved);
+        console.log(`[Oracle] ✅ ${asset} APROVADO — ${oracle.reason} | Oracle: ${oracle.confidence}% | Score final: ${Math.round(finalScore)}%`);
+
+        // Explicação da Luna (fire-and-forget, não bloqueia)
+        generateLunaExplanation({
+          asset: approved.asset,
+          direction: approved.direction,
+          score: approved.score,
+          quality: approved.quality,
+          adx: approved.adx,
+          rsi: approved.rsi,
+          entropy: approved.entropy,
+          consensus: approved.consensus,
+          marketRegime: approved.marketRegime,
+          sess: approved.sess,
+          category: approved.category,
+          ts: approved.ts,
+        }, io).catch(() => {});
+
+      } catch {
+        // Oracle falhou completamente — mantém sinal sem oracle stamp
+        console.warn(`[Oracle] Erro crítico para ${asset} — mantendo sinal original`);
+      }
+    } else {
+      // Score abaixo do mínimo Oracle — emite sem badge oracle
+      generateLunaExplanation({
+        asset: result.asset,
+        direction: result.direction,
+        score: result.score,
+        quality: result.quality,
+        adx: result.adx,
+        rsi: result.rsi,
+        entropy: result.entropy,
+        consensus: result.consensus,
+        marketRegime: result.marketRegime,
+        sess: result.sess,
+        category: result.category,
+        ts: result.ts,
+      }, io).catch(() => {});
+    }
+  }
+
   // Run signal engine every second
   setInterval(() => {
     const now = new Date();
@@ -148,62 +268,15 @@ export function initSignalEngine(io: IOServer) {
 
     if (second !== 48) return;
 
-    // Use global timeframe to decide if this minute should trigger
-    if (!shouldTriggerSignal(minute, globalTimeframe)) {
-      return; // Not a valid fire minute for current timeframe
-    }
+    if (!shouldTriggerSignal(minute, globalTimeframe)) return;
 
-    console.log(`[SignalEngine] 🕐 Disparo ${globalTimeframe} — minuto :${String(minute).padStart(2,'0')}`);
+    const tf = globalTimeframe;
+    console.log(`[SignalEngine] 🕐 Disparo ${tf} — minuto :${String(minute).padStart(2,'0')}`);
 
-    for (const asset of ALL_ASSETS) {
-      const buf = getBuffer(asset);
-      if (!buf || buf.m1.length < 30) continue;
-      if (shouldThrottle(asset)) continue;
-
-      // News blackout: skip if within 15 min of high-impact event
-      const newsCheck = checkNewsBlackoutSync(asset);
-      if (newsCheck.active) {
-        const dir = newsCheck.minutesUntil && newsCheck.minutesUntil > 0 ? 'em' : 'há';
-        const mins = Math.abs(newsCheck.minutesUntil ?? 0);
-        console.log(`[NewsFilter] ${asset} bloqueado — ${newsCheck.eventTitle} ${dir} ${mins}min`);
-        io.emit('news_blackout', { asset, event: newsCheck.eventTitle, minutesUntil: newsCheck.minutesUntil });
-        continue;
-      }
-
-      try {
-        const pairWR = getPerformanceWR(asset, globalTimeframe);
-        const result = runEngine(buf.m1, asset, pairWR);
-        if (!result) continue;
-
-        // Tag signal with the timeframe it was generated for
-        const taggedResult = { ...result, timeframe: globalTimeframe };
-
-        latestSignals.set(asset, taggedResult);
-        io.emit('new_signal', taggedResult);
-
-        if (result.passed) {
-          lastSignalTime.set(asset, Date.now());
-          console.log(`[SignalEngine] ${asset} → ${result.direction} ${result.score}% (${result.quality}) [${globalTimeframe}]`);
-
-          generateLunaExplanation({
-            asset: result.asset,
-            direction: result.direction,
-            score: result.score,
-            quality: result.quality,
-            adx: result.adx,
-            rsi: result.rsi,
-            entropy: result.entropy,
-            consensus: result.consensus,
-            marketRegime: result.marketRegime,
-            sess: result.sess,
-            category: result.category,
-            ts: result.ts,
-          }, io).catch(() => {});
-        }
-      } catch {
-        // Swallow individual asset errors
-      }
-    }
+    // Processa todos os assets em PARALELO (Oracle calls concorrentes)
+    Promise.allSettled(
+      ALL_ASSETS.map(asset => processAsset(asset, tf))
+    ).catch(() => {});
   }, 1000);
 
   console.log('[SignalEngine] Backend signal engine started');

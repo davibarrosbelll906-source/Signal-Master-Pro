@@ -59,6 +59,11 @@ export interface SignalResult {
   category: string;
   ts: number;
   passed: boolean;
+  // Luna Oracle fields (populated by backendSignalEngine after Oracle review)
+  oracleApproved?: boolean;
+  oracleConfidence?: number;
+  oracleReason?: string;
+  oracleScore?: number;
 }
 
 export const BASE_WEIGHTS: Record<string, number> = {
@@ -599,7 +604,7 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number): SignalR
   else if (atrPct > 0.012) blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps (> 120 bps)`;
   else if (marketRegime === 'CHOPPY') blockedBy = `Regime CHOPPY — mercado sem direcionalidade`;
   else if (tfDisagreeCount === 3) blockedBy = `Conflito MTF total — todos os 3 timeframes contra a direção`;
-  else if (entropy > 0.82) blockedBy = `Entropia muito alta (${Math.round(entropy * 100)}%) — mercado completamente aleatório`;
+  else if (entropy > 0.82 && !(marketRegime === 'TRENDING' && adx >= 22)) blockedBy = `Entropia muito alta (${Math.round(entropy * 100)}%) em mercado lateral — sinal inválido`;
   else if (confluenceFactors < 2) blockedBy = `Confluência insuficiente (${confluenceFactors}/3 fatores: tendência, RSI, volume)`;
   else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;

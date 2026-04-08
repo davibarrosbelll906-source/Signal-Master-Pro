@@ -58,15 +58,23 @@ export interface SignalResult {
   entropy: number;
   dnaMatch: number;
   consensus: number;
+  confirmed?: number;
   mmTrap: boolean;
   mmTrapType: string;
   sess: string;
   votes: Record<string, string>;
   blocked?: string;
+  blockedBy?: string | null;
+  passed?: boolean;
   asset: string;
   category: string;
   fingerprint: FingerprintPoint[];
   ts: number;
+  // Luna Oracle Engine fields
+  oracleApproved?: boolean;
+  oracleConfidence?: number;
+  oracleReason?: string;
+  oracleScore?: number;
 }
 
 export interface FingerprintPoint {
@@ -992,7 +1000,7 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   else if (atrPct > 0.012) blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps (> 120 bps)`;
   else if (diagRegime === 'CHOPPY') blockedBy = `Regime CHOPPY — mercado sem direcionalidade`;
   else if (diagTfDisagree === 3) blockedBy = `Conflito MTF total — todos os 3 timeframes contra a direção`;
-  else if (entropy > 0.82) blockedBy = `Entropia muito alta (${Math.round(entropy * 100)}%) — mercado completamente aleatório`;
+  else if (entropy > 0.82 && !(diagRegime === 'TRENDING' && adx >= 22)) blockedBy = `Entropia muito alta (${Math.round(entropy * 100)}%) em mercado lateral — sinal inválido`;
   else if (diagConfluenceFactors < 2) blockedBy = `Confluência insuficiente (${diagConfluenceFactors}/3 fatores)`;
   else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;

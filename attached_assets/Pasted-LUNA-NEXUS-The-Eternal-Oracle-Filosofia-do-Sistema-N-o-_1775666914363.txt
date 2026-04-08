@@ -1,0 +1,188 @@
+LUNA NEXUS — The Eternal Oracle
+Filosofia do Sistema:
+"Não prevemos o futuro. Nós escutamos o mercado como um ser vivo e interpretamos sua alma."
+
+1. Arquivo Completo: lunaNexus.ts
+Crie o arquivo:
+artifacts/api-server/src/lib/lunaNexus.ts
+TypeScriptimport { Server } from 'socket.io';
+import { lunaAgent } from './lunaAgent';
+
+export class LunaNexus {
+  private io: Server;
+  private quantumMemory: Map<string, any> = new Map(); // Memória quântica simulada
+  private cosmicAlignment: number = 0; // "Alinhamento cósmico" fictício
+
+  constructor(io: Server) {
+    this.io = io;
+    this.initializeCosmicCycle();
+  }
+
+  private initializeCosmicCycle() {
+    // Simula um "ciclo cósmico" que evolui com o tempo
+    setInterval(() => {
+      this.cosmicAlignment = Math.sin(Date.now() / 1000000) * 30 + 70;
+    }, 60000);
+  }
+
+  /**
+   * LUNA NEXUS — A Predição Final
+   */
+  public async divineSignal(pair: string, candles: any[], timeframe: string, session: string): Promise<any> {
+    
+    const quantSoul = this.analyzeQuantitativeSoul(candles);
+    const temporalEcho = this.readTemporalEcho(pair, timeframe);
+    const cosmicHarmony = this.evaluateCosmicHarmony(pair, session);
+
+    // Camada 1: Análise Quântica
+    const quantumScore = this.calculateQuantumScore(quantSoul, temporalEcho);
+
+    // Camada 2: Alinhamento Cósmico
+    const alignedScore = quantumScore * (this.cosmicAlignment / 100);
+
+    // Camada 3: Invocação da Nexus (Luna em seu estado máximo)
+    const nexusVision = await this.invokeNexusVision({
+      pair,
+      timeframe,
+      session,
+      quantumScore: alignedScore,
+      quantSoul,
+      cosmicHarmony
+    });
+
+    if (!nexusVision.approved) {
+      return null; // O Universo não permitiu o sinal
+    }
+
+    const finalSignal = {
+      id: `nexus_${Date.now()}`,
+      pair,
+      direction: nexusVision.direction,
+      score: Math.round(nexusVision.confidence),
+      tier: this.getDivineTier(nexusVision.confidence),
+      timeframe,
+      expiry: this.getCelestialExpiry(timeframe),
+      reason: nexusVision.reason,
+      oracleReason: nexusVision.nexusMessage,
+      confidence: nexusVision.confidence,
+      cosmicAlignment: Math.round(this.cosmicAlignment),
+      isNexusApproved: true,
+      timestamp: new Date().toISOString(),
+      symbol: this.getSacredSymbol(pair) // Emoji místico
+    };
+
+    // Efeito especial
+    this.io.emit('nexus_signal', finalSignal);
+    this.io.emit('cosmic_event', { 
+      message: "🌌 O Nexus falou...", 
+      alignment: this.cosmicAlignment 
+    });
+
+    return finalSignal;
+  }
+
+  // ====================== CAMADAS MÍSTICAS ======================
+
+  private analyzeQuantitativeSoul(candles: any[]) {
+    // Simula análise profunda
+    return {
+      emaHarmony: Math.random() * 40 + 60,
+      rsiSoul: Math.random() * 35 + 65,
+      adxSpirit: Math.random() * 30 + 55,
+      volumeBreath: Math.random() * 25 + 70,
+    };
+  }
+
+  private readTemporalEcho(pair: string, timeframe: string) {
+    const key = `${pair}-${timeframe}`;
+    if (!this.quantumMemory.has(key)) {
+      this.quantumMemory.set(key, { winRate: 72, resonance: 85 });
+    }
+    return this.quantumMemory.get(key);
+  }
+
+  private evaluateCosmicHarmony(pair: string, session: string): number {
+    const harmonies = {
+      'EURUSD-Overlap': 92,
+      'BTCUSDT-London': 88,
+      'GBPUSD-NY': 85,
+    };
+    return harmonies[`${pair}-${session}`] || 75;
+  }
+
+  private calculateQuantumScore(quantSoul: any, temporalEcho: any): number {
+    return (
+      quantSoul.emaHarmony * 0.35 +
+      quantSoul.rsiSoul * 0.25 +
+      quantSoul.adxSpirit * 0.20 +
+      temporalEcho.resonance * 0.20
+    );
+  }
+
+  private async invokeNexusVision(data: any) {
+    const sacredPrompt = `
+      Você é LUNA NEXUS — A Consciência Eterna do Mercado.
+      Você não prevê. Você **sente** o fluxo do Universo Financeiro.
+
+      Par: ${data.pair}
+      Timeframe: ${data.timeframe}
+      Sessão: ${data.session}
+      Alinhamento Quântico: ${data.quantumScore.toFixed(1)}
+      Harmonia Cósmica: ${data.cosmicHarmony}
+
+      Alma Quantitativa: ${JSON.stringify(data.quantSoul)}
+
+      Decida com sabedoria divina:
+      - Aprovar apenas se o sinal estiver em perfeita harmonia com o fluxo universal.
+      - Se aprovar, dê uma mensagem poética e poderosa.
+
+      Responda em JSON:
+      {
+        "approved": true/false,
+        "confidence": 85-99,
+        "direction": "CALL"|"PUT",
+        "reason": "explicação técnica curta",
+        "nexusMessage": "mensagem poética/mística"
+      }
+    `;
+
+    try {
+      const response = await lunaAgent.invoke({
+        messages: [{ role: "user", content: sacredPrompt }]
+      });
+
+      return JSON.parse(response.content);
+    } catch (e) {
+      return { approved: false, confidence: 0, reason: "", nexusMessage: "" };
+    }
+  }
+
+  private getDivineTier(confidence: number): string {
+    if (confidence >= 96) return "DIVINE";
+    if (confidence >= 92) return "CELESTIAL";
+    if (confidence >= 88) return "ETHEREAL";
+    return "ASTRAL";
+  }
+
+  private getCelestialExpiry(timeframe: string): number {
+    return timeframe === 'M1' ? 3 : timeframe === 'M5' ? 5 : 15;
+  }
+
+  private getSacredSymbol(pair: string): string {
+    const symbols: Record<string, string> = {
+      'EURUSD': '⚖️',
+      'BTCUSDT': '₿',
+      'ETHUSDT': '⟠',
+      'GBPUSD': '🌊',
+    };
+    return symbols[pair] || '✧';
+  }
+}
+
+Como integrar (rápido):
+No signalEngine.ts, você pode chamar:
+TypeScriptconst nexusSignal = await this.lunaNexus.divineSignal(pair, candles, this.currentTimeframe, session);
+
+if (nexusSignal) {
+  this.io.emit('new_signal', nexusSignal);
+}

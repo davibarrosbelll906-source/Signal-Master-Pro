@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, CheckCheck, X, HelpCircle, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { Copy, CheckCheck, X, HelpCircle, ChevronDown, ChevronUp, Lock, Sparkles, ShieldCheck } from "lucide-react";
 import { usePlanGuard } from "@/lib/usePlanGuard";
 import { useLocation } from "wouter";
 import {
@@ -194,7 +194,9 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ type: 'spring', damping: 20 }}
       className={`relative rounded-2xl overflow-hidden flex flex-col transition-all duration-500 ${
-        pendingSignal
+        pendingSignal && (pendingSignal as any).oracleApproved === true
+          ? 'shadow-[0_0_30px_rgba(168,85,247,0.18)] border border-purple-500/40'
+          : pendingSignal
           ? pendingSignal.direction === 'CALL'
             ? 'shadow-[0_0_25px_rgba(0,255,136,0.12)] border border-[var(--green)]/30'
             : 'shadow-[0_0_25px_rgba(255,68,102,0.12)] border border-[var(--red)]/30'
@@ -306,6 +308,38 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
                 <div className="h-full rounded-full bg-gradient-to-r from-[var(--green)] to-[var(--blue)]"
                   style={{ width: `${pendingSignal.score}%` }} />
               </div>
+
+              {/* Oracle pending indicator */}
+              {(pendingSignal as any).oraclePending === true && (pendingSignal as any).oracleApproved !== true && (
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-purple-500/5 border border-purple-500/15">
+                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                  <span className="text-[9px] text-purple-400/70 font-bold uppercase tracking-wide">Oracle analisando...</span>
+                </div>
+              )}
+
+              {/* Luna Oracle badge */}
+              {(pendingSignal as any).oracleApproved === true && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-2 px-2.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/30"
+                >
+                  <ShieldCheck size={12} className="text-purple-400 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[10px] font-black text-purple-300 tracking-wide uppercase">Luna Oracle</span>
+                      {(pendingSignal as any).oracleConfidence > 0 && (
+                        <span className="text-[9px] text-purple-400/70">{(pendingSignal as any).oracleConfidence}%</span>
+                      )}
+                    </div>
+                    {(pendingSignal as any).oracleReason && (
+                      <p className="text-[9px] text-purple-300/70 leading-snug line-clamp-2">
+                        {(pendingSignal as any).oracleReason}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
 
               {/* Por que este sinal? — PRO+ */}
               <PairMonitorIAButton showExplain={showExplain} setShowExplain={setShowExplain} />

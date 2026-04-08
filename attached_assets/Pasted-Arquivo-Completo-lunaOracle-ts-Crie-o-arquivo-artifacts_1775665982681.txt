@@ -1,0 +1,215 @@
+Arquivo Completo: lunaOracle.ts
+Crie o arquivo:
+artifacts/api-server/src/lib/lunaOracle.ts
+TypeScriptimport { Server } from 'socket.io';
+import { lunaAgent } from './lunaAgent';
+
+export interface OracleSignal {
+  id: string;
+  pair: string;
+  direction: 'CALL' | 'PUT';
+  score: number;
+  tier: string;
+  timeframe: string;
+  expiry: number;
+  reason: string;
+  session: string;
+  confidence: number;
+  oracleConfidence: number;
+  oracleReason: string;
+  isOracleApproved: boolean;
+  marketRegime: 'TRENDING' | 'RANGING' | 'CHOPPY';
+  timestamp: string;
+}
+
+export class LunaOracleEngine {
+  private io: Server;
+
+  constructor(io: Server) {
+    this.io = io;
+  }
+
+  /**
+   * ORACLE PRINCIPAL - Decisão final do sinal
+   */
+  public async predictBestSignal(
+    pair: string,
+    candles: any[],
+    timeframe: string,
+    quantAnalysis: any,
+    session: string
+  ): Promise<OracleSignal | null> {
+
+    // 1. Análise Quantitativa + Filtros Rígidos
+    const baseScore = quantAnalysis.finalScore || 65;
+    const regime = this.getMarketRegime(candles);
+    const confluence = this.hasStrongConfluence(quantAnalysis);
+
+    let oracleScore = baseScore;
+
+    // Ajustes baseados em regras avançadas
+    if (regime === 'CHOPPY') oracleScore -= 28;
+    if (regime === 'RANGING') oracleScore -= 16;
+    if (!confluence) oracleScore -= 22;
+
+    // Penalidade forte se score cair demais
+    if (oracleScore < 72) {
+      return null; // Oracle bloqueia o sinal
+    }
+
+    // 2. Consulta à Luna Oracle (camada de inteligência final)
+    const oracleDecision = await this.askLunaOracle({
+      pair,
+      timeframe,
+      baseScore: oracleScore,
+      regime,
+      confluence,
+      quantAnalysis,
+      session
+    });
+
+    if (!oracleDecision.approved) {
+      console.log(`🚫 Oracle rejeitou sinal de ${pair} - ${oracleDecision.reason}`);
+      return null;
+    }
+
+    // 3. Cria o sinal final aprovado pela Oracle
+    const finalSignal: OracleSignal = {
+      id: `oracle_${Date.now()}`,
+      pair,
+      direction: oracleScore > 78 ? 'CALL' : 'PUT',
+      score: Math.round(oracleScore),
+      tier: this.getTier(oracleScore),
+      timeframe,
+      expiry: this.suggestExpiry(timeframe),
+      reason: quantAnalysis.mainReason || "Confluência forte detectada",
+      session,
+      confidence: Math.round(oracleScore * 0.93),
+      oracleConfidence: oracleDecision.confidence,
+      oracleReason: oracleDecision.reason,
+      isOracleApproved: true,
+      marketRegime: regime,
+      timestamp: new Date().toISOString(),
+    };
+
+    console.log(`🌟 ORACLE APROVOU → ${pair} ${finalSignal.direction} ${finalSignal.score}% (${finalSignal.oracleConfidence}% Oracle)`);
+
+    return finalSignal;
+  }
+
+  /**
+   * Consulta à Luna como Oráculo Supremo
+   */
+  private async askLunaOracle(data: any) {
+    const prompt = `
+      Você é **Luna Oracle** — a inteligência máxima do SignalMaster Pro v7.
+      Sua missão é aprovar APENAS sinais de altíssima qualidade.
+
+      Par: ${data.pair}
+      Timeframe: ${data.timeframe}
+      Score Quantitativo: ${data.baseScore}
+      Regime de Mercado: ${data.regime}
+      Confluência Multi-Timeframe: ${data.confluence ? 'FORTE' : 'FRACA'}
+      Sessão: ${data.session}
+
+      Dados da análise quantitativa:
+      ${JSON.stringify(data.quantAnalysis, null, 2)}
+
+      Regras rigorosas:
+      - Só aprove se o sinal tiver confluência clara e alta probabilidade.
+      - Seja extremamente conservadora.
+      - Prefira não aprovar do que aprovar um sinal duvidoso.
+
+      Responda **exatamente** neste formato JSON:
+      {
+        "approved": true/false,
+        "confidence": número entre 75 e 100,
+        "reason": "explicação curta, clara e profissional em português"
+      }
+    `;
+
+    try {
+      const response = await lunaAgent.invoke({
+        messages: [{ role: "user", content: prompt }]
+      });
+
+      const parsed = JSON.parse(response.content);
+
+      // Garantia de segurança
+      if (typeof parsed.approved !== 'boolean') parsed.approved = false;
+      if (typeof parsed.confidence !== 'number') parsed.confidence = 0;
+
+      return parsed;
+    } catch (error) {
+      console.error("Erro na Luna Oracle:", error);
+      return { approved: false, confidence: 0, reason: "Erro interno na Oracle" };
+    }
+  }
+
+  private getMarketRegime(candles: any[]): 'TRENDING' | 'RANGING' | 'CHOPPY' {
+    // Implementação simplificada - você pode melhorar depois
+    const adx = this.calculateADX(candles);
+    const volatility = this.calculateVolatility(candles);
+
+    if (adx > 25 && volatility > 0.0007) return 'TRENDING';
+    if (adx < 18) return 'RANGING';
+    return 'CHOPPY';
+  }
+
+  private hasStrongConfluence(analysis: any): boolean {
+    let count = 0;
+    if (analysis.emaTrend?.strength > 0.7) count++;
+    if (analysis.rsi?.strength > 0.65) count++;
+    if (analysis.adx?.trendStrength > 22) count++;
+    if (analysis.bollingerSqueeze) count++;
+    return count >= 3;
+  }
+
+  private getTier(score: number): string {
+    if (score >= 92) return 'ELITE';
+    if (score >= 85) return 'PREMIUM';
+    if (score >= 78) return 'FORTE';
+    return 'MÉDIO';
+  }
+
+  private suggestExpiry(timeframe: string): number {
+    return timeframe === 'M1' ? 3 : timeframe === 'M5' ? 5 : 10;
+  }
+
+  // Métodos auxiliares que você já deve ter (implemente se não tiver)
+  private calculateADX(candles: any[]): number { return 22; }   // placeholder
+  private calculateVolatility(candles: any[]): number { return 0.0012; } // placeholder
+}
+
+2. Integração Total no signalEngine.ts
+Atualize seu signalEngine.ts com as seguintes mudanças:
+Adicione no topo:
+TypeScriptimport { LunaOracleEngine, OracleSignal } from './lunaOracle';
+Dentro da classe SignalEngine:
+TypeScriptprivate lunaOracle: LunaOracleEngine;
+
+constructor(io: Server) {
+  this.io = io;
+  this.lunaOracle = new LunaOracleEngine(io);
+  this.startEngine();
+}
+Substitua o final da função generateSignals() por isto:
+TypeScript// === LUNA ORACLE ENGINE - Decisão Final ===
+      const oracleSignal = await this.lunaOracle.predictBestSignal(
+        pair,
+        candles,
+        this.currentTimeframe,
+        analysis,
+        this.getCurrentSession(now)
+      );
+
+      if (!oracleSignal) {
+        continue; // Sinal rejeitado pela Oracle
+      }
+
+      // Envia o sinal aprovado pela Oracle
+      this.io.emit('new_signal', oracleSignal);
+
+      this.lastSignalTime.set(pair, Date.now());
+    }
+  }
