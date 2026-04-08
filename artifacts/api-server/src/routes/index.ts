@@ -8,6 +8,7 @@ import leaderboardRouter from "./leaderboard.js";
 import stripeRouter from "./stripe.js";
 import lunaRouter from "./luna.js";
 import marketRouter from "./market.js";
+import backtestRouter from "./backtest.js";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,7 @@ router.use(healthRouter);
 router.use("/auth", authRouter);
 router.use("/auth", otpRouter);
 router.use("/trades", tradesRouter);
+router.use("/backtest", backtestRouter);
 router.use("/email", emailRouter);
 router.use("/leaderboard", leaderboardRouter);
 router.use("/stripe", stripeRouter);
