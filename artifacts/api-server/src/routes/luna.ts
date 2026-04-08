@@ -1,8 +1,8 @@
 import express from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { db } from "@workspace/db";
-import { conversations, messages } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { conversations, messages, lunaAnalyses } from "@workspace/db";
+import { eq, asc, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 
 const router = express.Router();
@@ -155,6 +155,55 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
       res.write(`data: ${JSON.stringify({ error: "Erro ao gerar resposta" })}\n\n`);
       res.end();
     }
+  }
+});
+
+router.get("/analyses", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).user.sub;
+    const rows = await db
+      .select()
+      .from(lunaAnalyses)
+      .where(eq(lunaAnalyses.userId, userId))
+      .orderBy(desc(lunaAnalyses.createdAt))
+      .limit(200);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao buscar análises" });
+  }
+});
+
+router.post("/analyses", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).user.sub;
+    const { pair, timeframe, userQuestion, lunaResponse, keyLessons, tags, thumbnailBase64 } = req.body;
+    const [row] = await db
+      .insert(lunaAnalyses)
+      .values({
+        userId,
+        pair: pair || "",
+        timeframe: timeframe || "",
+        userQuestion: userQuestion || "",
+        lunaResponse: lunaResponse || "",
+        keyLessons: JSON.stringify(keyLessons || []),
+        tags: JSON.stringify(tags || []),
+        thumbnailBase64: thumbnailBase64 || null,
+      })
+      .returning();
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao salvar análise" });
+  }
+});
+
+router.delete("/analyses/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).user.sub;
+    const id = parseInt(req.params.id);
+    await db.delete(lunaAnalyses).where(eq(lunaAnalyses.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao deletar análise" });
   }
 });
 

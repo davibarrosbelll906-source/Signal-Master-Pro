@@ -130,6 +130,9 @@ export default function LunaChat({ chartRef, currentPair, currentTimeframe, trad
                   timestamp: new Date(),
                 }]);
                 setStreamingContent("");
+                if (imageBase64) {
+                  autoSaveAnalysis(text, full, imageBase64);
+                }
               }
             } catch {}
           }
@@ -175,6 +178,56 @@ export default function LunaChat({ chartRef, currentPair, currentTimeframe, trad
     } finally {
       setCapturing(false);
     }
+  }
+
+  async function autoSaveAnalysis(question: string, response: string, imageBase64: string) {
+    try {
+      const lines = response.split("\n").filter(l => l.trim().startsWith("-") || l.trim().startsWith("•"));
+      const keyLessons = lines.slice(0, 4).map(l => l.replace(/^[-•]\s*/, "").replace(/\*\*/g, "").trim()).filter(Boolean);
+      const tagMap: Record<string, string[]> = {
+        tendencia: ["tendência", "alta", "baixa", "lateral", "trend"],
+        suporte_resistencia: ["suporte", "resistência", "sr", "zona"],
+        price_action: ["vela", "candle", "pin bar", "engolfo", "doji", "hammer"],
+        volatilidade: ["volatilidade", "atr", "bollinger", "banda"],
+        momentum: ["rsi", "macd", "momentum", "divergência"],
+        sessao: ["london", "nova york", "ásia", "sessão", "overlap"],
+      };
+      const rLow = response.toLowerCase();
+      const tags = Object.entries(tagMap).filter(([, kws]) => kws.some(kw => rLow.includes(kw))).map(([tag]) => tag);
+
+      const thumbnail = imageBase64.length > 500_000
+        ? await compressThumbnail(imageBase64)
+        : imageBase64;
+
+      await apiClient.post("/luna/analyses", {
+        pair: currentPair || "",
+        timeframe: currentTimeframe || "",
+        userQuestion: question,
+        lunaResponse: response,
+        keyLessons,
+        tags,
+        thumbnailBase64: thumbnail,
+      });
+    } catch (err) {
+      console.warn("Análise não pôde ser salva:", err);
+    }
+  }
+
+  async function compressThumbnail(base64: string): Promise<string> {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ratio = Math.min(320 / img.width, 180 / img.height);
+        canvas.width = img.width * ratio;
+        canvas.height = img.height * ratio;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = () => resolve("");
+      img.src = base64;
+    });
   }
 
   function formatMarkdown(text: string) {
