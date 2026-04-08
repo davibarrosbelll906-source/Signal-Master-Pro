@@ -794,30 +794,6 @@ export default function SignalsPage() {
                 </div>
               )}
 
-              {/* INDICATORS VOTES */}
-              {(signal || lastDiag) && (() => {
-                const VOTE_LABELS: Record<string, string> = {
-                  ema: 'EMA Stack (M1)', htf: 'HTF M5', m15: 'HTF M15',
-                  rsi: 'RSI', rsidiv: 'RSI Divergência', macd: 'MACD',
-                  bb: 'Bollinger %B', bsq: 'BB Squeeze', stoch: 'Estocástico',
-                  sr: 'Suporte/Resistência', candle: 'Candle Pattern', volume: 'Volume', obv: 'OBV Fluxo'
-                };
-                return (
-                  <div className="glass-card p-4 space-y-1.5">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Votos dos Indicadores</h3>
-                    {Object.entries((signal || lastDiag)!.votes).map(([ind, vote]) => (
-                      <div key={ind} className="flex items-center justify-between text-xs">
-                        <span className="text-gray-500">{VOTE_LABELS[ind] || ind.toUpperCase()}</span>
-                        <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                          vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
-                          vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
-                          'text-gray-500 bg-white/5'
-                        }`}>{vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
             </div>
 
             {/* RIGHT SUB: Signal Card (2/3 width) */}
@@ -984,6 +960,53 @@ export default function SignalsPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* INDICATORS VOTES — below signal card */}
+          {(signal || lastDiag) && (() => {
+            const VOTE_LABELS: Record<string, string> = {
+              ema: 'EMA Stack (M1)', htf: 'HTF M5', m15: 'HTF M15',
+              rsi: 'RSI', rsidiv: 'RSI Divergência', macd: 'MACD',
+              bb: 'Bollinger %B', bsq: 'BB Squeeze', stoch: 'Estocástico',
+              sr: 'Suporte/Resistência', candle: 'Candle Pattern', volume: 'Volume', obv: 'OBV Fluxo'
+            };
+            const src = (signal || lastDiag)!;
+            const callVotes = Object.values(src.votes).filter(v => v === 'CALL').length;
+            const putVotes  = Object.values(src.votes).filter(v => v === 'PUT').length;
+            const neuVotes  = Object.values(src.votes).filter(v => v === 'NEUTRAL').length;
+            const total     = callVotes + putVotes + neuVotes;
+            return (
+              <div className="glass-card p-4 mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Votos dos Indicadores</h3>
+                  <div className="flex gap-2 text-[10px]">
+                    <span className="text-[var(--green)] font-bold">▲ {callVotes} CALL</span>
+                    <span className="text-gray-600">·</span>
+                    <span className="text-[var(--red)] font-bold">▼ {putVotes} PUT</span>
+                    <span className="text-gray-600">·</span>
+                    <span className="text-gray-500">— {neuVotes} NEU</span>
+                  </div>
+                </div>
+                {/* Vote bar */}
+                <div className="flex rounded-full overflow-hidden h-1.5 mb-4 bg-white/5">
+                  {callVotes > 0 && <div className="bg-[var(--green)] transition-all" style={{ width: `${(callVotes/total)*100}%` }} />}
+                  {neuVotes  > 0 && <div className="bg-gray-600 transition-all" style={{ width: `${(neuVotes/total)*100}%` }} />}
+                  {putVotes  > 0 && <div className="bg-[var(--red)] transition-all"  style={{ width: `${(putVotes/total)*100}%` }} />}
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                  {Object.entries(src.votes).map(([ind, vote]) => (
+                    <div key={ind} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">{VOTE_LABELS[ind] || ind.toUpperCase()}</span>
+                      <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                        vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
+                        vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
+                        'text-gray-500 bg-white/5'
+                      }`}>{vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
             </div>{/* end RIGHT SUB */}
           </div>{/* end INTERNAL GRID */}
 
