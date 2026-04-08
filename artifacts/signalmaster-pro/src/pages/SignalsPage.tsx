@@ -207,26 +207,40 @@ export default function SignalsPage() {
   const shouldFireNow = (sec: number, min: number, tf: 'M1' | 'M5' | 'M15'): boolean => {
     if (sec !== 48) return false;
     if (tf === 'M1') return true;
-    // Dispara no segundo :48 do ÚLTIMO minuto do período (antes do fechamento do candle)
-    // M5:  minutos 4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59
-    // M15: minutos 14, 29, 44, 59
-    if (tf === 'M5') return min % 5 === 4;
-    if (tf === 'M15') return min % 15 === 14;
+    // Dispara no segundo :48 do minuto de ABERTURA do candle (alinhado com corretoras)
+    // M5:  minutos 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55
+    // M15: minutos 0, 15, 30, 45
+    if (tf === 'M5') return min % 5 === 0;
+    if (tf === 'M15') return min % 15 === 0;
     return false;
   };
 
-  // Helper: seconds until next signal for given timeframe
+  // Helper: segundos até o próximo sinal (usando fórmula getNextSignalMinute)
   const getSecsToNext = (min: number, sec: number, tf: 'M1' | 'M5' | 'M15'): number => {
     if (tf === 'M1') return sec <= 48 ? 48 - sec : 60 - sec + 48;
     const interval = tf === 'M5' ? 5 : 15;
-    const intervalSecs = interval * 60;
-    // Posição dentro do período atual (em segundos)
-    const posInPeriod = (min % interval) * 60 + sec;
-    // Alvo: segundo :48 do último minuto do período
-    const targetInPeriod = (interval - 1) * 60 + 48;
-    let secsLeft = targetInPeriod - posInPeriod;
-    if (secsLeft <= 0) secsLeft += intervalSecs; // já passou → próximo período
-    return secsLeft;
+
+    // Encontra o próximo minuto de disparo
+    let nextMin: number;
+    if (min % interval === 0 && sec < 48) {
+      // Ainda dentro da janela do minuto atual (não disparou ainda)
+      nextMin = min;
+    } else {
+      // Avança para o próximo múltiplo de `interval`
+      nextMin = Math.ceil((min + 1) / interval) * interval;
+      if (nextMin >= 60) nextMin -= 60; // volta ao próximo ciclo
+    }
+
+    let secsLeft: number;
+    if (nextMin > min) {
+      secsLeft = (nextMin - min) * 60 + 48 - sec;
+    } else if (nextMin === min) {
+      secsLeft = 48 - sec;
+    } else {
+      // Cruzou a hora (ex: 59→00)
+      secsLeft = (60 - min + nextMin) * 60 + 48 - sec;
+    }
+    return Math.max(1, secsLeft);
   };
 
   // 1-second tick — emit signal based on selected timeframe

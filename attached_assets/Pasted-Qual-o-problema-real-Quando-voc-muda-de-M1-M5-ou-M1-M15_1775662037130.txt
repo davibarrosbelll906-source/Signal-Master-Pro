@@ -1,0 +1,102 @@
+Qual é o problema real?
+Quando você muda de M1 → M5 ou M1 → M15, o sistema continua usando a lógica antiga de contagem de minutos, causando um atraso de 1 minuto no disparo do sinal.
+Isso acontece porque:
+
+A verificação está sendo feita com base no getMinutes() atual sem ajustar corretamente o próximo múltiplo.
+O motor não recalcula corretamente o próximo timestamp quando o timeframe muda.
+
+
+Solução Definitiva: Função getNextSignalTime()
+Vou te dar a correção completa para resolver esse atraso de 1 minuto.
+1. Substitua sua lógica atual por esta função melhorada
+Crie ou atualize no seu signalEngine.ts (backend) ou no arquivo que controla o tempo:
+TypeScript// Função corrigida - Recomendada
+private getNextSignalMinute(currentMinute: number, timeframe: string): number {
+  let interval = 1;
+
+  switch (timeframe) {
+    case 'M5':
+      interval = 5;
+      break;
+    case 'M15':
+      interval = 15;
+      break;
+    case 'M1':
+    default:
+      interval = 1;
+  }
+
+  // Calcula o próximo múltiplo correto
+  const nextMinute = Math.ceil((currentMinute + 1) / interval) * interval;
+
+  // Se passou do minuto 59, vai para o próximo hora
+  if (nextMinute >= 60) {
+    return 0; // próximo sinal será no minuto 00 da próxima hora
+  }
+
+  return nextMinute;
+}
+2. Atualize a verificação principal no generateSignals()
+Substitua sua lógica atual de tempo por esta versão corrigida:
+TypeScriptprivate async generateSignals() {
+  const now = new Date();
+  const currentSecond = now.getSeconds();
+  const currentMinute = now.getMinutes();
+
+  // Pega o timeframe atual (deve vir do estado/global)
+  const currentTimeframe = this.getCurrentTimeframe(); // crie este método
+
+  // Calcula qual deve ser o minuto exato do próximo sinal
+  const targetMinute = this.getNextSignalMinute(currentMinute, currentTimeframe);
+
+  // Só dispara se:
+  // 1. Estamos no segundo :48
+  // 2. O minuto atual é o minuto alvo
+  if (currentSecond === 48 && currentMinute === targetMinute) {
+    console.log(`🟢 Gerando sinal para ${currentTimeframe} - Minuto ${currentMinute}`);
+    await this.generateSignalsForAllPairs();
+  }
+}
+3. Método auxiliar para pegar o timeframe atual
+TypeScriptprivate getCurrentTimeframe(): string {
+  // Aqui você deve pegar o timeframe salvo no banco ou em memória
+  // Por enquanto, podemos pegar de um Map ou de uma variável global
+  return this.currentTimeframe || 'M1'; // fallback
+}
+
+Solução Rápida (se você quiser corrigir hoje)
+Se quiser uma correção mais simples e imediata, substitua toda a lógica de verificação de tempo por esta versão:
+TypeScriptprivate async generateSignals() {
+  const now = new Date();
+  const second = now.getSeconds();
+  const minute = now.getMinutes();
+
+  if (second !== 48) return; // só roda no segundo 48
+
+  const timeframe = this.getCurrentTimeframe();
+
+  let shouldTrigger = false;
+
+  switch (timeframe) {
+    case 'M1':
+      shouldTrigger = true;                    // todo minuto
+      break;
+    case 'M5':
+      shouldTrigger = (minute % 5 === 0);      // 00, 05, 10, 15...
+      break;
+    case 'M15':
+      shouldTrigger = (minute % 15 === 0);     // 00, 15, 30, 45
+      break;
+  }
+
+  if (shouldTrigger) {
+    console.log(`✅ Sinal disparado para ${timeframe} às ${minute}:${second}`);
+    await this.generateSignalsForAllPairs();
+  }
+}
+
+Dicas adicionais para evitar esse bug no futuro:
+
+Sempre teste a troca de timeframe com o relógio visível.
+Adicione um log claro quando o sinal é disparado:TypeScriptconsole.log(`Sinal gerado → Timeframe: ${timeframe} | Minuto: ${minute}`);
+Crie uma função isValidSignalTime(minute: number, timeframe: string) separada.

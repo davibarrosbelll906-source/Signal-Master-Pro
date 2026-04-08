@@ -1,0 +1,148 @@
+Aqui está a solução completa e corrigida para o seu problema de atraso de 1 minuto ao trocar de timeframe.
+Vou te entregar duas partes que você pediu:
+1. Versão Completa e Corrigida da generateSignals() + Métodos Auxiliares
+Substitua sua função atual no signalEngine.ts (backend) por esta versão:
+TypeScript// ====================== SIGNAL ENGINE - VERSÃO CORRIGIDA ======================
+private currentTimeframe: string = 'M1';   // será sincronizado pelo frontend
+
+private async generateSignals() {
+  const now = new Date();
+  const currentSecond = now.getSeconds();
+  const currentMinute = now.getMinutes();
+
+  // Só executa no segundo :48 (como você já fazia)
+  if (currentSecond !== 48) return;
+
+  // Verifica se deve disparar sinal baseado no timeframe atual
+  if (!this.shouldTriggerSignal(currentMinute, this.currentTimeframe)) {
+    return;
+  }
+
+  console.log(`🟢 [SIGNAL ENGINE] Disparando sinal - Timeframe: ${this.currentTimeframe} | Minuto: ${currentMinute}`);
+
+  const activePairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSDT', 'ETHUSDT' /* seus pares */];
+
+  for (const pair of activePairs) {
+    const candles = this.buffers.get(pair) || [];
+    if (candles.length < 60) continue;
+
+    const analysis = this.runFullQuantitativeAnalysis(candles, pair, this.currentTimeframe);
+
+    if (analysis.finalScore < 68) continue;
+    if (!this.isValidConfluence(analysis)) continue;
+    if (this.isTooFrequent(pair)) continue;
+
+    const signal = {
+      id: Date.now().toString(),
+      pair,
+      direction: analysis.direction,
+      score: Math.round(analysis.finalScore),
+      tier: this.getTier(analysis.finalScore),
+      timeframe: this.currentTimeframe,
+      expiry: this.suggestExpiry(this.currentTimeframe),
+      reason: analysis.mainReason,
+      session: this.getCurrentSession(now),
+      confidence: analysis.confidence,
+      timestamp: now.toISOString(),
+    };
+
+    // Envia sinal para todos os clientes conectados
+    this.io.emit('new_signal', signal);
+
+    // Explicação da Luna (opcional)
+    this.sendLunaEducationalExplanation(signal, analysis);
+
+    this.lastSignalTime.set(pair, Date.now());
+  }
+}
+
+// ====================== MÉTODOS AUXILIARES CORRIGIDOS ======================
+
+/**
+ * Verifica se deve disparar o sinal no minuto atual baseado no timeframe
+ */
+private shouldTriggerSignal(currentMinute: number, timeframe: string): boolean {
+  switch (timeframe) {
+    case 'M1':
+      return true;                    // todo minuto
+
+    case 'M5':
+      return currentMinute % 5 === 0; // 00, 05, 10, 15, 20, 25, 30...
+
+    case 'M15':
+      return currentMinute % 15 === 0; // 00, 15, 30, 45
+
+    default:
+      return true;
+  }
+}
+
+/**
+ * Sugere tempo de expiração baseado no timeframe
+ */
+private suggestExpiry(timeframe: string): number {
+  switch (timeframe) {
+    case 'M1': return 3;
+    case 'M5': return 5;
+    case 'M15': return 10;
+    default: return 5;
+  }
+}
+
+/**
+ * Atualiza o timeframe atual (chamado pelo frontend via Socket.io)
+ */
+public updateTimeframe(newTimeframe: string): void {
+  if (['M1', 'M5', 'M15'].includes(newTimeframe)) {
+    this.currentTimeframe = newTimeframe;
+    console.log(`⏱️ Timeframe atualizado para: ${newTimeframe}`);
+  }
+}
+
+/**
+ * Retorna o timeframe atual
+ */
+public getCurrentTimeframe(): string {
+  return this.currentTimeframe;
+}
+
+2. Como Sincronizar o Timeframe entre Frontend e Backend (Melhor Prática)
+No Backend (signalEngine.ts):
+Adicione este método no final da classe SignalEngine:
+TypeScript// Método para receber mudança de timeframe via Socket.io
+public handleTimeframeChange(timeframe: string, socketId?: string) {
+  this.updateTimeframe(timeframe);
+  
+  // Opcional: notificar todos os clientes conectados
+  this.io.emit('timeframe_changed', { 
+    timeframe,
+    message: `Timeframe alterado para ${timeframe}` 
+  });
+}
+No Frontend (React):
+
+Atualize o componente que controla o timeframe (provavelmente em SignalsPage.tsx ou Sidebar.tsx):
+
+tsxconst handleTimeframeChange = (newTimeframe: string) => {
+  setSelectedTimeframe(newTimeframe);
+  
+  // Envia para o backend via Socket.io
+  socket.emit('change_timeframe', newTimeframe);
+  
+  // Opcional: salvar no localStorage
+  localStorage.setItem('smpTimeframe', newTimeframe);
+};
+
+Conecte o Socket.io no frontend (em App.tsx ou arquivo de socket):
+
+TypeScriptsocket.on('timeframe_changed', (data) => {
+  console.log('Timeframe atualizado:', data.timeframe);
+  // Atualiza estado local se necessário
+});
+
+Resumo das Correções:
+
+shouldTriggerSignal() agora calcula corretamente os minutos para M5 e M15.
+updateTimeframe() permite que o frontend controle o timeframe do motor.
+Elimina o atraso de 1 minuto ao trocar de timeframe.
+Código mais limpo, legível e fácil de manter.
