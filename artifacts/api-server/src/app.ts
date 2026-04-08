@@ -7,6 +7,9 @@ import { logger } from "./lib/logger.js";
 
 const app: Express = express();
 
+// Trust reverse proxy (Replit deployment, Nginx, etc.)
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,
