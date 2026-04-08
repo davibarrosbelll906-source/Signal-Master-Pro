@@ -505,7 +505,7 @@ export default function SignalsPage() {
       </AnimatePresence>
 
       {/* ─── MODO SINGLE (layout original) ─────────────────────────────────── */}
-      {!multiPairMode && <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+      {!multiPairMode && <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
 
         {/* LEFT PANEL */}
         <div className="xl:col-span-1 space-y-4">
@@ -613,191 +613,10 @@ export default function SignalsPage() {
 
           {/* MANAGEMENT PANEL */}
           <ManagementPanel wins={wins} losses={losses} onResult={() => refreshStats()} />
-
-          {/* TIMEFRAME + COUNTDOWN */}
-          <div className="glass-card p-5 flex flex-col items-center space-y-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Timeframe</h3>
-
-            {/* TIMEFRAME SELECTOR */}
-            <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl w-full">
-              {(['M1', 'M5', 'M15'] as const).map(tf => (
-                <button
-                  key={tf}
-                  onClick={() => { setTimeframe(tf); setSignal(null); setPendingSignal(null); }}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all duration-200 ${
-                    timeframe === tf
-                      ? 'bg-[var(--green)] text-black shadow-[0_0_12px_rgba(0,255,136,0.3)]'
-                      : 'text-gray-500 hover:text-white'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
-
-            {/* TF description */}
-            <div className="text-[10px] text-gray-600 text-center">
-              {timeframe === 'M1' && 'Sinal a cada minuto — alta frequência'}
-              {timeframe === 'M5' && 'Sinal a cada 5 min — mais confiável'}
-              {timeframe === 'M15' && 'Sinal a cada 15 min — máxima confiança'}
-            </div>
-
-            {/* COUNTDOWN RING */}
-            <div className="relative w-24 h-24">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
-                <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
-                <circle
-                  cx="48" cy="48" r="40" fill="none"
-                  stroke={isFiring ? 'var(--green)' : timeframe === 'M15' ? '#f59e0b' : timeframe === 'M5' ? '#3b82f6' : 'var(--blue)'}
-                  strokeWidth="6" strokeLinecap="round"
-                  strokeDasharray="251.3"
-                  strokeDashoffset={251.3 * (1 - progressPct / 100)}
-                  className="transition-all duration-1000"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                {isFiring ? (
-                  <div className="text-xs font-black text-[var(--green)] animate-pulse text-center">⚡<br/>ANALISANDO</div>
-                ) : (
-                  <>
-                    <div className="text-2xl font-bold font-mono tabular-nums text-white">
-                      {String(Math.floor(timeToNext / 60)).padStart(2, '0')}:{String(timeToNext % 60).padStart(2, '0')}
-                    </div>
-                    <div className="text-[9px] text-gray-500 uppercase tracking-widest">{timeframe}</div>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="text-[10px] text-gray-700 text-center">
-              {timeframe === 'M1' && 'Próximo: :{48}s de cada minuto'}
-              {timeframe === 'M5' && 'Próximo: min :00/:05/:10... seg :48'}
-              {timeframe === 'M15' && 'Próximo: min :00/:15/:30/:45 seg :48'}
-            </div>
-          </div>
-
-          {/* LAST ANALYSIS DIAGNOSTIC */}
-          {lastDiag && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`glass-card p-4 space-y-3 border ${lastDiag.passed ? 'border-[var(--green)]/30' : 'border-orange-500/20'}`}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Última Análise</h3>
-                <span className="text-[10px] text-gray-600">
-                  {lastDiagTime?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-              </div>
-
-              {/* Score + direction */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-gray-600 mb-0.5">Direção</div>
-                  <div className={`font-black text-lg ${lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
-                    {lastDiag.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-600 mb-0.5">Score</div>
-                  <div className={`font-black text-xl ${
-                    lastDiag.score >= 92 ? 'text-white font-black' :
-                    lastDiag.score >= 83 ? 'text-yellow-400' :
-                    lastDiag.score >= 74 ? 'text-[var(--green)]' :
-                    lastDiag.score >= 68 ? 'text-[var(--blue)]' : 'text-gray-400'
-                  }`}>{lastDiag.score}%</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-600 mb-0.5">Qualidade</div>
-                  <div className={`font-bold text-sm ${
-                    lastDiag.quality === 'ELITE' ? 'text-white' :
-                    lastDiag.quality === 'PREMIUM' ? 'text-yellow-400' :
-                    lastDiag.quality === 'FORTE' ? 'text-[var(--green)]' :
-                    lastDiag.quality === 'MÉDIO' ? 'text-[var(--blue)]' : 'text-gray-500'
-                  }`}>{lastDiag.quality}</div>
-                </div>
-              </div>
-
-              {/* Mini stats row */}
-              <div className="grid grid-cols-3 gap-1.5 text-center">
-                <div className="bg-white/5 rounded-lg p-1.5">
-                  <div className="text-[10px] text-gray-600">ADX</div>
-                  <div className={`text-sm font-bold ${lastDiag.adx >= 25 ? 'text-[var(--green)]' : lastDiag.adx >= 18 ? 'text-yellow-400' : 'text-[var(--red)]'}`}>{lastDiag.adx}</div>
-                </div>
-                <div className="bg-white/5 rounded-lg p-1.5">
-                  <div className="text-[10px] text-gray-600">Consenso</div>
-                  <div className={`text-sm font-bold ${lastDiag.consensus >= 4 ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>{lastDiag.consensus}/5</div>
-                </div>
-                <div className="bg-white/5 rounded-lg p-1.5">
-                  <div className="text-[10px] text-gray-600">Confirmados</div>
-                  <div className={`text-sm font-bold ${lastDiag.confirmed >= 3 ? 'text-[var(--green)]' : 'text-yellow-400'}`}>{lastDiag.confirmed}/5</div>
-                </div>
-              </div>
-
-              {/* Extras (confirmed patterns) */}
-              {lastDiag.extras && lastDiag.extras.length > 0 && (
-                <div className="space-y-1">
-                  {lastDiag.extras.map((e, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-[10px] text-emerald-400">
-                      <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
-                      {e}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Blocked reason */}
-              {lastDiag.blockedBy ? (
-                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/15">
-                  <span className="text-orange-400 text-xs shrink-0">⚠</span>
-                  <span className="text-xs text-orange-300 leading-relaxed">{lastDiag.blockedBy}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--green)]/10 border border-[var(--green)]/20">
-                  <span className="text-[var(--green)] text-xs">✓</span>
-                  <span className="text-xs text-[var(--green)] font-bold">Sinal aprovado e emitido</span>
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* INDICATORS MINI — readable names */}
-          {(signal || lastDiag) && (() => {
-            const VOTE_LABELS: Record<string, string> = {
-              ema: 'EMA Stack (M1)', htf: 'HTF M5', m15: 'HTF M15',
-              rsi: 'RSI', rsidiv: 'RSI Divergência',
-              macd: 'MACD', bb: 'Bollinger %B', bsq: 'BB Squeeze',
-              stoch: 'Estocástico', sr: 'Suporte/Resistência',
-              candle: 'Candle Pattern', volume: 'Volume', obv: 'OBV Fluxo'
-            };
-            return (
-              <div className="glass-card p-4 space-y-1.5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Votos dos Indicadores</h3>
-                {Object.entries((signal || lastDiag)!.votes).map(([ind, vote]) => (
-                  <div key={ind} className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">{VOTE_LABELS[ind] || ind.toUpperCase()}</span>
-                    <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                      vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
-                      vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
-                      'text-gray-500 bg-white/5'
-                    }`}>
-                      {vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {!lastDiag && (
-            <div className="glass-card p-4 text-center">
-              <div className="text-gray-600 text-xs mb-1">Aguardando primeira análise</div>
-              <div className="text-gray-700 text-[10px]">O motor analisa a cada segundo :48</div>
-            </div>
-          )}
         </div>
 
         {/* CENTER / MAIN */}
-        <div className="xl:col-span-2 space-y-4">
+        <div className="xl:col-span-3 space-y-4">
 
           {/* ASSET SELECTOR */}
           <div className="glass-card p-4">
@@ -836,6 +655,170 @@ export default function SignalsPage() {
             </div>
           </div>
 
+          {/* INTERNAL DESKTOP GRID: [Timeframe + Analysis | Signal Card] */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+
+            {/* LEFT SUB: Timeframe + Last Analysis */}
+            <div className="space-y-4">
+
+              {/* TIMEFRAME + COUNTDOWN */}
+              <div className="glass-card p-5 flex flex-col items-center space-y-3">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Timeframe</h3>
+                <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl w-full">
+                  {(['M1', 'M5', 'M15'] as const).map(tf => (
+                    <button
+                      key={tf}
+                      onClick={() => { setTimeframe(tf); setSignal(null); setPendingSignal(null); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all duration-200 ${
+                        timeframe === tf
+                          ? 'bg-[var(--green)] text-black shadow-[0_0_12px_rgba(0,255,136,0.3)]'
+                          : 'text-gray-500 hover:text-white'
+                      }`}
+                    >{tf}</button>
+                  ))}
+                </div>
+                <div className="text-[10px] text-gray-600 text-center">
+                  {timeframe === 'M1' && 'Sinal a cada minuto — alta frequência'}
+                  {timeframe === 'M5' && 'Sinal a cada 5 min — mais confiável'}
+                  {timeframe === 'M15' && 'Sinal a cada 15 min — máxima confiança'}
+                </div>
+                <div className="relative w-24 h-24">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                    <circle
+                      cx="48" cy="48" r="40" fill="none"
+                      stroke={isFiring ? 'var(--green)' : timeframe === 'M15' ? '#f59e0b' : timeframe === 'M5' ? '#3b82f6' : 'var(--blue)'}
+                      strokeWidth="6" strokeLinecap="round"
+                      strokeDasharray="251.3"
+                      strokeDashoffset={251.3 * (1 - progressPct / 100)}
+                      className="transition-all duration-1000"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    {isFiring ? (
+                      <div className="text-xs font-black text-[var(--green)] animate-pulse text-center">⚡<br/>ANALISANDO</div>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold font-mono tabular-nums text-white">
+                          {String(Math.floor(timeToNext / 60)).padStart(2, '0')}:{String(timeToNext % 60).padStart(2, '0')}
+                        </div>
+                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">{timeframe}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="text-[10px] text-gray-700 text-center">
+                  {timeframe === 'M1' && 'Próximo: :48s de cada minuto'}
+                  {timeframe === 'M5' && 'Próximo: min :00/:05/:10... seg :48'}
+                  {timeframe === 'M15' && 'Próximo: min :00/:15/:30/:45 seg :48'}
+                </div>
+              </div>
+
+              {/* LAST ANALYSIS DIAGNOSTIC */}
+              {lastDiag ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`glass-card p-4 space-y-3 border ${lastDiag.passed ? 'border-[var(--green)]/30' : 'border-orange-500/20'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Última Análise</h3>
+                    <span className="text-[10px] text-gray-600">
+                      {lastDiagTime?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-gray-600 mb-0.5">Direção</div>
+                      <div className={`font-black text-lg ${lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                        {lastDiag.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-600 mb-0.5">Score</div>
+                      <div className={`font-black text-xl ${
+                        lastDiag.score >= 92 ? 'text-white' : lastDiag.score >= 83 ? 'text-yellow-400' :
+                        lastDiag.score >= 74 ? 'text-[var(--green)]' : lastDiag.score >= 68 ? 'text-[var(--blue)]' : 'text-gray-400'
+                      }`}>{lastDiag.score}%</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-600 mb-0.5">Qualidade</div>
+                      <div className={`font-bold text-sm ${
+                        lastDiag.quality === 'ELITE' ? 'text-white' : lastDiag.quality === 'PREMIUM' ? 'text-yellow-400' :
+                        lastDiag.quality === 'FORTE' ? 'text-[var(--green)]' : lastDiag.quality === 'MÉDIO' ? 'text-[var(--blue)]' : 'text-gray-500'
+                      }`}>{lastDiag.quality}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <div className="bg-white/5 rounded-lg p-1.5">
+                      <div className="text-[10px] text-gray-600">ADX</div>
+                      <div className={`text-sm font-bold ${lastDiag.adx >= 25 ? 'text-[var(--green)]' : lastDiag.adx >= 18 ? 'text-yellow-400' : 'text-[var(--red)]'}`}>{lastDiag.adx}</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-1.5">
+                      <div className="text-[10px] text-gray-600">Consenso</div>
+                      <div className={`text-sm font-bold ${lastDiag.consensus >= 4 ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>{lastDiag.consensus}/5</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-1.5">
+                      <div className="text-[10px] text-gray-600">Confirmados</div>
+                      <div className={`text-sm font-bold ${lastDiag.confirmed >= 3 ? 'text-[var(--green)]' : 'text-yellow-400'}`}>{lastDiag.confirmed}/5</div>
+                    </div>
+                  </div>
+                  {lastDiag.extras && lastDiag.extras.length > 0 && (
+                    <div className="space-y-1">
+                      {lastDiag.extras.map((e, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+                          <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />{e}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {lastDiag.blockedBy ? (
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/15">
+                      <span className="text-orange-400 text-xs shrink-0">⚠</span>
+                      <span className="text-xs text-orange-300 leading-relaxed">{lastDiag.blockedBy}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--green)]/10 border border-[var(--green)]/20">
+                      <span className="text-[var(--green)] text-xs">✓</span>
+                      <span className="text-xs text-[var(--green)] font-bold">Sinal aprovado e emitido</span>
+                    </div>
+                  )}
+                </motion.div>
+              ) : (
+                <div className="glass-card p-4 text-center">
+                  <div className="text-gray-600 text-xs mb-1">Aguardando primeira análise</div>
+                  <div className="text-gray-700 text-[10px]">O motor analisa a cada segundo :48</div>
+                </div>
+              )}
+
+              {/* INDICATORS VOTES */}
+              {(signal || lastDiag) && (() => {
+                const VOTE_LABELS: Record<string, string> = {
+                  ema: 'EMA Stack (M1)', htf: 'HTF M5', m15: 'HTF M15',
+                  rsi: 'RSI', rsidiv: 'RSI Divergência', macd: 'MACD',
+                  bb: 'Bollinger %B', bsq: 'BB Squeeze', stoch: 'Estocástico',
+                  sr: 'Suporte/Resistência', candle: 'Candle Pattern', volume: 'Volume', obv: 'OBV Fluxo'
+                };
+                return (
+                  <div className="glass-card p-4 space-y-1.5">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Votos dos Indicadores</h3>
+                    {Object.entries((signal || lastDiag)!.votes).map(([ind, vote]) => (
+                      <div key={ind} className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500">{VOTE_LABELS[ind] || ind.toUpperCase()}</span>
+                        <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                          vote === 'CALL' ? 'text-[var(--green)] bg-[var(--green)]/10' :
+                          vote === 'PUT' ? 'text-[var(--red)] bg-[var(--red)]/10' :
+                          'text-gray-500 bg-white/5'
+                        }`}>{vote === 'CALL' ? '▲ CALL' : vote === 'PUT' ? '▼ PUT' : '— NEU'}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* RIGHT SUB: Signal Card (2/3 width) */}
+            <div className="lg:col-span-2">
           {/* SIGNAL CARD */}
           <AnimatePresence mode="wait">
             {signal ? (
@@ -998,6 +981,13 @@ export default function SignalsPage() {
               </motion.div>
             )}
           </AnimatePresence>
+            </div>{/* end RIGHT SUB */}
+          </div>{/* end INTERNAL GRID */}
+
+          {/* CHART — full width of center */}
+          <div className="glass-card p-1">
+            <TradingViewWidget symbol={asset} height={380} />
+          </div>
         </div>
 
         {/* RIGHT PANEL */}
@@ -1075,11 +1065,6 @@ export default function SignalsPage() {
             </div>
           )}
         </div>
-      </div>}
-
-      {/* TRADINGVIEW CHART — só no modo single */}
-      {!multiPairMode && <div className="glass-card p-1">
-        <TradingViewWidget symbol={asset} height={380} />
       </div>}
 
       {/* MINI TRADE HISTORY */}
