@@ -523,232 +523,170 @@ export function generateOUCandle(lastPrice: number, asset: string): Candle {
 export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode = false): SignalResult | null {
   if (m1.length < 30) return null;
 
-  const closes = m1.map(c => c.c);
-  const highs = m1.map(c => c.h);
-  const lows = m1.map(c => c.l);
-  const opens = m1.map(c => c.o);
-  const volumes = m1.map(c => c.v);
+  const closes  = m1.map(c => c.c);
+  const highs   = m1.map(c => c.h);
+  const lows    = m1.map(c => c.l);
+  const opens   = m1.map(c => c.o);
   const category = ASSET_CATEGORIES[asset] || 'forex';
-  const sess = getCurrentSession();
+  const sess     = getCurrentSession();
 
-  const ema9 = calcEMA(closes, 9);
+  // ── Indicadores core ──────────────────────────────────────────────────
+  const ema9  = calcEMA(closes, 9);
   const ema21 = calcEMA(closes, 21);
   const ema50 = calcEMA(closes, 50);
-  const rsi = calcRSI(closes, 14);
-  const macd = calcMACD(closes);
-  const bb = calcBollinger(closes, 20);
-  const stoch = calcStoch(highs, lows, closes, 14);
-  const adx = calcADX(highs, lows, closes, 14);
-  const atr = calcATR(highs, lows, closes, 14);
-  const candle = detectCandlePattern(m1);
-  const entropy = calcEntropy(m1.slice(-20));
+  const rsi   = calcRSI(closes, 14);
+  const adx   = calcADX(highs, lows, closes, 14);
+  const atr   = calcATR(highs, lows, closes, 14);
+  const candle   = detectCandlePattern(m1);
+  const srBounce = detectSRBounce(highs, lows, closes, opens);
   const marketRegime = detectMarketRegime(highs, lows, closes);
 
-  const m5closes = deriveM5(m1).map(c => c.c);
-  const m5ema9 = calcEMA(m5closes, 9);
-  const m5ema21 = calcEMA(m5closes, 21);
-  const htfBull = m5ema9.length > 0 && m5ema21.length > 0 &&
+  // ── HTF tendência ────────────────────────────────────────────────────
+  const m5closes  = deriveM5(m1).map(c => c.c);
+  const m5ema9    = calcEMA(m5closes, 9);
+  const m5ema21   = calcEMA(m5closes, 21);
+  const htfBull   = m5ema9.length > 0 && m5ema21.length > 0 &&
     m5ema9[m5ema9.length - 1] > m5ema21[m5ema21.length - 1];
 
   const m15closes = deriveM15(m1).map(c => c.c);
-  const m15ema9 = calcEMA(m15closes, 9);
-  const m15ema21 = calcEMA(m15closes, 21);
-  const m15Bull = m15ema9.length > 0 && m15ema21.length > 0 &&
+  const m15ema9   = calcEMA(m15closes, 9);
+  const m15ema21  = calcEMA(m15closes, 21);
+  const m15Bull   = m15ema9.length > 0 && m15ema21.length > 0 &&
     m15ema9[m15ema9.length - 1] > m15ema21[m15ema21.length - 1];
 
   const lastClose = closes[closes.length - 1];
-  const lastEma9 = ema9[ema9.length - 1] ?? lastClose;
+  const lastEma9  = ema9[ema9.length - 1]   ?? lastClose;
   const lastEma21 = ema21[ema21.length - 1] ?? lastClose;
   const lastEma50 = ema50[ema50.length - 1] ?? lastClose;
+  const atrPct    = lastClose > 0 ? atr / lastClose : 0;
+  const emaBull   = lastEma9 > lastEma21 && lastEma21 > lastEma50;
+  const emaBear   = lastEma9 < lastEma21 && lastEma21 < lastEma50;
 
-  const rsidiv = detectRSIDivergence(closes, highs, lows);
-  const obvTrend = calcOBVTrend(closes, volumes, 12);
-  const bbSqueeze = detectBBSqueeze(closes);
-  const srBounce = detectSRBounce(highs, lows, closes, opens);
-  const emaRetest = detectEMARetest(closes, ema21, htfBull ? 'CALL' : 'PUT');
-  const macdMomentum = calcMACDMomentum(closes);
+  // ── Direção baseada na zona tocada ────────────────────────────────────
+  let direction: 'CALL' | 'PUT';
+  if (srBounce.nearSupport && !srBounce.nearResistance) direction = 'CALL';
+  else if (srBounce.nearResistance && !srBounce.nearSupport) direction = 'PUT';
+  else direction = (srBounce.rejectionLong || candle.direction > 0) ? 'CALL' : 'PUT';
 
-  const mmTrapCandles = m1;
-  const mmHighs = mmTrapCandles.map(c => c.h);
-  const mmLows = mmTrapCandles.map(c => c.l);
-  const mmVols = mmTrapCandles.map(c => c.v);
-  let mmTrap = false;
-  let mmTrapType = '';
-  if (mmTrapCandles.length >= 10) {
-    const resistance = Math.max(...mmHighs.slice(-50, -3));
-    const support = Math.min(...mmLows.slice(-50, -3));
-    const last = mmTrapCandles[mmTrapCandles.length - 1];
-    const prev = mmTrapCandles[mmTrapCandles.length - 2];
-    const avgVol = mmVols.slice(-20, -1).reduce((a, b) => a + b, 0) / 19;
-    const lastVol = mmVols[mmVols.length - 1];
-    const bullTrap = prev.h > resistance * 1.001 && last.c < resistance && last.c < prev.o && lastVol > avgVol * 1.5;
-    const bearTrap = prev.l < support * 0.999 && last.c > support && last.c > prev.o && lastVol > avgVol * 1.5;
-    if (bullTrap) { mmTrap = true; mmTrapType = 'BULL_TRAP'; }
-    if (bearTrap) { mmTrap = true; mmTrapType = 'BEAR_TRAP'; }
-  }
-
-  const votes: Record<string, string> = {};
-  const emaBull = lastEma9 > lastEma21 && lastEma21 > lastEma50 && lastClose > lastEma9;
-  const emaBear = lastEma9 < lastEma21 && lastEma21 < lastEma50 && lastClose < lastEma9;
-  votes.ema = emaBull ? 'CALL' : emaBear ? 'PUT' : 'NEUTRAL';
-  votes.htf = m5closes.length >= 9 ? (htfBull ? 'CALL' : 'PUT') : 'NEUTRAL';
-  votes.m15 = m15closes.length >= 9 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL';
-  votes.rsi = rsi < 35 ? 'CALL' : rsi > 65 ? 'PUT' : rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL';
-  votes.rsidiv = rsidiv === 'bullish' ? 'CALL' : rsidiv === 'bearish' ? 'PUT' : 'NEUTRAL';
-  votes.macd = macd.hist > 0 ? 'CALL' : 'PUT';
-  votes.bb = bb.pct < 0.2 ? 'CALL' : bb.pct > 0.8 ? 'PUT' : 'NEUTRAL';
-  votes.bsq = bbSqueeze.squeeze && bbSqueeze.breakout === 'up' ? 'CALL'
-            : bbSqueeze.squeeze && bbSqueeze.breakout === 'down' ? 'PUT' : 'NEUTRAL';
-  votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
-  // Voto S&R só conta quando zona tem ≥2 toques (zona legítima)
-  votes.sr = (srBounce.nearSupport && srBounce.supportStrength >= 2) ? 'CALL'
-           : (srBounce.nearResistance && srBounce.resistanceStrength >= 2) ? 'PUT'
-           : 'NEUTRAL';
-  votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
-  const avgVol = volumes.slice(-20, -1).reduce((a, b) => a + b, 0) / 19 || 1;
-  votes.volume = volumes[volumes.length - 1] > avgVol * 1.2
-    ? (lastClose > closes[closes.length - 2] ? 'CALL' : 'PUT') : 'NEUTRAL';
-  votes.obv = obvTrend === 'up' ? 'CALL' : obvTrend === 'down' ? 'PUT' : 'NEUTRAL';
-
-  const mlWeights = { ...BASE_WEIGHTS };
-
-  const callVotes = Object.entries(votes).filter(([, v]) => v === 'CALL');
-  const putVotes = Object.entries(votes).filter(([, v]) => v === 'PUT');
-  const callScore = callVotes.reduce((s, [k]) => s + (mlWeights[k] || 0), 0);
-  const putScore = putVotes.reduce((s, [k]) => s + (mlWeights[k] || 0), 0);
-  const total = callScore + putScore || 1;
-  const direction: 'CALL' | 'PUT' = callScore >= putScore ? 'CALL' : 'PUT';
-  let rawScore = Math.max(callScore, putScore) / total;
-
-  // ── 3-Factor Confluence: Trend + RSI + Volume/PA ──────────────────────
-  const confluenceTrend  = votes.ema === direction;
-  const confluenceRSI    = votes.rsi === direction;
-  const confluenceVolume = votes.volume === direction || votes.obv === direction;
-  const confluenceFactors = [confluenceTrend, confluenceRSI, confluenceVolume].filter(Boolean).length;
-
-  rawScore = Math.min(0.95, Math.max(0.35, rawScore + getPairSessionBonus(sess, category, asset)));
-  if (adx >= 30) rawScore = Math.min(0.95, rawScore + 0.05);
-  else if (adx >= 25) rawScore = Math.min(0.95, rawScore + 0.03);
-  else if (adx < 18) rawScore = Math.max(0.35, rawScore - 0.06);
-  if (rsi > 82 || rsi < 18) rawScore = Math.max(0.35, rawScore - 0.07);
-  if (rsidiv !== null) rawScore = Math.min(0.95, rawScore + 0.08);
-  if (bbSqueeze.squeeze) rawScore = Math.min(0.95, rawScore + 0.06);
-  // ── S&R Gate: bônus proporcional à força da zona que confirma, penalidade quando opõe ──
-  const supStr = srBounce.supportStrength;
-  const resStr = srBounce.resistanceStrength;
+  // ── Candle score (0–30 pts) ───────────────────────────────────────────
+  let candleScore = 0;
   if (direction === 'CALL') {
-    if (supStr >= 5)      rawScore = Math.min(0.95, rawScore + 0.12); // suporte forte → CALL
-    else if (supStr >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
-    else if (supStr >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
-    if (resStr >= 5)      rawScore = Math.max(0.35, rawScore - 0.12); // resistência forte → penaliza CALL
-    else if (resStr >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+    if (candle.pattern === 'hammer' || candle.pattern === 'threeWhiteSoldiers') candleScore = 30;
+    else if (candle.pattern === 'bullEngulfing') candleScore = 24;
+    else if (srBounce.rejectionLong) candleScore = 18;
+    else if (candle.pattern === 'doji') candleScore = 10;
   } else {
-    if (resStr >= 5)      rawScore = Math.min(0.95, rawScore + 0.12); // resistência forte → PUT
-    else if (resStr >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
-    else if (resStr >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
-    if (supStr >= 5)      rawScore = Math.max(0.35, rawScore - 0.12); // suporte forte → penaliza PUT
-    else if (supStr >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+    if (candle.pattern === 'shootingStar' || candle.pattern === 'threeBlackCrows') candleScore = 30;
+    else if (candle.pattern === 'bearEngulfing') candleScore = 24;
+    else if (srBounce.rejectionShort) candleScore = 18;
+    else if (candle.pattern === 'doji') candleScore = 10;
   }
-  if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
-  if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
-  if (entropy > 0.72) rawScore = Math.max(0.35, rawScore - 0.06);
-  if (entropy > 0.82) rawScore = Math.max(0.35, rawScore - 0.12);
 
-  // ── ATR Volatility Filter: 0.03%–1.2% of price ───────────────────────
-  const atrPct = lastClose > 0 ? atr / lastClose : 0;
-  if (atrPct < 0.0003) rawScore = Math.max(0.35, rawScore - 0.10);      // mercado morto
-  else if (atrPct > 0.012) rawScore = Math.max(0.35, rawScore - 0.08);  // mercado caótico
-  else if (category === 'crypto' && atrPct > 0.02) rawScore = Math.max(0.35, rawScore - 0.05);
+  // ── S/R Zone strength (0–40 pts) ─────────────────────────────────────
+  const zoneStrength = direction === 'CALL' ? srBounce.supportStrength : srBounce.resistanceStrength;
+  let srScore = 0;
+  if      (zoneStrength >= 7) srScore = 40;
+  else if (zoneStrength >= 5) srScore = 35;
+  else if (zoneStrength >= 3) srScore = 28;
+  else if (zoneStrength >= 2) srScore = 20;
+  else                         srScore = 12;
 
-  // ── Confluence bonus/penalty ──────────────────────────────────────────
-  if (confluenceFactors >= 3) rawScore = Math.min(0.95, rawScore + 0.06);
-  else if (confluenceFactors <= 1) rawScore = Math.max(0.35, rawScore - 0.05);
-
-  // ── Market Regime Detector (Solução 2) ───────────────────────────────
-  if (marketRegime === 'RANGING')  rawScore = Math.max(0.35, rawScore - 0.08);
-  if (marketRegime === 'TRENDING') rawScore = Math.min(0.95, rawScore + 0.06);
-
-  // ── Multi-Timeframe Confluence Gate (Solução 1) ───────────────────────
-  const tfDisagreeCount = [votes.ema, votes.htf, votes.m15]
-    .filter(v => v !== 'NEUTRAL' && v !== direction).length;
-  const tfAgreeCount = [votes.ema, votes.htf, votes.m15]
-    .filter(v => v === direction).length;
-  if (tfAgreeCount === 3) rawScore = Math.min(0.95, rawScore + 0.07);
-  else if (tfAgreeCount === 2) rawScore = Math.min(0.95, rawScore + 0.03);
-  else if (tfDisagreeCount === 3) rawScore = Math.max(0.35, rawScore - 0.16);
-
-  // ── Adaptive Performance Memory (Solução 3) ───────────────────────────
-  // pairWR is passed by the orchestrator (backendSignalEngine) from in-memory Map
-  if (pairWR !== undefined) {
-    const wrBonus = (pairWR - 0.65) * 0.7;
-    rawScore = Math.min(0.95, Math.max(0.35, rawScore + wrBonus));
+  // ── EMA alignment (0–20 pts) ─────────────────────────────────────────
+  let emaScore = 0;
+  if (direction === 'CALL') {
+    if (emaBull) emaScore = 20; else if (lastEma9 > lastEma21) emaScore = 12; else emaScore = 4;
+  } else {
+    if (emaBear) emaScore = 20; else if (lastEma9 < lastEma21) emaScore = 12; else emaScore = 4;
   }
+
+  // ── HTF M5 + M15 (0–10 pts) ──────────────────────────────────────────
+  let htfScore = 0;
+  if (direction === 'CALL') {
+    if (htfBull && m15Bull) htfScore = 10; else if (htfBull) htfScore = 7; else if (m15Bull) htfScore = 4;
+  } else {
+    if (!htfBull && !m15Bull) htfScore = 10; else if (!htfBull) htfScore = 7; else if (!m15Bull) htfScore = 4;
+  }
+
+  // ── RSI bonus (0–8 pts) ───────────────────────────────────────────────
+  let rsiBonus = 0;
+  if (direction === 'CALL') {
+    if (rsi < 30) rsiBonus = 8; else if (rsi < 40) rsiBonus = 4; else if (rsi < 50) rsiBonus = 2;
+  } else {
+    if (rsi > 70) rsiBonus = 8; else if (rsi > 60) rsiBonus = 4; else if (rsi > 50) rsiBonus = 2;
+  }
+
+  // ── Score (normalizado, max 108 pts) ─────────────────────────────────
+  let rawScore = (srScore + candleScore + emaScore + htfScore + rsiBonus) / 108;
+  rawScore = Math.min(0.97, Math.max(0.40, rawScore + getPairSessionBonus(sess, category, asset) * 0.20));
+  if (adx >= 30)      rawScore = Math.min(0.97, rawScore + 0.03);
+  else if (adx >= 25) rawScore = Math.min(0.97, rawScore + 0.015);
+  if (marketRegime === 'TRENDING') rawScore = Math.min(0.97, rawScore + 0.04);
+  const htfAgrees = direction === 'CALL' ? htfBull : !htfBull;
+  const m15Agrees = direction === 'CALL' ? m15Bull : !m15Bull;
+  if (htfAgrees && m15Agrees) rawScore = Math.min(0.97, rawScore + 0.03);
+  if (pairWR !== undefined && pairWR < 0.40) rawScore = Math.max(0.40, rawScore - 0.05);
 
   const score = Math.round(rawScore * 100);
 
   let quality: SignalResult['quality'] = 'EVITAR';
-  if (score >= 94) quality = 'ULTRA';
-  else if (score >= 88) quality = 'ELITE';
-  else if (score >= 83) quality = 'PREMIUM';
-  else if (score >= 74) quality = 'FORTE';
-  else if (score >= 68) quality = 'MÉDIO';
-  else if (score >= 62) quality = 'FRACO';
+  if      (score >= 92) quality = 'ULTRA';
+  else if (score >= 84) quality = 'ELITE';
+  else if (score >= 76) quality = 'PREMIUM';
+  else if (score >= 68) quality = 'FORTE';
+  else if (score >= 60) quality = 'MÉDIO';
+  else if (score >= 52) quality = 'FRACO';
 
-  const variations = [
-    {},
-    { ema: 0.08, rsidiv: -0.05, macd: -0.03, m15: 0.05 },
-    { rsidiv: 0.10, stoch: 0.05, ema: -0.10, sr: 0.05 },
-    { volume: 0.10, obv: 0.08, bsq: 0.08, candle: -0.15 },
-    { rsidiv: -0.08, macd: -0.08, candle: 0.15, sr: 0.10 }
-  ];
-  let consensusCount = 0;
-  for (const v of variations) {
-    const w: Record<string, number> = { ...mlWeights };
-    for (const [k, d] of Object.entries(v)) {
-      if (w[k] !== undefined) w[k] = Math.max(0.01, w[k] + d);
-    }
-    const t = Object.values(w).reduce((a, b) => a + b, 0);
-    Object.keys(w).forEach(k => (w[k] /= t));
-    const cs = callVotes.reduce((s, [k]) => s + (w[k] || 0), 0);
-    const ps = putVotes.reduce((s, [k]) => s + (w[k] || 0), 0);
-    if ((direction === 'CALL' ? cs >= ps : ps > cs)) consensusCount++;
-  }
+  const votes: Record<string, string> = {
+    sr:     direction,
+    candle: candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL',
+    ema:    emaBull ? 'CALL' : emaBear ? 'PUT' : 'NEUTRAL',
+    htf:    htfBull ? 'CALL' : 'PUT',
+    m15:    m15closes.length >= 9 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL',
+    rsi:    rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL',
+  };
 
-  const mainCriteria = ['ema', 'htf', 'm15', 'rsi', 'macd', 'rsidiv'];
-  const confirmed = mainCriteria.filter(k => votes[k] === direction).length;
   const mins = new Date().getMinutes();
-
   let blockedBy: string | null = null;
-  if (mins === 59 || mins === 0) blockedBy = 'Horário morto (min :00 ou :59)';
-  else if (adx < 18) blockedBy = `ADX fraco (${Math.round(adx)} < 18) — mercado lateral`;
-  else if (atrPct < 0.0003) blockedBy = `Mercado morto — ATR ${(atrPct * 10000).toFixed(1)} bps (< 3 bps)`;
-  else if (atrPct > 0.012) blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps (> 120 bps)`;
-  else if (marketRegime === 'CHOPPY') blockedBy = `Regime CHOPPY — mercado sem direcionalidade`;
-  else if (tfDisagreeCount === 3) blockedBy = `Conflito MTF total — todos os 3 timeframes contra a direção`;
-  else if (entropy > 0.82 && !(marketRegime === 'TRENDING' && adx >= 22)) blockedBy = `Entropia muito alta (${Math.round(entropy * 100)}%) em mercado lateral — sinal inválido`;
-  else if (confluenceFactors < 2) blockedBy = `Confluência insuficiente (${confluenceFactors}/3 fatores: tendência, RSI, volume)`;
-  else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
-  else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
-  // S&R gate: bloqueia sinal contra zona forte (≥4 toques)
-  else if (direction === 'CALL' && resStr >= 4) blockedBy = `Resistência forte (${resStr} toques) — CALL bloqueado`;
-  else if (direction === 'PUT' && supStr >= 4) blockedBy = `Suporte forte (${supStr} toques) — PUT bloqueado`;
-  // Luna Mode S/R: exige zona forte alinhada + tendência + wick de rejeição
-  else if (lunaMode && direction === 'CALL' && !(supStr >= 3 && srBounce.rejectionLong && emaBull))
-    blockedBy = `Luna Mode: suporte ≥3 toques (${supStr}) + wick CALL (${srBounce.rejectionLong}) + uptrend (${emaBull})`;
-  else if (lunaMode && direction === 'PUT' && !(resStr >= 3 && srBounce.rejectionShort && emaBear))
-    blockedBy = `Luna Mode: resistência ≥3 toques (${resStr}) + wick PUT (${srBounce.rejectionShort}) + downtrend (${emaBear})`;
-  else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
+
+  if (mins === 59 || mins === 0)
+    blockedBy = 'Horário morto (min :00 ou :59)';
+  else if (!srBounce.nearSupport && !srBounce.nearResistance)
+    blockedBy = 'Fora de zona S/R — aguardando toque';
+  else if (candleScore === 0)
+    blockedBy = `Sem padrão de reversão em ${direction === 'CALL' ? 'suporte' : 'resistência'} (${candle.pattern})`;
+  else if (direction === 'CALL' && emaBear)
+    blockedBy = 'EMA Bear Stack — contra tendência de baixa';
+  else if (direction === 'PUT' && emaBull)
+    blockedBy = 'EMA Bull Stack — contra tendência de alta';
+  else if (adx < 15)
+    blockedBy = `ADX ${Math.round(adx)} < 15 — mercado sem força`;
+  else if (atrPct < 0.0003)
+    blockedBy = 'Mercado morto — ATR < 3 bps';
+  else if (atrPct > 0.025)
+    blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps`;
+  else if (direction === 'CALL' && rsi > 75)
+    blockedBy = `RSI ${Math.round(rsi)} sobrecomprado — CALL bloqueado`;
+  else if (direction === 'PUT' && rsi < 25)
+    blockedBy = `RSI ${Math.round(rsi)} sobrevendido — PUT bloqueado`;
+  else if (marketRegime === 'CHOPPY')
+    blockedBy = 'Regime CHOPPY — sem sinal';
+  else if (quality === 'EVITAR')
+    blockedBy = `Score ${score}% — zona fraca (${zoneStrength} toques) ou candle fraco (${candle.pattern})`;
+  else if (lunaMode && zoneStrength < 3)
+    blockedBy = `Luna Mode: zona com ${zoneStrength} toques (mínimo 3)`;
+  else if (lunaMode && direction === 'CALL' && !srBounce.rejectionLong)
+    blockedBy = 'Luna Mode: sem wick de rejeição bullish';
+  else if (lunaMode && direction === 'PUT' && !srBounce.rejectionShort)
+    blockedBy = 'Luna Mode: sem wick de rejeição bearish';
 
   return {
     direction, score, quality, marketRegime,
     adx: Math.round(adx), rsi: Math.round(rsi),
-    entropy: Math.round(entropy * 100),
-    consensus: consensusCount, confirmed,
-    blockedBy,
-    mmTrap, mmTrapType,
-    sess, votes,
-    asset, category,
-    ts: Date.now(),
-    passed: blockedBy === null,
+    entropy: 0, consensus: Math.round(zoneStrength),
+    confirmed: candleScore > 0 ? 1 : 0,
+    blockedBy, mmTrap: false, mmTrapType: '',
+    sess, votes, asset, category,
+    ts: Date.now(), passed: blockedBy === null,
   };
 }
+
