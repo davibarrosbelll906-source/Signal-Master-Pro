@@ -31,6 +31,9 @@ const socketTimeframes = new Map<string, string>();
 // Global default timeframe (used when no socket preference is known)
 let globalTimeframe: string = 'M1';
 
+// Luna Mode S/R: quando ativo exige zona forte + tendência + wick de rejeição
+let globalLunaMode: boolean = false;
+
 // ── Adaptive Performance Memory (Solução 3) ───────────────────────────────
 // Chave: "EURUSD-M5" → win rate (0.45–0.92), inicializa em 0.65 (neutro)
 const performanceMemory = new Map<string, number>();
@@ -124,11 +127,16 @@ export function initSignalEngine(io: IOServer) {
     socket.on('change_timeframe', (timeframe: string) => {
       if (['M1', 'M5', 'M15'].includes(timeframe)) {
         socketTimeframes.set(socket.id, timeframe);
-        globalTimeframe = timeframe; // update global for single-user simplicity
+        globalTimeframe = timeframe;
         console.log(`[SignalEngine] ⏱️ Timeframe atualizado → ${timeframe} (socket: ${socket.id})`);
-        // Confirm back to the client
         socket.emit('timeframe_changed', { timeframe });
       }
+    });
+
+    // Frontend → Backend: Luna Mode S/R toggle
+    socket.on('set_luna_mode', (mode: boolean) => {
+      globalLunaMode = !!mode;
+      console.log(`[SignalEngine] 🌙 Luna Mode S/R ${globalLunaMode ? 'ATIVADO' : 'desativado'}`);
     });
 
     // Recebe resultado WIN/LOSS do frontend → atualiza memória adaptativa + Nexus echo
@@ -162,7 +170,7 @@ export function initSignalEngine(io: IOServer) {
     }
 
     const pairWR = getPerformanceWR(asset, tf);
-    const result = runEngine(buf.m1, asset, pairWR);
+    const result = runEngine(buf.m1, asset, pairWR, globalLunaMode);
     if (!result) return;
 
     // ── Signals that didn't pass quant — broadcast as blocked (no Oracle) ──

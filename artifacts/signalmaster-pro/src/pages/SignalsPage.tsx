@@ -123,20 +123,34 @@ export default function SignalsPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Luna Mode — lido do localStorage
+  const [lunaMode] = useState<boolean>(() => {
+    try {
+      const cfg = JSON.parse(localStorage.getItem('smpCfg7') || '{}');
+      return cfg.lunaMode ?? false;
+    } catch { return false; }
+  });
+
   // Persist timeframe + re-sync on reconnect
   useEffect(() => {
     localStorage.setItem('smpTimeframe', timeframe);
     socket.emit('change_timeframe', timeframe);
   }, [timeframe]);
 
-  // Re-envia o timeframe toda vez que o socket reconecta (ex: servidor reiniciou)
+  // Sync lunaMode to backend whenever it changes or on mount
+  useEffect(() => {
+    socket.emit('set_luna_mode', lunaMode);
+  }, [lunaMode]);
+
+  // Re-envia o timeframe + lunaMode toda vez que o socket reconecta (ex: servidor reiniciou)
   useEffect(() => {
     const handleReconnect = () => {
       socket.emit('change_timeframe', timeframe);
+      socket.emit('set_luna_mode', lunaMode);
     };
     socket.on('connect', handleReconnect);
     return () => { socket.off('connect', handleReconnect); };
-  }, [timeframe]);
+  }, [timeframe, lunaMode]);
 
   // Reset Luna state when new signal fires for this asset
   useEffect(() => {
@@ -282,10 +296,10 @@ export default function SignalsPage() {
 
         setEngineStatus('calculando indicadores...');
         try {
-          const diag = runEngineDiag(buf, asset);
+          const diag = runEngineDiag(buf, asset, lunaMode);
           if (diag) { setLastDiag(diag); setLastDiagTime(new Date()); }
 
-          const result = runEngine(buf, asset);
+          const result = runEngine(buf, asset, lunaMode);
           if (result) {
             lastFiredByPairRef.current.set(asset, Date.now());
             setSignal(result);

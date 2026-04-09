@@ -6,6 +6,7 @@ import { PinSetup } from "@/components/PinLock";
 interface Config {
   minScore: number;
   forteOnly: boolean;
+  lunaMode: boolean;
   soundEnabled: boolean;
   soundOnlyStrong: boolean;
   vibrateEnabled: boolean;
@@ -26,6 +27,7 @@ interface Config {
 const DEFAULTS: Config = {
   minScore: 65,
   forteOnly: true,
+  lunaMode: false,
   soundEnabled: true,
   soundOnlyStrong: true,
   vibrateEnabled: true,
@@ -138,6 +140,20 @@ export default function SettingsPage() {
 
         <Row label="Apenas FORTE e PREMIUM" desc="Bloqueia sinais de qualidade MÉDIO e abaixo">
           <Toggle value={cfg.forteOnly} onChange={v => set('forteOnly', v)} />
+        </Row>
+
+        <Row
+          label="Luna Mode S/R Forte"
+          desc="Emite sinal APENAS em zona S/R forte (≥3 toques) + tendência alinhada + wick de rejeição"
+        >
+          <div className="flex items-center gap-2">
+            {cfg.lunaMode && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                🌙 ATIVO
+              </span>
+            )}
+            <Toggle value={cfg.lunaMode} onChange={v => set('lunaMode', v)} />
+          </div>
         </Row>
 
         <Row label="Exibir sinais de baixa qualidade" desc="Mostrar FRACO e EVITAR (apenas informativo)">

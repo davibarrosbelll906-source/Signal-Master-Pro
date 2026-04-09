@@ -1,0 +1,250 @@
+// =============================================
+// STRATÉGIA NOVA: StrongSRConfluence + Tendência
+// Arquivo: src/engine/StrongSRConfluence.js
+// Versão: v7.1 - Integrada ao SignalMaster Pro
+// =============================================
+
+/**
+ * StrongSRConfluence - Motor de Sinais baseado em Suportes/Resistências FORTES + Tendência
+ * Inspirado na lógica da Luna (Order Blocks, zonas com múltiplos toques, confluence de TF)
+ * 
+ * Regras principais:
+ * - Só gera sinal se tocar em zona S/R **MUITO FORTE** (mínimo 3 toques + confluence)
+ * - Sinal só na **direção da tendência** (Uptrend → só compra em suporte | Downtrend → só venda em resistência)
+ * - Score mínimo: 85 para ser sinal Premium
+ * - Confirmação de rejeição (wick longa ou engulfing)
+ */
+
+class StrongSRConfluence {
+  constructor(config = {}) {
+    this.config = {
+      minTouches: 3,                    // mínimo de toques para considerar zona FORTE
+      zoneBufferPips: 8,                // buffer em pips ao redor da zona
+      trendPeriod: 50,                  // EMA para definir tendência
+      swingDepth: 5,                    // profundidade do ZigZag/Fractal
+      minScore: 85,
+      ...config
+    };
+  }
+
+  // ====================== DETECÇÃO DE ZONAS FORTES ======================
+  findStrongZones(candles) {
+    const highs = [];
+    const lows = [];
+
+    // 1. Encontrar Swing Highs e Swing Lows (lógica simples e eficiente)
+    for (let i = this.config.swingDepth; i < candles.length - this.config.swingDepth; i++) {
+      const candle = candles[i];
+      
+      // Swing High
+      let isSwingHigh = true;
+      for (let j = 1; j <= this.config.swingDepth; j++) {
+        if (candles[i - j].high > candle.high || candles[i + j].high > candle.high) {
+          isSwingHigh = false;
+          break;
+        }
+      }
+      if (isSwingHigh) highs.push({ price: candle.high, time: candle.time, touches: 1 });
+
+      // Swing Low
+      let isSwingLow = true;
+      for (let j = 1; j <= this.config.swingDepth; j++) {
+        if (candles[i - j].low < candle.low || candles[i + j].low < candle.low) {
+          isSwingLow = false;
+          break;
+        }
+      }
+      if (isSwingLow) lows.push({ price: candle.low, time: candle.time, touches: 1 });
+    }
+
+    // 2. Agrupar em zonas (merge de níveis próximos)
+    const supportZones = this.mergeZones(lows, this.config.zoneBufferPips);
+    const resistanceZones = this.mergeZones(highs, this.config.zoneBufferPips);
+
+    // 3. Contar toques reais em cada zona
+    this.countTouches(supportZones, candles, 'low');
+    this.countTouches(resistanceZones, candles, 'high');
+
+    // 4. Filtrar apenas zonas FORTES
+    const strongSupports = supportZones.filter(z => z.touches >= this.config.minTouches);
+    const strongResistances = resistanceZones.filter(z => z.touches >= this.config.minTouches);
+
+    return { strongSupports, strongResistances };
+  }
+
+  mergeZones(levels, bufferPips) {
+    levels.sort((a, b) => a.price - b.price);
+    const zones = [];
+    
+    for (let level of levels) {
+      let merged = false;
+      for (let zone of zones) {
+        if (Math.abs(zone.price - level.price) <= bufferPips) {
+          zone.price = (zone.price + level.price) / 2; // média
+          zone.touches += level.touches;
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) zones.push({ ...level });
+    }
+    return zones;
+  }
+
+  countTouches(zones, candles, type) {
+    for (let zone of zones) {
+      let touches = 0;
+      const lower = zone.price - this.config.zoneBufferPips;
+      const upper = zone.price + this.config.zoneBufferPips;
+
+      for (let candle of candles) {
+        if (type === 'low' && candle.low <= upper && candle.low >= lower) touches++;
+        if (type === 'high' && candle.high >= lower && candle.high <= upper) touches++;
+      }
+      zone.touches = touches;
+    }
+  }
+
+  // ====================== DETECÇÃO DE TENDÊNCIA ======================
+  getTrend(candles) {
+    const ema = this.calculateEMA(candles, this.config.trendPeriod);
+    if (ema.length === 0) return 'NEUTRAL';
+
+    const lastPrice = candles[candles.length - 1].close;
+    const lastEMA = ema[ema.length - 1];
+
+    if (lastPrice > lastEMA) return 'UPTREND';
+    if (lastPrice < lastEMA) return 'DOWNTREND';
+    return 'NEUTRAL';
+  }
+
+  calculateEMA(candles, period) {
+    const ema = [];
+    const multiplier = 2 / (period + 1);
+    let sum = 0;
+
+    for (let i = 0; i < candles.length; i++) {
+      if (i < period - 1) {
+        sum += candles[i].close;
+        continue;
+      }
+      if (i === period - 1) {
+        sum += candles[i].close;
+        ema.push(sum / period);
+      } else {
+        const prevEMA = ema[ema.length - 1];
+        const currentEMA = (candles[i].close * multiplier) + (prevEMA * (1 - multiplier));
+        ema.push(currentEMA);
+      }
+    }
+    return ema;
+  }
+
+  // ====================== GERAÇÃO DO SINAL ======================
+  generateSignal(candles, currentPrice, currentTime) {
+    const { strongSupports, strongResistances } = this.findStrongZones(candles);
+    const trend = this.getTrend(candles);
+
+    if (trend === 'NEUTRAL') return null;
+
+    // Última vela para confirmação de rejeição
+    const lastCandle = candles[candles.length - 1];
+
+    // Verifica toque em suporte forte (só em UPTREND)
+    if (trend === 'UPTREND') {
+      for (let zone of strongSupports) {
+        const lower = zone.price - this.config.zoneBufferPips;
+        const upper = zone.price + this.config.zoneBufferPips;
+
+        if (lastCandle.low <= upper && lastCandle.low >= lower) {
+          // Confirmação de rejeição (wick longa ou bullish engulfing)
+          const wickSize = lastCandle.close - lastCandle.low;
+          const bodySize = Math.abs(lastCandle.close - lastCandle.open);
+          
+          if (wickSize > bodySize * 1.5 || (lastCandle.close > lastCandle.open && lastCandle.close > lastCandle.high * 0.7)) {
+            const score = this.calculateScore(zone, trend, candles);
+            if (score >= this.config.minScore) {
+              return {
+                type: 'BUY',
+                price: currentPrice,
+                zonePrice: zone.price,
+                score: Math.round(score),
+                reason: `Suporte FORTE (${zone.touches} toques) + UPTREND`,
+                timestamp: currentTime,
+                signalId: `SR-${Date.now()}`
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // Verifica toque em resistência forte (só em DOWNTREND)
+    if (trend === 'DOWNTREND') {
+      for (let zone of strongResistances) {
+        const lower = zone.price - this.config.zoneBufferPips;
+        const upper = zone.price + this.config.zoneBufferPips;
+
+        if (lastCandle.high >= lower && lastCandle.high <= upper) {
+          // Confirmação de rejeição (wick longa ou bearish engulfing)
+          const wickSize = lastCandle.high - lastCandle.close;
+          const bodySize = Math.abs(lastCandle.close - lastCandle.open);
+          
+          if (wickSize > bodySize * 1.5 || (lastCandle.close < lastCandle.open && lastCandle.close < lastCandle.low * 1.3)) {
+            const score = this.calculateScore(zone, trend, candles);
+            if (score >= this.config.minScore) {
+              return {
+                type: 'SELL',
+                price: currentPrice,
+                zonePrice: zone.price,
+                score: Math.round(score),
+                reason: `Resistência FORTE (${zone.touches} toques) + DOWNTREND`,
+                timestamp: currentTime,
+                signalId: `SR-${Date.now()}`
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  calculateScore(zone, trend, candles) {
+    let score = 60; // base
+
+    // Toques
+    score += Math.min(zone.touches * 8, 25);
+
+    // Confluence de tendência forte
+    if (trend === 'UPTREND' || trend === 'DOWNTREND') score += 15;
+
+    // Últimas 3 velas mostram rejeição clara
+    const recentCandles = candles.slice(-3);
+    if (recentCandles.every(c => Math.abs(c.close - c.open) / (c.high - c.low) < 0.4)) score += 10;
+
+    return Math.min(score, 100);
+  }
+}
+
+// ====================== EXPORT PARA INTEGRAR NO CONFLUENCE ENGINE ======================
+export default StrongSRConfluence;
+
+// Como usar no seu ConfluenceEngine.js (exemplo rápido):
+/*
+import StrongSRConfluence from './StrongSRConfluence.js';
+
+const srEngine = new StrongSRConfluence({
+  minTouches: 3,
+  zoneBufferPips: 10,
+  trendPeriod: 50
+});
+
+// Dentro do loop de geração de sinais:
+const newSignal = srEngine.generateSignal(candles, currentPrice, currentTime);
+if (newSignal) {
+  this.signals.push(newSignal);
+  // dispara para o frontend
+}
+*/

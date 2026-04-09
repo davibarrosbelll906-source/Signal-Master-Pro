@@ -430,19 +430,28 @@ function detectBBSqueeze(closes: number[]): { squeeze: boolean; breakout: 'up' |
   return { squeeze: true, breakout };
 }
 
-// S/R Swing Level detector: price near a key pivot = high-confidence bounce
+// S/R Swing Level detector (StrongSRConfluence style)
 interface SRBounceResult {
   nearSupport: boolean;
   nearResistance: boolean;
-  supportStrength: number;
+  supportStrength: number;     // contagem real de toques
   resistanceStrength: number;
+  rejectionLong: boolean;      // wick inferior > 1.5× corpo → confirmação CALL
+  rejectionShort: boolean;     // wick superior > 1.5× corpo → confirmação PUT
 }
 
-function detectSRBounce(highs: number[], lows: number[], closes: number[]): SRBounceResult {
-  const empty: SRBounceResult = { nearSupport: false, nearResistance: false, supportStrength: 0, resistanceStrength: 0 };
-  if (closes.length < 20) return empty;
+function detectSRBounce(
+  highs: number[], lows: number[], closes: number[], opens?: number[]
+): SRBounceResult {
+  const empty: SRBounceResult = {
+    nearSupport: false, nearResistance: false,
+    supportStrength: 0, resistanceStrength: 0,
+    rejectionLong: false, rejectionShort: false,
+  };
+  if (closes.length < 15) return empty;
 
-  const lookback = Math.min(120, closes.length - 3);
+  const DEPTH = 5;
+  const lookback = Math.min(150, closes.length);
   const h = highs.slice(-lookback);
   const l = lows.slice(-lookback);
   const price = closes[closes.length - 1];
@@ -451,27 +460,52 @@ function detectSRBounce(highs: number[], lows: number[], closes: number[]): SRBo
   const clusterTol   = atr * 1.5;
   const proximityTol = atr * 2.0;
 
+  // Swing highs — fractal 5 barras
   const swingHighs: number[] = [];
-  for (let i = 2; i < h.length - 2; i++) {
-    if (h[i] > h[i-1] && h[i] > h[i-2] && h[i] > h[i+1] && h[i] > h[i+2]) swingHighs.push(h[i]);
+  for (let i = DEPTH; i < h.length - DEPTH; i++) {
+    let ok = true;
+    for (let j = 1; j <= DEPTH && ok; j++) {
+      if (h[i - j] >= h[i] || h[i + j] >= h[i]) ok = false;
+    }
+    if (ok) swingHighs.push(h[i]);
   }
+
+  // Swing lows — fractal 5 barras
   const swingLows: number[] = [];
-  for (let i = 2; i < l.length - 2; i++) {
-    if (l[i] < l[i-1] && l[i] < l[i-2] && l[i] < l[i+1] && l[i] < l[i+2]) swingLows.push(l[i]);
+  for (let i = DEPTH; i < l.length - DEPTH; i++) {
+    let ok = true;
+    for (let j = 1; j <= DEPTH && ok; j++) {
+      if (l[i - j] <= l[i] || l[i + j] <= l[i]) ok = false;
+    }
+    if (ok) swingLows.push(l[i]);
   }
 
   const supClusters: { level: number; count: number }[] = [];
   for (const sl of swingLows) {
     const hit = supClusters.find(c => Math.abs(c.level - sl) <= clusterTol);
-    if (hit) { hit.count++; hit.level = (hit.level * hit.count + sl) / (hit.count + 1); }
+    if (hit) { hit.count++; hit.level = (hit.level * (hit.count - 1) + sl) / hit.count; }
     else supClusters.push({ level: sl, count: 1 });
   }
 
   const resClusters: { level: number; count: number }[] = [];
   for (const sh of swingHighs) {
     const hit = resClusters.find(c => Math.abs(c.level - sh) <= clusterTol);
-    if (hit) { hit.count++; hit.level = (hit.level * hit.count + sh) / (hit.count + 1); }
+    if (hit) { hit.count++; hit.level = (hit.level * (hit.count - 1) + sh) / hit.count; }
     else resClusters.push({ level: sh, count: 1 });
+  }
+
+  // Contagem REAL de toques (todos os candles que visitam a zona)
+  for (const c of supClusters) {
+    let t = 0;
+    const lo = c.level - clusterTol; const hi = c.level + clusterTol;
+    for (let i = 0; i < l.length; i++) { if (l[i] >= lo && l[i] <= hi) t++; }
+    c.count = Math.max(c.count, t);
+  }
+  for (const c of resClusters) {
+    let t = 0;
+    const lo = c.level - clusterTol; const hi = c.level + clusterTol;
+    for (let i = 0; i < h.length; i++) { if (h[i] >= lo && h[i] <= hi) t++; }
+    c.count = Math.max(c.count, t);
   }
 
   const nearestSup = supClusters
@@ -482,11 +516,22 @@ function detectSRBounce(highs: number[], lows: number[], closes: number[]): SRBo
     .filter(c => price >= c.level - proximityTol && price <= c.level + proximityTol)
     .sort((a, b) => b.count - a.count)[0];
 
+  // Wick de rejeição na última vela
+  const lastH = highs[highs.length - 1];
+  const lastL = lows[lows.length - 1];
+  const lastC = closes[closes.length - 1];
+  const lastO = opens ? opens[opens.length - 1] : lastC;
+  const bodySize = Math.abs(lastC - lastO) || atr * 0.1;
+  const lowerWick = Math.min(lastO, lastC) - lastL;
+  const upperWick = lastH - Math.max(lastO, lastC);
+
   return {
     nearSupport:        nearestSup !== undefined,
     nearResistance:     nearestRes !== undefined,
     supportStrength:    nearestSup?.count ?? 0,
     resistanceStrength: nearestRes?.count ?? 0,
+    rejectionLong:  lowerWick > bodySize * 1.5,
+    rejectionShort: upperWick > bodySize * 1.5,
   };
 }
 
@@ -552,13 +597,14 @@ export function detectMarketRegime(
 
 // ─── MAIN ENGINE ───────────────────────────────────────────────────────────
 
-export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null {
+export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): SignalResult | null {
   const m1 = buf.m1;
   if (m1.length < 30) return null;
 
   const closes = m1.map(c => c.c);
   const highs = m1.map(c => c.h);
   const lows = m1.map(c => c.l);
+  const opens = m1.map(c => c.o);
   const volumes = m1.map(c => c.v);
   const category = ASSET_CATEGORIES[asset] || 'forex';
   const sess = getCurrentSession();
@@ -599,7 +645,7 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   const rsidiv = detectRSIDivergence(closes, highs, lows);
   const obvTrend = calcOBVTrend(closes, volumes, 12);
   const bbSqueeze = detectBBSqueeze(closes);
-  const srBounce = detectSRBounce(highs, lows, closes);
+  const srBounce = detectSRBounce(highs, lows, closes, opens);
   const emaRetest = detectEMARetest(closes, ema21, htfBull ? 'CALL' : 'PUT');
   const macdMomentum = calcMACDMomentum(closes);
 
@@ -785,6 +831,9 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) return null;
   if (quality === 'EVITAR') return null;
   if (adx < 18) return null;
+  // Luna Mode S/R: exige zona forte alinhada + tendência + wick de rejeição
+  if (lunaMode && direction === 'CALL' && !(srBounce.supportStrength >= 3 && srBounce.rejectionLong && emaBull)) return null;
+  if (lunaMode && direction === 'PUT' && !(srBounce.resistanceStrength >= 3 && srBounce.rejectionShort && emaBear)) return null;
 
   // ATR Volatility Filter: bloqueia mercado morto e mercado caótico
   if (atrPct < 0.0003) return null;  // mercado morto (menos de 3 bps)
@@ -881,13 +930,14 @@ export interface DiagResult {
   extras?: string[];
 }
 
-export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | null {
+export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false): DiagResult | null {
   const m1 = buf.m1;
   if (m1.length < 30) return null;
 
   const closes = m1.map(c => c.c);
   const highs = m1.map(c => c.h);
   const lows = m1.map(c => c.l);
+  const opens = m1.map(c => c.o);
   const volumes = m1.map(c => c.v);
   const category = ASSET_CATEGORIES[asset] || 'forex';
   const sess = getCurrentSession();
@@ -924,7 +974,7 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   const rsidiv = detectRSIDivergence(closes, highs, lows);
   const obvTrend = calcOBVTrend(closes, volumes, 12);
   const bbSqueeze = detectBBSqueeze(closes);
-  const srBounce = detectSRBounce(highs, lows, closes);
+  const srBounce = detectSRBounce(highs, lows, closes, opens);
   const emaRetest = detectEMARetest(closes, ema21, htfBull ? 'CALL' : 'PUT');
   const macdMomentum = calcMACDMomentum(closes);
 
@@ -1079,6 +1129,11 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   // S&R gate: bloqueia sinal contra zona forte (≥4 toques)
   else if (direction === 'CALL' && srBounce.resistanceStrength >= 4) blockedBy = `Resistência forte (${srBounce.resistanceStrength} toques) — CALL bloqueado`;
   else if (direction === 'PUT' && srBounce.supportStrength >= 4) blockedBy = `Suporte forte (${srBounce.supportStrength} toques) — PUT bloqueado`;
+  // Luna Mode S/R: exige zona forte alinhada + tendência + wick de rejeição
+  else if (lunaMode && direction === 'CALL' && !(srBounce.supportStrength >= 3 && srBounce.rejectionLong && emaBull))
+    blockedBy = `Luna Mode: suporte ≥3 toques (${srBounce.supportStrength}) + wick CALL (${srBounce.rejectionLong}) + uptrend (${emaBull})`;
+  else if (lunaMode && direction === 'PUT' && !(srBounce.resistanceStrength >= 3 && srBounce.rejectionShort && emaBear))
+    blockedBy = `Luna Mode: resistência ≥3 toques (${srBounce.resistanceStrength}) + wick PUT (${srBounce.rejectionShort}) + downtrend (${emaBear})`;
   else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
   else if (score < minScore) blockedBy = `Score abaixo do mínimo (${score}% < ${minScore}%)`;
   else if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) blockedBy = `Qualidade ${quality} bloqueada — "Apenas FORTE+" ativo`;
