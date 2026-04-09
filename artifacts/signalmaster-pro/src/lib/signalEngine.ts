@@ -431,23 +431,62 @@ function detectBBSqueeze(closes: number[]): { squeeze: boolean; breakout: 'up' |
 }
 
 // S/R Swing Level detector: price near a key pivot = high-confidence bounce
-function detectSRBounce(highs: number[], lows: number[], closes: number[]): { nearSupport: boolean; nearResistance: boolean } {
-  if (closes.length < 20) return { nearSupport: false, nearResistance: false };
-  const lookback = Math.min(50, closes.length - 3);
-  const h = highs.slice(-lookback, -3);
-  const l = lows.slice(-lookback, -3);
+interface SRBounceResult {
+  nearSupport: boolean;
+  nearResistance: boolean;
+  supportStrength: number;
+  resistanceStrength: number;
+}
+
+function detectSRBounce(highs: number[], lows: number[], closes: number[]): SRBounceResult {
+  const empty: SRBounceResult = { nearSupport: false, nearResistance: false, supportStrength: 0, resistanceStrength: 0 };
+  if (closes.length < 20) return empty;
+
+  const lookback = Math.min(120, closes.length - 3);
+  const h = highs.slice(-lookback);
+  const l = lows.slice(-lookback);
   const price = closes[closes.length - 1];
-  const atr = calcATR(highs.slice(-20), lows.slice(-20), closes.slice(-20), 14);
-  const tol = atr * 1.8;
+  const atr = calcATR(highs.slice(-20), lows.slice(-20), closes.slice(-20), 14) || price * 0.001;
+
+  const clusterTol   = atr * 1.5;
+  const proximityTol = atr * 2.0;
+
   const swingHighs: number[] = [];
-  const swingLows: number[] = [];
-  for (let i = 1; i < h.length - 1; i++) {
-    if (h[i] > h[i - 1] && h[i] > h[i + 1]) swingHighs.push(h[i]);
-    if (l[i] < l[i - 1] && l[i] < l[i + 1]) swingLows.push(l[i]);
+  for (let i = 2; i < h.length - 2; i++) {
+    if (h[i] > h[i-1] && h[i] > h[i-2] && h[i] > h[i+1] && h[i] > h[i+2]) swingHighs.push(h[i]);
   }
+  const swingLows: number[] = [];
+  for (let i = 2; i < l.length - 2; i++) {
+    if (l[i] < l[i-1] && l[i] < l[i-2] && l[i] < l[i+1] && l[i] < l[i+2]) swingLows.push(l[i]);
+  }
+
+  const supClusters: { level: number; count: number }[] = [];
+  for (const sl of swingLows) {
+    const hit = supClusters.find(c => Math.abs(c.level - sl) <= clusterTol);
+    if (hit) { hit.count++; hit.level = (hit.level * hit.count + sl) / (hit.count + 1); }
+    else supClusters.push({ level: sl, count: 1 });
+  }
+
+  const resClusters: { level: number; count: number }[] = [];
+  for (const sh of swingHighs) {
+    const hit = resClusters.find(c => Math.abs(c.level - sh) <= clusterTol);
+    if (hit) { hit.count++; hit.level = (hit.level * hit.count + sh) / (hit.count + 1); }
+    else resClusters.push({ level: sh, count: 1 });
+  }
+
+  const nearestSup = supClusters
+    .filter(c => price >= c.level - proximityTol && price <= c.level + proximityTol)
+    .sort((a, b) => b.count - a.count)[0];
+
+  const nearestRes = resClusters
+    .filter(c => price >= c.level - proximityTol && price <= c.level + proximityTol)
+    .sort((a, b) => b.count - a.count)[0];
+
   return {
-    nearSupport: swingLows.some(sl => Math.abs(price - sl) <= tol && price >= sl - tol),
-    nearResistance: swingHighs.some(sh => Math.abs(price - sh) <= tol && price <= sh + tol)
+    nearSupport:        nearestSup !== undefined,
+    nearResistance:     nearestRes !== undefined,
+    supportStrength:    nearestSup?.count ?? 0,
+    resistanceStrength: nearestRes?.count ?? 0,
   };
 }
 
@@ -597,8 +636,10 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   // Stochastic with dead zone
   votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
 
-  // Support/Resistance bounce
-  votes.sr = srBounce.nearSupport ? 'CALL' : srBounce.nearResistance ? 'PUT' : 'NEUTRAL';
+  // Support/Resistance bounce — só vota se zona tem ≥2 toques
+  votes.sr = (srBounce.nearSupport && srBounce.supportStrength >= 2) ? 'CALL'
+           : (srBounce.nearResistance && srBounce.resistanceStrength >= 2) ? 'PUT'
+           : 'NEUTRAL';
 
   // Candle pattern
   votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
@@ -667,8 +708,22 @@ export function runEngine(buf: CandleBuffer, asset: string): SignalResult | null
   // BB Squeeze breakout bonus
   if (bbSqueeze.squeeze) rawScore = Math.min(0.95, rawScore + 0.06);
 
-  // S/R bounce bonus
-  if (srBounce.nearSupport || srBounce.nearResistance) rawScore = Math.min(0.95, rawScore + 0.05);
+  // S&R Gate — bônus proporcional à força de zona alinhada, penalidade quando opõe
+  { const supStr = srBounce.supportStrength; const resStr = srBounce.resistanceStrength;
+    if (direction === 'CALL') {
+      if (supStr >= 5) rawScore = Math.min(0.95, rawScore + 0.12);
+      else if (supStr >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
+      else if (supStr >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
+      if (resStr >= 5) rawScore = Math.max(0.35, rawScore - 0.12);
+      else if (resStr >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+    } else {
+      if (resStr >= 5) rawScore = Math.min(0.95, rawScore + 0.12);
+      else if (resStr >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
+      else if (resStr >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
+      if (supStr >= 5) rawScore = Math.max(0.35, rawScore - 0.12);
+      else if (supStr >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+    }
+  }
 
   // EMA Retest bounce bonus
   if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
@@ -886,7 +941,9 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   votes.bsq = bbSqueeze.squeeze && bbSqueeze.breakout === 'up' ? 'CALL'
             : bbSqueeze.squeeze && bbSqueeze.breakout === 'down' ? 'PUT' : 'NEUTRAL';
   votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
-  votes.sr = srBounce.nearSupport ? 'CALL' : srBounce.nearResistance ? 'PUT' : 'NEUTRAL';
+  votes.sr = (srBounce.nearSupport && srBounce.supportStrength >= 2) ? 'CALL'
+           : (srBounce.nearResistance && srBounce.resistanceStrength >= 2) ? 'PUT'
+           : 'NEUTRAL';
   votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
   const avgVol = volumes.slice(-20, -1).reduce((a, b) => a + b, 0) / 19 || 1;
   votes.volume = volumes[volumes.length - 1] > avgVol * 1.2
@@ -920,7 +977,22 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   if (rsi > 82 || rsi < 18) rawScore = Math.max(0.35, rawScore - 0.07);
   if (rsidiv !== null) rawScore = Math.min(0.95, rawScore + 0.08);
   if (bbSqueeze.squeeze) rawScore = Math.min(0.95, rawScore + 0.06);
-  if (srBounce.nearSupport || srBounce.nearResistance) rawScore = Math.min(0.95, rawScore + 0.05);
+  // S&R Gate — bônus proporcional à força de zona alinhada, penalidade quando opõe
+  { const supStr2 = srBounce.supportStrength; const resStr2 = srBounce.resistanceStrength;
+    if (direction === 'CALL') {
+      if (supStr2 >= 5) rawScore = Math.min(0.95, rawScore + 0.12);
+      else if (supStr2 >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
+      else if (supStr2 >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
+      if (resStr2 >= 5) rawScore = Math.max(0.35, rawScore - 0.12);
+      else if (resStr2 >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+    } else {
+      if (resStr2 >= 5) rawScore = Math.min(0.95, rawScore + 0.12);
+      else if (resStr2 >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
+      else if (resStr2 >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
+      if (supStr2 >= 5) rawScore = Math.max(0.35, rawScore - 0.12);
+      else if (supStr2 >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+    }
+  }
   if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
   if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
   if (entropy > 0.72) rawScore = Math.max(0.35, rawScore - 0.06);
@@ -1004,6 +1076,9 @@ export function runEngineDiag(buf: CandleBuffer, asset: string): DiagResult | nu
   else if (diagConfluenceFactors < 2) blockedBy = `Confluência insuficiente (${diagConfluenceFactors}/3 fatores)`;
   else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
+  // S&R gate: bloqueia sinal contra zona forte (≥4 toques)
+  else if (direction === 'CALL' && srBounce.resistanceStrength >= 4) blockedBy = `Resistência forte (${srBounce.resistanceStrength} toques) — CALL bloqueado`;
+  else if (direction === 'PUT' && srBounce.supportStrength >= 4) blockedBy = `Suporte forte (${srBounce.supportStrength} toques) — PUT bloqueado`;
   else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
   else if (score < minScore) blockedBy = `Score abaixo do mínimo (${score}% < ${minScore}%)`;
   else if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) blockedBy = `Qualidade ${quality} bloqueada — "Apenas FORTE+" ativo`;

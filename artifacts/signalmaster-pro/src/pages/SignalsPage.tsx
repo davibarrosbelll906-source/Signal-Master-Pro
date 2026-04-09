@@ -123,11 +123,19 @@ export default function SignalsPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Persist timeframe
+  // Persist timeframe + re-sync on reconnect
   useEffect(() => {
     localStorage.setItem('smpTimeframe', timeframe);
-    // Sincroniza timeframe com o motor do backend via Socket.io
     socket.emit('change_timeframe', timeframe);
+  }, [timeframe]);
+
+  // Re-envia o timeframe toda vez que o socket reconecta (ex: servidor reiniciou)
+  useEffect(() => {
+    const handleReconnect = () => {
+      socket.emit('change_timeframe', timeframe);
+    };
+    socket.on('connect', handleReconnect);
+    return () => { socket.off('connect', handleReconnect); };
   }, [timeframe]);
 
   // Reset Luna state when new signal fires for this asset

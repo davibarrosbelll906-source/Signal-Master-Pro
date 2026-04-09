@@ -328,23 +328,79 @@ function detectBBSqueeze(closes: number[]): { squeeze: boolean; breakout: 'up' |
   return { squeeze: true, breakout };
 }
 
-function detectSRBounce(highs: number[], lows: number[], closes: number[]): { nearSupport: boolean; nearResistance: boolean } {
-  if (closes.length < 20) return { nearSupport: false, nearResistance: false };
-  const lookback = Math.min(50, closes.length - 3);
-  const h = highs.slice(-lookback, -3);
-  const l = lows.slice(-lookback, -3);
+interface SRBounceResult {
+  nearSupport: boolean;
+  nearResistance: boolean;
+  supportStrength: number;   // 0–10+: número de toques na zona de suporte
+  resistanceStrength: number; // 0–10+: número de toques na zona de resistência
+}
+
+/**
+ * Detecta zonas de Suporte e Resistência com força baseada em número de toques.
+ * Usa fractal de 2 barras para identificar swing highs/lows.
+ * Clusters de níveis próximos (dentro de 1.5 ATR) são agrupados.
+ * Retorna força da zona mais próxima em cada direção.
+ */
+function detectSRBounce(highs: number[], lows: number[], closes: number[]): SRBounceResult {
+  const empty: SRBounceResult = { nearSupport: false, nearResistance: false, supportStrength: 0, resistanceStrength: 0 };
+  if (closes.length < 20) return empty;
+
+  const lookback = Math.min(120, closes.length - 3);
+  const h = highs.slice(-lookback);
+  const l = lows.slice(-lookback);
   const price = closes[closes.length - 1];
-  const atr = calcATR(highs.slice(-20), lows.slice(-20), closes.slice(-20), 14);
-  const tol = atr * 1.8;
+  const atr = calcATR(highs.slice(-20), lows.slice(-20), closes.slice(-20), 14) || price * 0.001;
+
+  const clusterTol   = atr * 1.5;  // agrupa níveis dentro de 1.5 ATR
+  const proximityTol = atr * 2.0;  // distância máxima do preço atual à zona
+
+  // Swing highs (resistência) — fractal de 2 barras
   const swingHighs: number[] = [];
-  const swingLows: number[] = [];
-  for (let i = 1; i < h.length - 1; i++) {
-    if (h[i] > h[i - 1] && h[i] > h[i + 1]) swingHighs.push(h[i]);
-    if (l[i] < l[i - 1] && l[i] < l[i + 1]) swingLows.push(l[i]);
+  for (let i = 2; i < h.length - 2; i++) {
+    if (h[i] > h[i-1] && h[i] > h[i-2] && h[i] > h[i+1] && h[i] > h[i+2]) {
+      swingHighs.push(h[i]);
+    }
   }
+
+  // Swing lows (suporte) — fractal de 2 barras
+  const swingLows: number[] = [];
+  for (let i = 2; i < l.length - 2; i++) {
+    if (l[i] < l[i-1] && l[i] < l[i-2] && l[i] < l[i+1] && l[i] < l[i+2]) {
+      swingLows.push(l[i]);
+    }
+  }
+
+  // Agrupa swing lows em clusters de suporte
+  const supClusters: { level: number; count: number }[] = [];
+  for (const sl of swingLows) {
+    const hit = supClusters.find(c => Math.abs(c.level - sl) <= clusterTol);
+    if (hit) { hit.count++; hit.level = (hit.level * hit.count + sl) / (hit.count + 1); }
+    else supClusters.push({ level: sl, count: 1 });
+  }
+
+  // Agrupa swing highs em clusters de resistência
+  const resClusters: { level: number; count: number }[] = [];
+  for (const sh of swingHighs) {
+    const hit = resClusters.find(c => Math.abs(c.level - sh) <= clusterTol);
+    if (hit) { hit.count++; hit.level = (hit.level * hit.count + sh) / (hit.count + 1); }
+    else resClusters.push({ level: sh, count: 1 });
+  }
+
+  // Zona de suporte mais próxima (preço acima ou dentro da zona)
+  const nearestSup = supClusters
+    .filter(c => price >= c.level - proximityTol && price <= c.level + proximityTol)
+    .sort((a, b) => b.count - a.count)[0];
+
+  // Zona de resistência mais próxima (preço abaixo ou dentro da zona)
+  const nearestRes = resClusters
+    .filter(c => price >= c.level - proximityTol && price <= c.level + proximityTol)
+    .sort((a, b) => b.count - a.count)[0];
+
   return {
-    nearSupport: swingLows.some(sl => Math.abs(price - sl) <= tol && price >= sl - tol),
-    nearResistance: swingHighs.some(sh => Math.abs(price - sh) <= tol && price <= sh + tol)
+    nearSupport:         nearestSup !== undefined,
+    nearResistance:      nearestRes !== undefined,
+    supportStrength:     nearestSup?.count ?? 0,
+    resistanceStrength:  nearestRes?.count ?? 0,
   };
 }
 
@@ -497,7 +553,10 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number): SignalR
   votes.bsq = bbSqueeze.squeeze && bbSqueeze.breakout === 'up' ? 'CALL'
             : bbSqueeze.squeeze && bbSqueeze.breakout === 'down' ? 'PUT' : 'NEUTRAL';
   votes.stoch = stoch < 25 ? 'CALL' : stoch > 75 ? 'PUT' : 'NEUTRAL';
-  votes.sr = srBounce.nearSupport ? 'CALL' : srBounce.nearResistance ? 'PUT' : 'NEUTRAL';
+  // Voto S&R só conta quando zona tem ≥2 toques (zona legítima)
+  votes.sr = (srBounce.nearSupport && srBounce.supportStrength >= 2) ? 'CALL'
+           : (srBounce.nearResistance && srBounce.resistanceStrength >= 2) ? 'PUT'
+           : 'NEUTRAL';
   votes.candle = candle.direction > 0 ? 'CALL' : candle.direction < 0 ? 'PUT' : 'NEUTRAL';
   const avgVol = volumes.slice(-20, -1).reduce((a, b) => a + b, 0) / 19 || 1;
   votes.volume = volumes[volumes.length - 1] > avgVol * 1.2
@@ -527,7 +586,22 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number): SignalR
   if (rsi > 82 || rsi < 18) rawScore = Math.max(0.35, rawScore - 0.07);
   if (rsidiv !== null) rawScore = Math.min(0.95, rawScore + 0.08);
   if (bbSqueeze.squeeze) rawScore = Math.min(0.95, rawScore + 0.06);
-  if (srBounce.nearSupport || srBounce.nearResistance) rawScore = Math.min(0.95, rawScore + 0.05);
+  // ── S&R Gate: bônus proporcional à força da zona que confirma, penalidade quando opõe ──
+  const supStr = srBounce.supportStrength;
+  const resStr = srBounce.resistanceStrength;
+  if (direction === 'CALL') {
+    if (supStr >= 5)      rawScore = Math.min(0.95, rawScore + 0.12); // suporte forte → CALL
+    else if (supStr >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
+    else if (supStr >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
+    if (resStr >= 5)      rawScore = Math.max(0.35, rawScore - 0.12); // resistência forte → penaliza CALL
+    else if (resStr >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+  } else {
+    if (resStr >= 5)      rawScore = Math.min(0.95, rawScore + 0.12); // resistência forte → PUT
+    else if (resStr >= 3) rawScore = Math.min(0.95, rawScore + 0.07);
+    else if (resStr >= 1) rawScore = Math.min(0.95, rawScore + 0.03);
+    if (supStr >= 5)      rawScore = Math.max(0.35, rawScore - 0.12); // suporte forte → penaliza PUT
+    else if (supStr >= 3) rawScore = Math.max(0.35, rawScore - 0.07);
+  }
   if (emaRetest) rawScore = Math.min(0.95, rawScore + 0.05);
   if (macdMomentum === 'growing') rawScore = Math.min(0.95, rawScore + 0.02);
   if (entropy > 0.72) rawScore = Math.max(0.35, rawScore - 0.06);
@@ -608,6 +682,9 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number): SignalR
   else if (confluenceFactors < 2) blockedBy = `Confluência insuficiente (${confluenceFactors}/3 fatores: tendência, RSI, volume)`;
   else if (confirmed < 3) blockedBy = `Poucos confirmadores (${confirmed}/6 critérios principais)`;
   else if (consensusCount < 4) blockedBy = `Consenso insuficiente (${consensusCount}/5 universos)`;
+  // S&R gate: bloqueia sinal contra zona forte (≥4 toques)
+  else if (direction === 'CALL' && resStr >= 4) blockedBy = `Resistência forte (${resStr} toques) — CALL bloqueado`;
+  else if (direction === 'PUT' && supStr >= 4) blockedBy = `Suporte forte (${supStr} toques) — PUT bloqueado`;
   else if (quality === 'EVITAR') blockedBy = `Score muito baixo (${score}%) — sinal EVITAR`;
 
   return {
