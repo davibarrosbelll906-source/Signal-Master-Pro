@@ -156,22 +156,24 @@ ok "Build completo"
 step "Iniciando app com PM2 (24/7)"
 try { pm2 delete smp-api 2>$null } catch {}
 Set-Location "$INSTALL_DIR\artifacts\api-server"
-pm2 start node --name smp-api -- --enable-source-maps .\dist\index.mjs
-pm2 save
-
-# Configurar PM2 para iniciar com o Windows
-pm2 startup | Out-Null
-info "Configurando inicio automatico..."
-$pm2StartupCmd = pm2 startup | Select-String "pm2"
-if ($pm2StartupCmd) { Invoke-Expression $pm2StartupCmd }
+pm2 start .\dist\index.mjs --name smp-api
+pm2 save --force
 
 ok "App rodando na porta $APP_PORT"
 
 # ── Instalar e configurar Nginx Windows ───────────────────────
 step "Instalando Nginx"
 choco install nginx -y --no-progress
-$nginxDir = "C:\tools\nginx"
-if (-not (Test-Path $nginxDir)) { $nginxDir = "C:\nginx" }
+$env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+# Localizar pasta do Nginx instalado pelo Chocolatey
+$nginxCmd = Get-Command nginx -ErrorAction SilentlyContinue
+if ($nginxCmd) { $nginxExe = $nginxCmd.Source } else { $nginxExe = $null }
+if (-not $nginxExe) {
+    $nginxExe = Get-ChildItem "C:\ProgramData\chocolatey\lib\nginx" -Filter "nginx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $nginxExe) { $nginxExe = "C:\tools\nginx\nginx.exe" }
+$nginxDir = Split-Path $nginxExe -Parent
 
 $nginxConf = @"
 worker_processes 1;
