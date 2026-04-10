@@ -25,7 +25,7 @@ interface Config {
 }
 
 const DEFAULTS: Config = {
-  minScore: 65,
+  minScore: 77,
   forteOnly: true,
   lunaMode: false,
   soundEnabled: true,

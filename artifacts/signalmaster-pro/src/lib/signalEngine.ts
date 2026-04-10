@@ -764,7 +764,7 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
   const cfg = (() => {
     try { return JSON.parse(localStorage.getItem('smpCfg7') || '{}'); } catch { return {}; }
   })();
-  const minScore  = cfg.minScore ?? 65;
+  const minScore  = cfg.minScore ?? 77;
   const forteOnly = cfg.forteOnly ?? true;
 
   if (score < minScore) return null;
@@ -929,7 +929,7 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
   const cfg = (() => {
     try { return JSON.parse(localStorage.getItem('smpCfg7') || '{}'); } catch { return {}; }
   })();
-  const minScore  = cfg.minScore ?? 65;
+  const minScore  = cfg.minScore ?? 77;
   const forteOnly = cfg.forteOnly ?? true;
 
   const votes: Record<string, string> = {
