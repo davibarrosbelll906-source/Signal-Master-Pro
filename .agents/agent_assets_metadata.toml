@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "W2C2iFxOn4SuAjPp1vKVX"
+uri = "file://signalmaster_pro_codigo.txt"
+type = "text"
+title = "SignalMaster Pro — Código Completo (52 arquivos core)"
