@@ -109,7 +109,7 @@ const frontendDist = process.env["FRONTEND_DIST"] ||
 if (existsSync(frontendDist)) {
   logger.info({ frontendDist }, "Servindo frontend estático");
   app.use(express.static(frontendDist, { maxAge: "1d" }));
-  app.get("*", (_req: Request, res: Response) => {
+  app.use((_req: Request, res: Response) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
