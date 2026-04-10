@@ -1,11 +1,11 @@
 //+------------------------------------------------------------------+
-//|          SMP Gold Scalper AI — v5.0                              |
+//|          SMP Gold Scalper AI — v5.1                              |
 //|          SignalMaster Pro — XAU/USD Expert Advisor               |
-//|          Trend-First + Range Detection + Day/Hour Filter         |
-//|          Inspirado em: AuRange Hunter Strategy                   |
+//|          Trend-First + Range Detection + Gold S3 Exit Method     |
+//|          Segredo Gold S3: TP grande + BE ativo + Trail %         |
 //+------------------------------------------------------------------+
 #property copyright "SignalMaster Pro"
-#property version   "5.00"
+#property version   "5.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -24,15 +24,16 @@ input double  MaxLot           = 5.0;    // Lote máximo
 input double  MaxDailyLossPct  = 5.0;    // % perda diária máxima (0=off)
 input int     MaxDailyTrades   = 20;     // Max trades por dia (0=off)
 
-input group "=== STOP & TARGET ==="
-input int     SL_ATR_Multi     = 15;     // ATR × SL (x0.1)
-input int     TP1_ATR_Multi    = 15;     // ATR × TP1 parcial (x0.1)
-input int     TP2_ATR_Multi    = 28;     // ATR × TP2 final (x0.1)
-input double  TP1_ClosePct     = 60.0;   // % lote fechado no TP1
-input int     Trail_ATR_Multi  = 10;     // ATR × trailing stop (x0.1)
-input double  TrailPctThresh   = 2.5;    // Trailing percentual (%) — AuRange style, 0=off
-input bool    UseTrailing      = true;   // Usar trailing stop
-input int     BE_ATR           = 8;      // Break-even em X ATR (x0.1), 0=off
+input group "=== STOP & TARGET (Gold S3 Style) ==="
+input int     SL_Points        = 500;    // Stop Loss fixo em pontos (safety net)
+input int     TP_Points        = 5000;   // Take Profit fixo em pontos (safety net — trailing fecha antes)
+input int     BE_TriggerPts    = 300;    // Pontos de lucro para ativar break-even
+input int     BE_SLDistPts     = 600;    // Distância do SL ao ponto de trigger no break-even
+input double  TrailPctThresh   = 2.5;    // Trailing percentual (%) — principal mecanismo de saída
+input double  TrailPctStep     = 0.5;    // Step mínimo para mover trailing (%)
+input bool    UseTrailing      = true;   // Usar trailing stop percentual
+input bool    UseATRTrail      = true;   // Usar trailing ATR como fallback
+input int     Trail_ATR_Multi  = 12;     // ATR × trailing fallback (x0.1)
 
 input group "=== IA — SCORE ==="
 input int     MinScore         = 62;     // Score mínimo entrada (0-100)
@@ -207,26 +208,28 @@ void OnTick()
 
    if(score<MinScore||dir=="") return;
 
-   double lot=CalcLot(atr,score);
+   double lot=CalcLot(score);
    if(lot<MinLot) return;
 
-   double slD=atr*(SL_ATR_Multi/10.0), tp2D=atr*(TP2_ATR_Multi/10.0);
+   // Gold S3 style: SL e TP são safety nets — trailing percentual fecha as posições
+   double slD = SL_Points * _Point;
+   double tpD = TP_Points * _Point;
 
    if(dir=="BUY")
    {
       double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
       if(g_trade.Buy(lot,_Symbol,ask,
                      NormalizeDouble(ask-slD,_Digits),
-                     NormalizeDouble(ask+tp2D,_Digits),TradeTag))
-      { dayTrades++; Print("BUY v5|Sc:",score,"|Lot:",lot,"|TR:",trendDir,"|",rsn); }
+                     NormalizeDouble(ask+tpD,_Digits),TradeTag))
+      { dayTrades++; Print("BUY v5.1|Sc:",score,"|Lot:",lot,"|SL:",SL_Points,"pts|TR:",trendDir,"|",rsn); }
    }
    else
    {
       double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
       if(g_trade.Sell(lot,_Symbol,bid,
                       NormalizeDouble(bid+slD,_Digits),
-                      NormalizeDouble(bid-tp2D,_Digits),TradeTag))
-      { dayTrades++; Print("SELL v5|Sc:",score,"|Lot:",lot,"|TR:",trendDir,"|",rsn); }
+                      NormalizeDouble(bid-tpD,_Digits),TradeTag))
+      { dayTrades++; Print("SELL v5.1|Sc:",score,"|Lot:",lot,"|SL:",SL_Points,"pts|TR:",trendDir,"|",rsn); }
    }
 }
 
@@ -433,86 +436,95 @@ void CalcScore(int &score,string &dir,string &rsn,double atr,int trendDir,double
 }
 
 //+------------------------------------------------------------------+
-//| Gestão de posições — Break-even + Trailing ATR + Trailing %     |
+//| Gestão de posições — Gold S3 Style                              |
+//| 1) Break-even fixo (BE_TriggerPts → SL a BE_SLDistPts antes)   |
+//| 2) Trailing percentual PRIMÁRIO (TrailPctThresh%)               |
+//| 3) Trailing ATR como FALLBACK                                   |
+//| SEM fechamento parcial — deixa o trailing trabalhar!            |
 //+------------------------------------------------------------------+
 void ManagePositions()
 {
-   double atr=B(hATR1,0,1);
-   double trD=atr*(Trail_ATR_Multi/10.0);
-   double beD=(BE_ATR>0)?atr*(BE_ATR/10.0):0;
-   double t1D=atr*(TP1_ATR_Multi/10.0);
+   double atr   = B(hATR1,0,1);
+   double trAtr = atr * (Trail_ATR_Multi/10.0);  // trailing ATR fallback
+   double beTrig= BE_TriggerPts * _Point;         // distância para ativar BE
+   double beSlD = BE_SLDistPts  * _Point;         // SL fica BE_SLDistPts antes do trigger
 
    for(int i=PositionsTotal()-1;i>=0;i--)
    {
       if(!g_pos.SelectByIndex(i)) continue;
       if(g_pos.Magic()!=EaMagic||g_pos.Symbol()!=_Symbol) continue;
 
-      ulong  tk=g_pos.Ticket();
-      double sl=g_pos.StopLoss(),lot=g_pos.Volume();
-      double op=g_pos.PriceOpen(),tp=g_pos.TakeProfit();
+      ulong  tk = g_pos.Ticket();
+      double sl = g_pos.StopLoss();
+      double op = g_pos.PriceOpen();
+      double tp = g_pos.TakeProfit();
 
       if(g_pos.PositionType()==POSITION_TYPE_BUY)
       {
-         double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
-         double prf=bid-op;
+         double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+         double prf = bid - op;  // lucro em preço
 
-         // Break-even
-         if(beD>0&&prf>=beD&&sl<op)
-            g_trade.PositionModify(tk,NormalizeDouble(op+_Point*2,_Digits),tp);
-
-         // TP1 parcial
-         if(prf>=t1D&&lot>MinLot*2.0)
+         //--- 1. Break-even Gold S3 style
+         // Quando lucro >= BE_TriggerPts, move SL para (trigger - BE_SLDistPts)
+         if(beTrig>0 && prf>=beTrig)
          {
-            double cl=MathMax(MinLot,MathMin(NormalizeDouble(lot*(TP1_ClosePct/100.0),2),lot-MinLot));
-            g_trade.PositionClosePartial(tk,cl);
+            double beSL = NormalizeDouble(bid - beSlD, _Digits);
+            if(beSL > sl + _Point*3 && beSL > op - _Point*10)
+               g_trade.PositionModify(tk, beSL, tp);
          }
 
-         // Trailing ATR
-         if(UseTrailing)
+         //--- 2. Trailing percentual PRIMÁRIO (Gold S3 / Aurum Ra style)
+         if(UseTrailing && TrailPctThresh>0)
          {
-            double nsl=NormalizeDouble(bid-trD,_Digits);
-            if(nsl>sl+_Point*5&&nsl>op) g_trade.PositionModify(tk,nsl,tp);
-         }
-
-         // Trailing percentual — AuRange style
-         if(TrailPctThresh>0)
-         {
-            double pctPrf=(bid-op)/op*100.0;
-            if(pctPrf>=TrailPctThresh)
+            double pctPrf = (bid - op) / op * 100.0;
+            if(pctPrf >= TrailPctThresh)
             {
-               double nsl=NormalizeDouble(bid*(1.0-(TrailPctThresh/2.0)/100.0),_Digits);
-               if(nsl>sl+_Point*5&&nsl>op) g_trade.PositionModify(tk,nsl,tp);
+               // SL fica a TrailPctStep% abaixo do preço atual
+               double nsl = NormalizeDouble(bid * (1.0 - (TrailPctStep/100.0)), _Digits);
+               if(nsl > sl + _Point*3 && (sl==0 || nsl > sl))
+                  g_trade.PositionModify(tk, nsl, tp);
             }
+         }
+
+         //--- 3. Trailing ATR fallback (quando trailing % ainda não ativou)
+         if(UseATRTrail && TrailPctThresh==0)
+         {
+            double nsl = NormalizeDouble(bid - trAtr, _Digits);
+            if(nsl > sl + _Point*3 && nsl > op)
+               g_trade.PositionModify(tk, nsl, tp);
          }
       }
-      else
+      else // SELL
       {
-         double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
-         double prf=op-ask;
+         double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+         double prf = op - ask;
 
-         if(beD>0&&prf>=beD&&(sl==0||sl>op))
-            g_trade.PositionModify(tk,NormalizeDouble(op-_Point*2,_Digits),tp);
-
-         if(prf>=t1D&&lot>MinLot*2.0)
+         //--- 1. Break-even
+         if(beTrig>0 && prf>=beTrig)
          {
-            double cl=MathMax(MinLot,MathMin(NormalizeDouble(lot*(TP1_ClosePct/100.0),2),lot-MinLot));
-            g_trade.PositionClosePartial(tk,cl);
+            double beSL = NormalizeDouble(ask + beSlD, _Digits);
+            if((sl==0 || beSL < sl - _Point*3) && beSL < op + _Point*10)
+               g_trade.PositionModify(tk, beSL, tp);
          }
 
-         if(UseTrailing)
+         //--- 2. Trailing percentual PRIMÁRIO
+         if(UseTrailing && TrailPctThresh>0)
          {
-            double nsl=NormalizeDouble(ask+trD,_Digits);
-            if((sl==0||nsl<sl-_Point*5)&&nsl<op) g_trade.PositionModify(tk,nsl,tp);
-         }
-
-         if(TrailPctThresh>0)
-         {
-            double pctPrf=(op-ask)/op*100.0;
-            if(pctPrf>=TrailPctThresh)
+            double pctPrf = (op - ask) / op * 100.0;
+            if(pctPrf >= TrailPctThresh)
             {
-               double nsl=NormalizeDouble(ask*(1.0+(TrailPctThresh/2.0)/100.0),_Digits);
-               if((sl==0||nsl<sl-_Point*5)&&nsl<op) g_trade.PositionModify(tk,nsl,tp);
+               double nsl = NormalizeDouble(ask * (1.0 + (TrailPctStep/100.0)), _Digits);
+               if(sl==0 || nsl < sl - _Point*3)
+                  g_trade.PositionModify(tk, nsl, tp);
             }
+         }
+
+         //--- 3. Trailing ATR fallback
+         if(UseATRTrail && TrailPctThresh==0)
+         {
+            double nsl = NormalizeDouble(ask + trAtr, _Digits);
+            if((sl==0 || nsl < sl - _Point*3) && nsl < op)
+               g_trade.PositionModify(tk, nsl, tp);
          }
       }
    }
@@ -556,6 +568,8 @@ void DrawPanel()
    dash+="  ╠══════════════════════════════════════════════╣\n";
    dash+=StringFormat("  ║  Sessão  : %s  |  Dia: %s\n",SessionOk()?"ATIVA":"OFF",DayAllowed()?"OK":"BLOQ");
    dash+=StringFormat("  ║  Spread  : %.0f  |  ATR: %.0f pts\n",GetSpread(),B(hATR1,0,1)/_Point);
+   dash+=StringFormat("  ║  SL: %d pts  |  TP: %d pts (safety)\n",SL_Points,TP_Points);
+   dash+=StringFormat("  ║  BE: %d pts  |  Trail: %.1f%%\n",BE_TriggerPts,TrailPctThresh);
    dash+=StringFormat("  ║  Pos: %d/%d  |  Trades: %d/%d\n",CountPos(),MaxPositions,dayTrades,MaxDailyTrades>0?MaxDailyTrades:99);
    dash+="  ╠══════════════════════════════════════════════╣\n";
    dash+=StringFormat("  ║  Banca : $%.2f  |  DD: %.1f%%\n",bal,dd);
@@ -568,15 +582,16 @@ void DrawPanel()
 //+------------------------------------------------------------------+
 //| Funções auxiliares                                               |
 //+------------------------------------------------------------------+
-double CalcLot(double atr,int score)
+// Gold S3 style: lote calculado com SL fixo em pontos
+double CalcLot(int score)
 {
-   double bal=AccountInfoDouble(ACCOUNT_BALANCE);
-   double slD=atr*(SL_ATR_Multi/10.0);
-   double tv=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
-   double ts=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
-   double ls=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
+   double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+   double slD = SL_Points * _Point;               // SL em preço
+   double tv  = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
+   double ts  = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
+   double ls  = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
    if(tv<=0||slD<=0||ts<=0) return MinLot;
-   double lot=bal*(RiskPercent/100.0)/((slD/ts)*tv);
+   double lot = bal*(RiskPercent/100.0)/((slD/ts)*tv);
    if(score>=EliteScore) lot*=1.5;
    lot=MathFloor(lot/ls)*ls;
    lot=MathMax(MinLot,MathMin(MaxLot,lot));
@@ -594,7 +609,7 @@ double GetUsedRisk()
 {
    double bal=AccountInfoDouble(ACCOUNT_BALANCE);
    if(bal<=0) return 0;
-   double atr=B(hATR1,0,1),slD=atr*(SL_ATR_Multi/10.0);
+   double slD=SL_Points*_Point;
    double tv=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
    double ts=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
    if(tv<=0||slD<=0||ts<=0) return 0;
