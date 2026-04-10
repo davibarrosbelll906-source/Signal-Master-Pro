@@ -19,6 +19,7 @@ import {
   ASSET_CATEGORIES, CRYPTO_SYMBOLS, BASE_PRICES, PAIR_VOL,
   generateOUCandle, type Candle
 } from './signalEngine.js';
+import { orchestratorOnTick, orchestratorOnClose } from './signalOrchestrator.js';
 
 export interface AssetBuffer {
   m1: Candle[];
@@ -69,8 +70,8 @@ function initBuffer(asset: string): AssetBuffer {
   return buf;
 }
 
-// ── Helper: atualiza candle buffer a partir de um candle recebido ──────────
-function pushCandle(buf: AssetBuffer, candle: Candle, isClosed: boolean) {
+// ── Helper: atualiza candle buffer + dispara o orquestrador ───────────────
+function pushCandle(buf: AssetBuffer, candle: Candle, isClosed: boolean, asset?: string) {
   const lastT = buf.m1.length > 0 ? buf.m1[buf.m1.length - 1].t : -1;
   if (lastT === candle.t) {
     buf.m1[buf.m1.length - 1] = candle;
@@ -78,6 +79,14 @@ function pushCandle(buf: AssetBuffer, candle: Candle, isClosed: boolean) {
     buf.m1.push(candle);
     if (buf.m1.length > 210) buf.m1.shift();
   }
+
+  if (!asset) return;
+
+  // Estágio 1 + 2: roda em cada tick
+  orchestratorOnTick(buf, asset);
+
+  // Estágio 3: roda apenas quando o candle fecha
+  if (isClosed) orchestratorOnClose(buf, asset);
 }
 
 // ── 1. Binance ────────────────────────────────────────────────
@@ -115,7 +124,7 @@ async function connectBinance(asset: string): Promise<boolean> {
       pushCandle(buf, {
         o: parseFloat(k.o), h: parseFloat(k.h), l: parseFloat(k.l), c: parseFloat(k.c),
         v: parseFloat(k.v), t: k.t
-      }, k.x);
+      }, k.x, asset);
       buf.price = parseFloat(k.c);
       notify(asset);
     } catch {}
@@ -168,7 +177,7 @@ async function connectBybit(asset: string): Promise<boolean> {
       pushCandle(buf, {
         o: parseFloat(k.open), h: parseFloat(k.high), l: parseFloat(k.low), c: parseFloat(k.close),
         v: parseFloat(k.volume), t: parseInt(k.start)
-      }, k.confirm);
+      }, k.confirm, asset);
       buf.price = parseFloat(k.close);
       notify(asset);
     } catch {}
@@ -230,7 +239,12 @@ async function connectKraken(asset: string): Promise<boolean> {
         o: parseFloat(data[2]), h: parseFloat(data[3]), l: parseFloat(data[4]),
         c: parseFloat(data[5]), v: parseFloat(data[7]), t: nowMinT
       };
-      pushCandle(buf, candle, false);
+      // Para Kraken: emite close quando começa um novo candle
+      const lastKrakenT = buf.m1.length > 0 ? buf.m1[buf.m1.length - 1].t : -1;
+      if (candle.t !== lastKrakenT && lastKrakenT !== -1) {
+        orchestratorOnClose(buf, asset);
+      }
+      pushCandle(buf, candle, false, asset);
       buf.price = candle.c;
       notify(asset);
     } catch {}

@@ -278,7 +278,7 @@ function detectRSIDivergence(closes: number[], highs: number[], lows: number[]):
   return null;
 }
 
-function calcOBVTrend(closes: number[], volumes: number[], lookback = 12): 'up' | 'down' | 'flat' {
+export function calcOBVTrend(closes: number[], volumes: number[], lookback = 12): 'up' | 'down' | 'flat' {
   if (closes.length < lookback + 1) return 'flat';
   let obv = 0;
   const obvSeries: number[] = [0];
@@ -295,7 +295,7 @@ function calcOBVTrend(closes: number[], volumes: number[], lookback = 12): 'up' 
   return 'flat';
 }
 
-function detectBBSqueeze(closes: number[]): { squeeze: boolean; breakout: 'up' | 'down' | null } {
+export function detectBBSqueeze(closes: number[]): { squeeze: boolean; breakout: 'up' | 'down' | null } {
   if (closes.length < 40) return { squeeze: false, breakout: null };
   const calcBW = (data: number[]) => {
     const b = calcBollinger(data, 20);
@@ -326,7 +326,7 @@ interface SRBounceResult {
  *  - Clustering de zonas próximas (dentro de 1.5 ATR)
  *  - Detecção de wick de rejeição (confirmação de padrão de vela)
  */
-function detectSRBounce(
+export function detectSRBounce(
   highs: number[], lows: number[], closes: number[], opens?: number[]
 ): SRBounceResult {
   const empty: SRBounceResult = {

@@ -7,6 +7,7 @@ import path from "path";
 import { existsSync } from "fs";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
+import { onSignalReady, getPipelineStats, getWarmAssets } from "./lib/signalOrchestrator.js";
 
 const app: Express = express();
 
@@ -101,6 +102,17 @@ app.use("/api", limiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/send-otp", otpLimiter);
 app.use("/api", router);
+
+// ── Rota de métricas do pipeline do orquestrador ──────────────────────────
+app.get("/api/pipeline-stats", (_req: Request, res: Response) => {
+  res.json({ stats: getPipelineStats(), warm: getWarmAssets() });
+});
+
+// ── Registra handler do orquestrador: loga sinais emitidos ────────────────
+onSignalReady((signal) => {
+  logger.info({ asset: signal.asset, dir: signal.direction, score: signal.score, quality: signal.quality },
+    "[Orchestrator] Sinal emitido");
+});
 
 // Servir frontend estático (para VPS sem Nginx)
 const frontendDist = process.env["FRONTEND_DIST"] ||
