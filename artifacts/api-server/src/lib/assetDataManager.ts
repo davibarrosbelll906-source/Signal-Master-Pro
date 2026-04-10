@@ -116,50 +116,13 @@ async function connectCrypto(asset: string) {
 }
 
 // ── Twelve Data (Forex + Commodities) ────────────────────────
-async function connectTwelveData(assets: string[]) {
+
+// Guarda os assets válidos para reconexão sem recarregar REST
+let twelveValidAssets: string[] = [];
+
+function connectTwelveDataWS(validAssets: string[]) {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey) {
-    console.log('[AssetData] TWELVE_DATA_API_KEY não configurada — usando simulação para Forex');
-    for (const asset of assets) connectOU(asset);
-    return;
-  }
-
-  // Carregar histórico via REST (200 candles M1 por par)
-  for (const asset of assets) {
-    const sym = TWELVE_SYMBOLS[asset];
-    if (!sym) { connectOU(asset); continue; }
-
-    const buf = initBuffer(asset);
-    try {
-      const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1min&outputsize=200&apikey=${apiKey}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      const json = await res.json() as any;
-      if (json.status === 'error' || !json.values) throw new Error(json.message || 'API error');
-
-      // Twelve Data retorna do mais novo ao mais antigo — inverter para ordem cronológica
-      const candles: Candle[] = (json.values as any[]).reverse().map((v: any) => ({
-        o: parseFloat(v.open),
-        h: parseFloat(v.high),
-        l: parseFloat(v.low),
-        c: parseFloat(v.close),
-        v: parseFloat(v.volume || '1000'),
-        t: new Date(v.datetime).getTime(),
-      }));
-
-      buf.m1 = candles;
-      buf.price = candles[candles.length - 1]?.c ?? buf.price;
-      buf.connected = true;
-      notify(asset);
-      console.log(`[AssetData] Twelve Data ✓ ${asset} — ${candles.length} candles carregados`);
-    } catch (e: any) {
-      console.log(`[AssetData] Twelve Data falhou para ${asset}: ${e?.message} — usando simulação`);
-      connectOU(asset);
-    }
-  }
-
-  // WebSocket para atualizações em tempo real (ticks → M1 candles)
-  const validAssets = assets.filter(a => TWELVE_SYMBOLS[a] && buffers.get(a)?.connected);
-  if (validAssets.length === 0) return;
+  if (!apiKey || validAssets.length === 0) return;
 
   const symbols = validAssets.map(a => TWELVE_SYMBOLS[a]).join(',');
   const ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${apiKey}`);
@@ -188,7 +151,6 @@ async function connectTwelveData(assets: string[]) {
 
       let tick = liveTick.get(asset);
       if (!tick || tick.t !== nowMinT) {
-        // Novo minuto — fechar candle anterior e abrir novo
         if (tick && buf.m1.length > 0) {
           const last = buf.m1[buf.m1.length - 1];
           if (last.t === tick.t) {
@@ -200,7 +162,6 @@ async function connectTwelveData(assets: string[]) {
         buf.m1.push({ o: price, h: price, l: price, c: price, v: 1000, t: nowMinT });
         if (buf.m1.length > 202) buf.m1.shift();
       } else {
-        // Mesmo minuto — atualizar candle ao vivo
         tick.h = Math.max(tick.h, price);
         tick.l = Math.min(tick.l, price);
         tick.c = price;
@@ -214,13 +175,67 @@ async function connectTwelveData(assets: string[]) {
   });
 
   ws.on('close', () => {
-    console.log('[AssetData] Twelve Data WebSocket fechado — reconectando em 15s');
-    setTimeout(() => connectTwelveData(assets), 15000);
+    console.log('[AssetData] Twelve Data WebSocket fechado — reconectando em 30s');
+    // Reconecta apenas o WebSocket, sem recarregar dados históricos via REST
+    setTimeout(() => connectTwelveDataWS(twelveValidAssets), 30000);
   });
 
   ws.on('error', (e) => {
     console.log(`[AssetData] Twelve Data WebSocket erro: ${e.message}`);
   });
+}
+
+async function connectTwelveData(assets: string[]) {
+  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  if (!apiKey) {
+    console.log('[AssetData] TWELVE_DATA_API_KEY não configurada — usando simulação para Forex');
+    for (const asset of assets) connectOU(asset);
+    return;
+  }
+
+  // Carregar histórico via REST em lotes de 8 por minuto (limite free tier)
+  const BATCH_SIZE = 8;
+  for (let i = 0; i < assets.length; i += BATCH_SIZE) {
+    const batch = assets.slice(i, i + BATCH_SIZE);
+    if (i > 0) {
+      console.log(`[AssetData] Aguardando 65s antes do próximo lote (rate limit TwelveData)...`);
+      await new Promise(r => setTimeout(r, 65000));
+    }
+    for (const asset of batch) {
+      const sym = TWELVE_SYMBOLS[asset];
+      if (!sym) { connectOU(asset); continue; }
+
+      const buf = initBuffer(asset);
+      try {
+        const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1min&outputsize=200&apikey=${apiKey}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        const json = await res.json() as any;
+        if (json.status === 'error' || !json.values) throw new Error(json.message || 'API error');
+
+        const candles: Candle[] = (json.values as any[]).reverse().map((v: any) => ({
+          o: parseFloat(v.open),
+          h: parseFloat(v.high),
+          l: parseFloat(v.low),
+          c: parseFloat(v.close),
+          v: parseFloat(v.volume || '1000'),
+          t: new Date(v.datetime).getTime(),
+        }));
+
+        buf.m1 = candles;
+        buf.price = candles[candles.length - 1]?.c ?? buf.price;
+        buf.connected = true;
+        notify(asset);
+        console.log(`[AssetData] Twelve Data ✓ ${asset} — ${candles.length} candles carregados`);
+      } catch (e: any) {
+        console.log(`[AssetData] Twelve Data falhou para ${asset}: ${e?.message} — usando simulação`);
+        connectOU(asset);
+      }
+    }
+  }
+
+  // WebSocket para ticks em tempo real
+  twelveValidAssets = assets.filter(a => TWELVE_SYMBOLS[a] && buffers.get(a)?.connected);
+  connectTwelveDataWS(twelveValidAssets);
 }
 
 // ── Simulação OU (fallback) ───────────────────────────────────
