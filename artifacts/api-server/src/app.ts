@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
+import path from "path";
+import { existsSync } from "fs";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 
@@ -100,10 +102,22 @@ app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/send-otp", otpLimiter);
 app.use("/api", router);
 
-// 404 — rota não encontrada
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({ error: "Rota não encontrada" });
-});
+// Servir frontend estático (para VPS sem Nginx)
+const frontendDist = process.env["FRONTEND_DIST"] ||
+  path.resolve(process.cwd(), "../signalmaster-pro/dist/public");
+
+if (existsSync(frontendDist)) {
+  logger.info({ frontendDist }, "Servindo frontend estático");
+  app.use(express.static(frontendDist, { maxAge: "1d" }));
+  app.get("*", (_req: Request, res: Response) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+} else {
+  // 404 — rota não encontrada (sem frontend)
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ error: "Rota não encontrada" });
+  });
+}
 
 // Handler global de erros — captura qualquer erro não tratado nas rotas
 // Em produção: não vaza stack trace; em dev: inclui detalhes para debug
