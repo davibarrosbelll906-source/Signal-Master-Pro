@@ -34,22 +34,13 @@ const callbacks: BufferCallback[] = [];
 const wsMap     = new Map<string, WebSocket>();
 const ouTimers  = new Map<string, ReturnType<typeof setInterval>>();
 
-// ── Twelve Data symbol mapping ────────────────────────────────
-const TWELVE_SYMBOLS: Record<string, string> = {
-  EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY',
-  AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', NZDUSD: 'NZD/USD',
-  EURGBP: 'EUR/GBP', GBPJPY: 'GBP/JPY',
-  XAUUSD: 'XAU/USD', XAGUSD: 'XAG/USD', USOIL: 'WTI/USD',
-};
-const TWELVE_REVERSE: Record<string, string> = Object.fromEntries(
-  Object.entries(TWELVE_SYMBOLS).map(([k, v]) => [v, k])
-);
-
-// ── Kraken symbol mapping ─────────────────────────────────────
+// ── Kraken symbol mapping (crypto-only: Ebinex focus) ────────────
 const KRAKEN_SYMBOLS: Record<string, string> = {
   BTCUSD: 'XBT/USD', ETHUSD: 'ETH/USD', SOLUSD: 'SOL/USD',
   XRPUSD: 'XRP/USD', ADAUSD: 'ADA/USD', DOGEUSD: 'DOGE/USD',
   LTCUSD: 'LTC/USD', BNBUSD: 'BNB/USD',
+  AVAXUSD: 'AVAX/USD', DOTUSD: 'DOT/USD',
+  LINKUSD: 'LINK/USD', MATICUSD: 'POL/USD',
 };
 const KRAKEN_REVERSE: Record<string, string> = Object.fromEntries(
   Object.entries(KRAKEN_SYMBOLS).map(([k, v]) => [v, k])
@@ -265,113 +256,6 @@ async function connectCrypto(asset: string) {
   }
 }
 
-// ── Twelve Data (Forex + Commodities) ────────────────────────
-
-let twelveValidAssets: string[] = [];
-
-function connectTwelveDataWS(validAssets: string[]) {
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey || validAssets.length === 0) return;
-
-  const symbols = validAssets.map(a => TWELVE_SYMBOLS[a]).join(',');
-  const ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${apiKey}`);
-  wsMap.set('_twelve_ws', ws);
-
-  ws.on('open', () => {
-    console.log(`[AssetData] Twelve Data WebSocket conectado (${validAssets.length} pares)`);
-    ws.send(JSON.stringify({ action: 'subscribe', params: { symbols } }));
-  });
-
-  ws.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(raw.toString());
-      if (msg.event !== 'price') return;
-      const asset = TWELVE_REVERSE[msg.symbol];
-      if (!asset) return;
-      const buf = buffers.get(asset);
-      if (!buf) return;
-      const price = parseFloat(msg.price);
-      if (!price || isNaN(price)) return;
-      const nowMinT = Math.floor(Date.now() / 60000) * 60000;
-      buf.price = price;
-      let tick = liveTick.get(asset);
-      if (!tick || tick.t !== nowMinT) {
-        if (tick && buf.m1.length > 0) {
-          const last = buf.m1[buf.m1.length - 1];
-          if (last.t === tick.t)
-            buf.m1[buf.m1.length - 1] = { o: tick.o, h: tick.h, l: tick.l, c: tick.c, v: last.v, t: tick.t };
-        }
-        tick = { o: price, h: price, l: price, c: price, t: nowMinT };
-        liveTick.set(asset, tick);
-        buf.m1.push({ o: price, h: price, l: price, c: price, v: 1000, t: nowMinT });
-        if (buf.m1.length > 202) buf.m1.shift();
-      } else {
-        tick.h = Math.max(tick.h, price);
-        tick.l = Math.min(tick.l, price);
-        tick.c = price;
-        if (buf.m1.length > 0) {
-          const last = buf.m1[buf.m1.length - 1];
-          buf.m1[buf.m1.length - 1] = { ...last, h: tick.h, l: tick.l, c: tick.c };
-        }
-      }
-      notify(asset);
-    } catch {}
-  });
-
-  ws.on('close', () => {
-    console.log('[AssetData] Twelve Data WebSocket fechado — reconectando em 30s');
-    setTimeout(() => connectTwelveDataWS(twelveValidAssets), 30000);
-  });
-  ws.on('error', (e) => {
-    console.log(`[AssetData] Twelve Data WebSocket erro: ${e.message}`);
-  });
-}
-
-async function connectTwelveData(assets: string[]) {
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey) {
-    console.log('[AssetData] TWELVE_DATA_API_KEY não configurada — usando simulação para Forex');
-    for (const asset of assets) connectOU(asset);
-    return;
-  }
-
-  const BATCH_SIZE = 8;
-  for (let i = 0; i < assets.length; i += BATCH_SIZE) {
-    const batch = assets.slice(i, i + BATCH_SIZE);
-    if (i > 0) {
-      console.log(`[AssetData] Aguardando 65s antes do próximo lote (rate limit TwelveData)...`);
-      await new Promise(r => setTimeout(r, 65000));
-    }
-    for (const asset of batch) {
-      const sym = TWELVE_SYMBOLS[asset];
-      if (!sym) { connectOU(asset); continue; }
-      const buf = initBuffer(asset);
-      try {
-        const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1min&outputsize=200&apikey=${apiKey}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        const json = await res.json() as any;
-        if (json.status === 'error' || !json.values) throw new Error(json.message || 'API error');
-        const candles: Candle[] = (json.values as any[]).reverse().map((v: any) => ({
-          o: parseFloat(v.open), h: parseFloat(v.high), l: parseFloat(v.low), c: parseFloat(v.close),
-          v: parseFloat(v.volume || '1000'), t: new Date(v.datetime).getTime(),
-        }));
-        buf.m1 = candles;
-        buf.price = candles[candles.length - 1]?.c ?? buf.price;
-        buf.connected = true;
-        buf.source = 'TwelveData';
-        notify(asset);
-        console.log(`[AssetData] ✅ Twelve Data → ${asset} (${candles.length} candles)`);
-      } catch (e: any) {
-        console.log(`[AssetData] Twelve Data falhou para ${asset}: ${e?.message} — usando simulação`);
-        connectOU(asset);
-      }
-    }
-  }
-
-  twelveValidAssets = assets.filter(a => TWELVE_SYMBOLS[a] && buffers.get(a)?.connected);
-  connectTwelveDataWS(twelveValidAssets);
-}
-
 // ── Simulação OU (último recurso) ────────────────────────────
 function connectOU(asset: string) {
   if (ouTimers.has(asset)) return;
@@ -437,16 +321,7 @@ export function getBuffer(asset: string): AssetBuffer | undefined {
 }
 
 export async function initAllAssets(assets: string[]) {
-  const cryptoAssets = assets.filter(a => ASSET_CATEGORIES[a] === 'crypto');
-  const forexAssets  = assets.filter(a => ASSET_CATEGORIES[a] !== 'crypto');
-
-  // Crypto: Binance → Bybit → Kraken → Simulação (paralelo)
-  await Promise.all(cryptoAssets.map(asset => connectCrypto(asset)));
-
-  // Forex/Commodities via Twelve Data (ou simulação se sem chave)
-  if (process.env.TWELVE_DATA_API_KEY) {
-    await connectTwelveData(forexAssets);
-  } else {
-    for (const asset of forexAssets) connectOU(asset);
-  }
+  // Ebinex focus: all assets are crypto
+  // Cascade: Binance → Bybit → Kraken → OU Simulation (parallel)
+  await Promise.all(assets.map(asset => connectCrypto(asset)));
 }

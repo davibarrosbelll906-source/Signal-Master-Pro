@@ -14,15 +14,17 @@ import { subscribeAsset } from "@/lib/assetDataManager";
 import { useAccountMode } from "@/lib/useAccountMode";
 import { useSignalStore, type LunaExplanation, type NewsBlackout } from "@/lib/signalStore";
 import { socket } from "@/lib/socket";
-const CRYPTO_ASSETS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
-const FOREX_ASSETS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY'];
-const COMMODITY_ASSETS = ['XAUUSD', 'XAGUSD', 'USOIL'];
+// Ebinex Crypto Pairs
+const CRYPTO_ASSETS = [
+  'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD',
+  'ADAUSD', 'DOGEUSD', 'LTCUSD', 'AVAXUSD', 'DOTUSD',
+  'LINKUSD', 'MATICUSD',
+];
 
 const ASSET_ICONS: Record<string, string> = {
-  BTCUSD: '₿', ETHUSD: 'Ξ', SOLUSD: '◎', BNBUSD: '⬡', XRPUSD: '✕', ADAUSD: '₳',
-  DOGEUSD: 'Ð', LTCUSD: 'Ł', EURUSD: '€$', GBPUSD: '£$', USDJPY: '$¥', AUDUSD: 'A$',
-  USDCAD: 'C$', NZDUSD: 'N$', EURGBP: '€£', GBPJPY: '£¥',
-  XAUUSD: 'Au', XAGUSD: 'Ag', USOIL: '🛢'
+  BTCUSD: '₿', ETHUSD: 'Ξ', SOLUSD: '◎', BNBUSD: '⬡',
+  XRPUSD: '✕', ADAUSD: '₳', DOGEUSD: 'Ð', LTCUSD: 'Ł',
+  AVAXUSD: '🔺', DOTUSD: '●', LINKUSD: '⬡', MATICUSD: '⬟',
 };
 
 const QUALITY_COLORS: Record<string, string> = {
@@ -41,8 +43,8 @@ const REGIME_CONFIG = {
 };
 
 export default function SignalsPage() {
-  const [asset, setAsset] = useState('EURUSD');
-  const [category, setCategory] = useState<'crypto' | 'forex' | 'commodity'>('forex');
+  const [asset, setAsset] = useState('BTCUSD');
+  const [category, setCategory] = useState<'crypto'>('crypto');
   const [seconds, setSeconds] = useState(new Date().getSeconds());
   const [signal, setSignal] = useState<SignalResult | null>(null);
   const [pendingSignal, setPendingSignal] = useState<SignalResult | null>(null);
@@ -68,7 +70,7 @@ export default function SignalsPage() {
   });
   const [multiPairMode, setMultiPairMode] = useState(false);
   const [watchedPairs, setWatchedPairs] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('smpWatchedPairs') || '["EURUSD","BTCUSD"]'); } catch { return ['EURUSD', 'BTCUSD']; }
+    try { return JSON.parse(localStorage.getItem('smpWatchedPairs') || '["BTCUSD","ETHUSD","SOLUSD","XRPUSD"]'); } catch { return ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD']; }
   });
   const [lunaExplanation, setLunaExplanation] = useState<LunaExplanation | null>(null);
   const [lunaLoading, setLunaLoading] = useState(false);
@@ -88,7 +90,7 @@ export default function SignalsPage() {
   const [newsLoading, setNewsLoading] = useState(false);
 
   const MAX_PAIRS = 5;
-  const ALL_ASSETS = [...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS];
+  const ALL_ASSETS = [...CRYPTO_ASSETS];
 
   const bufRef = useRef<CandleBuffer>({ m1: [], m5: [], m15: [] });
   const lastFiredByPairRef = useRef<Map<string, number>>(new Map());
@@ -219,14 +221,13 @@ export default function SignalsPage() {
     setAsset(newAsset);
     setSignal(null);
     setPendingSignal(null);
-    const cat = ASSET_CATEGORIES[newAsset] as 'crypto' | 'forex' | 'commodity';
-    setCategory(cat);
+    setCategory('crypto');
     connectAsset(newAsset);
   }, [connectAsset]);
 
   // Initial load
   useEffect(() => {
-    connectAsset('EURUSD');
+    connectAsset('BTCUSD');
     return () => { if (unsubRef.current) unsubRef.current(); };
   }, []);
 
@@ -342,7 +343,7 @@ export default function SignalsPage() {
     const entry = {
       asset: manualAsset || asset,
       direction: manualDir,
-      category: ASSET_CATEGORIES[manualAsset || asset] || 'forex',
+      category: ASSET_CATEGORIES[manualAsset || asset] || 'crypto',
       result: type,
       score: 0,
       quality: 'MANUAL',
@@ -418,15 +419,8 @@ export default function SignalsPage() {
     CAD: '🇨🇦', NZD: '🇳🇿', CHF: '🇨🇭', CNY: '🇨🇳', ALL: '🌐',
   };
 
-  const isBlackoutEvent = (ev: typeof calendarEvents[0]) => {
-    const assetCurrencies: Record<string, string[]> = {
-      EURUSD: ['EUR','USD'], GBPUSD: ['GBP','USD'], USDJPY: ['USD','JPY'],
-      AUDUSD: ['AUD','USD'], USDCAD: ['USD','CAD'], NZDUSD: ['NZD','USD'],
-      EURGBP: ['EUR','GBP'], GBPJPY: ['GBP','JPY'],
-      XAUUSD: ['USD'], XAGUSD: ['USD'], USOIL: ['USD'],
-    };
-    return (assetCurrencies[asset] || []).includes(ev.country);
-  };
+  // Crypto assets are not directly affected by fiat currency events
+  const isBlackoutEvent = (_ev: typeof calendarEvents[0]) => false;
 
   const copySignal = () => {
     if (!signal) return;
@@ -450,29 +444,21 @@ export default function SignalsPage() {
       ═══════════════════════════════════════════════════════════ */}
       <div className="glass-card p-4 space-y-3">
 
-        {/* Row 1: category tabs + asset pills + price */}
+        {/* Row 1: Ebinex crypto pairs + price */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
-            {(['crypto','forex','commodity'] as const).map(c => (
-              <button key={c} onClick={() => {
-                const first = c === 'crypto' ? 'BTCUSD' : c === 'forex' ? 'EURUSD' : 'XAUUSD';
-                handleAssetChange(first);
-              }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                category === c ? 'bg-[var(--green)] text-black shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'text-gray-500 hover:text-white'
-              }`}>
-                {c === 'crypto' ? '₿ Cripto' : c === 'forex' ? '💱 Forex' : '🏅 Commodities'}
-              </button>
-            ))}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--green)]/8 border border-[var(--green)]/20">
+            <span className="text-[var(--green)] text-xs font-black">₿</span>
+            <span className="text-[var(--green)] text-[10px] font-bold uppercase tracking-widest">Ebinex Crypto</span>
           </div>
 
           <div className="flex flex-wrap gap-1.5 flex-1">
-            {(category === 'crypto' ? CRYPTO_ASSETS : category === 'forex' ? FOREX_ASSETS : COMMODITY_ASSETS).map(a => (
+            {CRYPTO_ASSETS.map(a => (
               <button key={a} onClick={() => handleAssetChange(a)} className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 asset === a
                   ? 'bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/30 shadow-[0_0_8px_rgba(0,255,136,0.12)]'
                   : 'bg-white/4 text-gray-400 hover:text-white border border-white/5 hover:border-white/10'
               }`}>
-                {ASSET_ICONS[a] || ''} {a}
+                {ASSET_ICONS[a] || ''} {a.replace('USD', '')}
               </button>
             ))}
           </div>
@@ -629,7 +615,7 @@ export default function SignalsPage() {
                 ))}</div>
               </div>
               <div className="p-4 space-y-4">
-                {[{ label: '₿ Cripto', color: 'yellow', assets: CRYPTO_ASSETS }, { label: '💱 Forex', color: 'blue', assets: FOREX_ASSETS }, { label: '🏅 Commodities', color: 'orange', assets: COMMODITY_ASSETS }].map(({ label, color, assets }) => (
+                {[{ label: '₿ Ebinex Crypto', color: 'yellow', assets: CRYPTO_ASSETS }].map(({ label, color, assets }) => (
                   <div key={label}>
                     <div className={`text-[10px] font-black text-${color}-400/80 uppercase tracking-widest mb-2`}>{label}</div>
                     <div className="flex flex-wrap gap-2">
@@ -1176,7 +1162,7 @@ export default function SignalsPage() {
                     <div className="mt-3 p-3 rounded-xl bg-white/4 border border-white/8 space-y-3">
                       <select value={manualAsset} onChange={e => setManualAsset(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none">
-                        {[...CRYPTO_ASSETS, ...FOREX_ASSETS, ...COMMODITY_ASSETS].map(a => (
+                        {CRYPTO_ASSETS.map(a => (
                           <option key={a} value={a} className="bg-[#07070d]">{a}</option>
                         ))}
                       </select>

@@ -1,37 +1,31 @@
 // Backend Signal Engine — Node.js adaptation of the frontend signalEngine.ts
 // All pure math + runEngine (adapted: no localStorage, no browser APIs)
 
+// ── Ebinex Crypto Pairs Only ─────────────────────────────────────────
 export const ASSET_CATEGORIES: Record<string, string> = {
   BTCUSD: 'crypto', ETHUSD: 'crypto', SOLUSD: 'crypto', BNBUSD: 'crypto',
   ADAUSD: 'crypto', DOGEUSD: 'crypto', XRPUSD: 'crypto', LTCUSD: 'crypto',
-  EURUSD: 'forex', GBPUSD: 'forex', USDJPY: 'forex', AUDUSD: 'forex',
-  USDCAD: 'forex', NZDUSD: 'forex', EURGBP: 'forex', GBPJPY: 'forex',
-  XAUUSD: 'commodity', XAGUSD: 'commodity', USOIL: 'commodity'
+  AVAXUSD: 'crypto', DOTUSD: 'crypto', LINKUSD: 'crypto', MATICUSD: 'crypto',
 };
 
 export const CRYPTO_SYMBOLS: Record<string, string> = {
   BTCUSD: 'btcusdt', ETHUSD: 'ethusdt', SOLUSD: 'solusdt', BNBUSD: 'bnbusdt',
-  ADAUSD: 'adausdt', DOGEUSD: 'dogeusdt', XRPUSD: 'xrpusdt', LTCUSD: 'ltcusdt'
+  ADAUSD: 'adausdt', DOGEUSD: 'dogeusdt', XRPUSD: 'xrpusdt', LTCUSD: 'ltcusdt',
+  AVAXUSD: 'avaxusdt', DOTUSD: 'dotusdt', LINKUSD: 'linkusdt', MATICUSD: 'maticusdt',
 };
 
 export const BASE_PRICES: Record<string, number> = {
-  // Forex
-  EURUSD: 1.085, GBPUSD: 1.265, USDJPY: 149.0, AUDUSD: 0.653,
-  USDCAD: 1.365, NZDUSD: 0.608, EURGBP: 0.858, GBPJPY: 188.0,
-  // Commodities
-  XAUUSD: 3200.0, XAGUSD: 32.0, USOIL: 62.0,
   // Crypto (approximate April 2026 prices)
   BTCUSD: 72000, ETHUSD: 1600, SOLUSD: 130, BNBUSD: 580,
   XRPUSD: 2.1, ADAUSD: 0.65, DOGEUSD: 0.16, LTCUSD: 90,
+  AVAXUSD: 28.0, DOTUSD: 6.5, LINKUSD: 14.0, MATICUSD: 0.55,
 };
 
 export const PAIR_VOL: Record<string, number> = {
-  EURUSD: 0.0003, GBPUSD: 0.0005, USDJPY: 0.03, AUDUSD: 0.0004,
-  USDCAD: 0.0004, NZDUSD: 0.0004, EURGBP: 0.0002, GBPJPY: 0.05,
-  XAUUSD: 8.0, XAGUSD: 0.08, USOIL: 0.25,
   // Crypto — calibrated so sigma*sqrt(1/1440)*100 ≈ 0.1-0.2% of base price per M1 candle
   BTCUSD: 27, ETHUSD: 0.9, SOLUSD: 0.1, BNBUSD: 0.33,
   XRPUSD: 0.0016, ADAUSD: 0.0005, DOGEUSD: 0.00012, LTCUSD: 0.051,
+  AVAXUSD: 0.014, DOTUSD: 0.004, LINKUSD: 0.007, MATICUSD: 0.0003,
 };
 
 export interface Candle {
@@ -255,31 +249,25 @@ export function getCurrentSession(): string {
 }
 
 function getPairSessionBonus(sess: string, category: string, asset: string): number {
+  // Crypto trades 24/7 — best hours are NY+London overlap and NY open
   const matrix: Record<string, Record<string, number>> = {
-    EURUSD: { london: 0.18, overlap: 0.22, ny: 0.14, asia: -0.15 },
-    GBPUSD: { london: 0.18, overlap: 0.20, ny: 0.13, asia: -0.16 },
-    GBPJPY: { london: 0.16, overlap: 0.22, ny: 0.12, asia: -0.06 },
-    USDJPY: { london: 0.10, overlap: 0.18, ny: 0.16, asia: 0.02 },
-    AUDUSD: { london: 0.08, overlap: 0.16, ny: 0.10, asia: 0.06 },
-    USDCAD: { london: 0.10, overlap: 0.18, ny: 0.16, asia: -0.12 },
-    NZDUSD: { london: 0.06, overlap: 0.14, ny: 0.08, asia: 0.04 },
-    EURGBP: { london: 0.15, overlap: 0.18, ny: 0.08, asia: -0.18 },
-    XAUUSD: { london: 0.16, overlap: 0.21, ny: 0.18, asia: -0.09 },
-    XAGUSD: { london: 0.12, overlap: 0.18, ny: 0.16, asia: -0.12 },
-    USOIL:  { london: 0.10, overlap: 0.18, ny: 0.18, asia: -0.12 },
-    BTCUSD: { london: 0.10, overlap: 0.22, ny: 0.20, asia: 0.05 },
-    ETHUSD: { london: 0.10, overlap: 0.20, ny: 0.18, asia: 0.04 },
-    SOLUSD: { london: 0.08, overlap: 0.20, ny: 0.18, asia: 0.02 },
-    BNBUSD: { london: 0.08, overlap: 0.18, ny: 0.16, asia: 0.02 },
-    XRPUSD: { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+    BTCUSD:  { london: 0.10, overlap: 0.22, ny: 0.20, asia: 0.05 },
+    ETHUSD:  { london: 0.10, overlap: 0.20, ny: 0.18, asia: 0.04 },
+    SOLUSD:  { london: 0.08, overlap: 0.20, ny: 0.18, asia: 0.02 },
+    BNBUSD:  { london: 0.08, overlap: 0.18, ny: 0.16, asia: 0.02 },
+    XRPUSD:  { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+    ADAUSD:  { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+    DOGEUSD: { london: 0.04, overlap: 0.14, ny: 0.12, asia: -0.02 },
+    LTCUSD:  { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+    AVAXUSD: { london: 0.08, overlap: 0.18, ny: 0.16, asia: 0.01 },
+    DOTUSD:  { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+    LINKUSD: { london: 0.06, overlap: 0.16, ny: 0.14, asia: 0.00 },
+    MATICUSD:{ london: 0.06, overlap: 0.14, ny: 0.12, asia: -0.01 },
   };
   if (matrix[asset]?.[sess] !== undefined) return matrix[asset][sess];
-  if (category === 'crypto') {
-    if (sess === 'overlap') return 0.18; if (sess === 'ny') return 0.14;
-    if (sess === 'london') return 0.08; return -0.10;
-  }
+  // Default crypto session bonus
   if (sess === 'overlap') return 0.18; if (sess === 'ny') return 0.14;
-  if (sess === 'london') return 0.12; return -0.10;
+  if (sess === 'london') return 0.08; return -0.05;
 }
 
 function detectRSIDivergence(closes: number[], highs: number[], lows: number[]): 'bullish' | 'bearish' | null {

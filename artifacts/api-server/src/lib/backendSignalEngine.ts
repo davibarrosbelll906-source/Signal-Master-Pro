@@ -13,10 +13,10 @@ import { initNewsFilter, checkNewsBlackoutSync } from './newsFilter.js';
 import { askLunaOracle, ORACLE_MIN_SCORE } from './lunaOracle.js';
 import { LunaNexus } from './lunaNexus.js';
 
+// Ebinex — crypto pairs only
 const ALL_ASSETS = [
   'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD',
-  'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'GBPJPY',
-  'XAUUSD', 'XAGUSD', 'USOIL'
+  'AVAXUSD', 'DOTUSD', 'LINKUSD', 'MATICUSD',
 ];
 
 // Anti-overtrade: maximum 1 signal per pair every 4 minutes
