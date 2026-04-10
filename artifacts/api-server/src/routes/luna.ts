@@ -1,10 +1,16 @@
 import express from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import OpenAI from "openai";
 import { db } from "@workspace/db";
 import { conversations, messages, lunaAnalyses } from "@workspace/db";
 import { eq, asc, desc, and, gte, count, inArray, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { requirePlan, planLevel } from "../middlewares/plan.js";
+
+const openaiKey = process.env["OPENAI_API_KEY"] || process.env["AI_INTEGRATIONS_OPENAI_API_KEY"];
+const openai = openaiKey ? new OpenAI({
+  apiKey: openaiKey,
+  baseURL: process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"] || undefined,
+}) : null;
 
 const router = express.Router();
 
@@ -197,9 +203,16 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
+    if (!openai) {
+      res.write(`data: ${JSON.stringify({ content: "⚠️ Luna não está disponível neste servidor (OPENAI_API_KEY não configurada)." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+      return;
+    }
+
     const stream = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      max_completion_tokens: 8192,
+      model: "gpt-4o",
+      max_tokens: 8192,
       messages: chatMessages,
       stream: true,
     });
