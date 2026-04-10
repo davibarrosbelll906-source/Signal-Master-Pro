@@ -646,6 +646,13 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
     ((direction === 'PUT' && srBounce.rejectionShort) ||
      (direction === 'CALL' && srBounce.rejectionLong));
 
+  // ── HTF hard gate: M5 + M15 devem confirmar a direção ───────────────────
+  // Se AMBOS M5 e M15 são bullish → PUT bloqueado (bounce em andamento)
+  // Se AMBOS M5 e M15 são bearish → CALL bloqueado (queda em andamento)
+  // Exceção: strongReversalZone (zona de 5+ toques com wick de rejeição)
+  const htfStrongBull = htfBull && m15Bull;
+  const htfStrongBear = !htfBull && !m15Bull;
+
   const mins = new Date().getMinutes();
   let blockedBy: string | null = null;
 
@@ -655,6 +662,11 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
     blockedBy = 'Fora de zona S/R — aguardando toque';
   else if (candleScore === 0)
     blockedBy = `Sem padrão de reversão em ${direction === 'CALL' ? 'suporte' : 'resistência'} (${candle.pattern})`;
+  // ── HTF gate (M5+M15 confirmação obrigatória) ────────────────────────────
+  else if (direction === 'PUT' && htfStrongBull && !strongReversalZone)
+    blockedBy = 'HTF Alta (M5+M15 bullish) — PUT bloqueado contra tendência superior';
+  else if (direction === 'CALL' && htfStrongBear && !strongReversalZone)
+    blockedBy = 'HTF Baixa (M5+M15 bearish) — CALL bloqueado contra tendência superior';
   // ── EMA50 gate (verificado ANTES do stack perfeito) ──────────────────────
   else if (direction === 'PUT' && ema50BullTrend && !strongReversalZone)
     blockedBy = `EMA50 Trend Alta — PUT bloqueado (preço ${lastClose > lastEma50 ? 'acima' : ''} EMA50, EMA21>EMA50)`;
