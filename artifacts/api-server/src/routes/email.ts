@@ -4,7 +4,7 @@ import { requireAuth } from "../middlewares/auth.js";
 import { z } from "zod";
 
 const router = Router();
-const resend = new Resend(process.env["RESEND_API_KEY"]);
+const resend = process.env["RESEND_API_KEY"] ? new Resend(process.env["RESEND_API_KEY"]) : null;
 
 const FROM = "SignalMaster Pro <onboarding@resend.dev>";
 
@@ -97,6 +97,7 @@ router.post("/daily-report", requireAuth, async (req, res) => {
     </div>
   `;
 
+  if (!resend) { res.json({ ok: true, skipped: "no email key" }); return; }
   try {
     await resend.emails.send({ from: FROM, to: email, subject: `📊 Relatório do dia — ${winRate}% WR · SignalMaster Pro`, html: emailBase(content) });
     res.json({ ok: true });
@@ -144,6 +145,7 @@ router.post("/alert", requireAuth, async (req, res) => {
     </div>
   `;
 
+  if (!resend) { res.json({ ok: true, skipped: "no email key" }); return; }
   try {
     await resend.emails.send({
       from: FROM,

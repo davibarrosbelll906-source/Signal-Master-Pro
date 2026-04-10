@@ -3,7 +3,7 @@ import { Resend } from "resend";
 
 const router = Router();
 
-const resend = new Resend(process.env["RESEND_API_KEY"]);
+const resend = process.env["RESEND_API_KEY"] ? new Resend(process.env["RESEND_API_KEY"]) : null;
 
 const otpStore = new Map<string, { code: string; expires: number; attempts: number }>();
 
@@ -31,6 +31,10 @@ router.post("/send-otp", async (req, res) => {
   const expires = Date.now() + 10 * 60 * 1000;
   otpStore.set(email.toLowerCase(), { code, expires, attempts: 0 });
 
+  if (!resend) {
+    console.log(`[OTP] Resend não configurado. Código para ${email}: ${code}`);
+    return res.json({ ok: true, dev: true });
+  }
   try {
     await resend.emails.send({
       from: "SignalMaster Pro <onboarding@resend.dev>",
