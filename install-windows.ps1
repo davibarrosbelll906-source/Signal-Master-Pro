@@ -154,7 +154,7 @@ ok "Build completo"
 
 # ── Iniciar com PM2 ───────────────────────────────────────────
 step "Iniciando app com PM2 (24/7)"
-pm2 delete smp-api 2>$null
+try { pm2 delete smp-api 2>$null } catch {}
 Set-Location "$INSTALL_DIR\artifacts\api-server"
 pm2 start node --name smp-api -- --enable-source-maps .\dist\index.mjs
 pm2 save
