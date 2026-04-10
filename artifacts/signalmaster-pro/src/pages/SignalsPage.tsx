@@ -860,41 +860,48 @@ export default function SignalsPage() {
 
                   {/* Direção do último diagnóstico */}
                   {lastDiag && (
-                    <div className="mt-6 flex flex-col items-center gap-3">
-                      <div className={`flex items-center gap-4 px-8 py-4 rounded-2xl border ${
-                        lastDiag.blockedBy
-                          ? 'border-orange-500/25 bg-orange-500/6'
-                          : lastDiag.direction === 'CALL'
-                            ? 'border-[var(--green)]/35 bg-[var(--green)]/8 shadow-[0_0_24px_rgba(0,255,135,0.15)]'
-                            : 'border-[var(--red)]/35 bg-[var(--red)]/8 shadow-[0_0_24px_rgba(255,60,60,0.15)]'
-                      }`}>
-                        <span className={`text-4xl font-black ${
-                          lastDiag.blockedBy ? 'text-orange-400/60' :
-                          lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
-                        }`}>
-                          {lastDiag.direction === 'CALL' ? '▲' : '▼'}
-                        </span>
-                        <div className="text-left">
-                          <div className={`text-2xl font-black tracking-widest ${
-                            lastDiag.blockedBy ? 'text-orange-400/60' :
-                            lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
+                    <div className="mt-6 flex flex-col items-center gap-3 w-full max-w-xs">
+                      {lastDiag.blockedBy ? (
+                        /* ── SINAL BLOQUEADO: sem seta, sem score, só razão ── */
+                        <div className="w-full px-4 py-3 rounded-2xl border border-white/8 bg-white/3 flex flex-col items-center gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600 text-sm">⛔</span>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Mercado filtrado</span>
+                          </div>
+                          <div className="text-[11px] text-gray-500 text-center leading-snug">{lastDiag.blockedBy}</div>
+                          {lastDiagTime && <div className="text-[10px] text-gray-700">{lastDiagTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
+                        </div>
+                      ) : (
+                        /* ── SINAL ATIVO: card colorido com direção + score ── */
+                        <>
+                          <div className={`flex items-center gap-4 px-8 py-4 rounded-2xl border w-full justify-center ${
+                            lastDiag.direction === 'CALL'
+                              ? 'border-[var(--green)]/35 bg-[var(--green)]/8 shadow-[0_0_24px_rgba(0,255,135,0.15)]'
+                              : 'border-[var(--red)]/35 bg-[var(--red)]/8 shadow-[0_0_24px_rgba(255,60,60,0.15)]'
                           }`}>
-                            {lastDiag.direction}
+                            <span className={`text-4xl font-black ${lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                              {lastDiag.direction === 'CALL' ? '▲' : '▼'}
+                            </span>
+                            <div className="text-left">
+                              <div className={`text-2xl font-black tracking-widest ${lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
+                                {lastDiag.direction}
+                              </div>
+                              <div className="text-[10px] text-gray-600 uppercase tracking-widest">
+                                {lastDiag.passed ? 'sinal gerado' : 'direção calculada'}
+                              </div>
+                            </div>
+                            <div className="text-left pl-3 border-l border-white/8">
+                              <div className="text-xs text-gray-500">Score</div>
+                              <div className="text-lg font-black text-white">{lastDiag.score ?? '—'}</div>
+                              <div className="text-[9px] font-bold text-gray-500">{lastDiag.quality}</div>
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-600 uppercase tracking-widest">
-                            {lastDiag.blockedBy ? 'sinal bloqueado' : lastDiag.passed ? 'sinal gerado' : 'direção calculada'}
+                          <div className="px-4 py-2 rounded-xl bg-white/4 border border-white/6 text-xs text-gray-500 text-center w-full">
+                            <span className="font-bold text-gray-400">Último:</span> {lastDiag.passed ? 'sinal confirmado e emitido' : 'filtrado pelo motor'}
+                            {lastDiagTime && <span className="ml-2 text-gray-600">• {lastDiagTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
                           </div>
-                        </div>
-                        <div className="text-left pl-3 border-l border-white/8">
-                          <div className="text-xs text-gray-500">Score</div>
-                          <div className={`text-lg font-black ${lastDiag.blockedBy ? 'text-orange-400/60' : 'text-white'}`}>{lastDiag.score ?? '—'}</div>
-                          <div className={`text-[9px] font-bold ${lastDiag.blockedBy ? 'text-orange-400/50' : 'text-gray-500'}`}>{lastDiag.quality}</div>
-                        </div>
-                      </div>
-                      <div className="px-4 py-2 rounded-xl bg-white/4 border border-white/6 text-xs text-gray-500 text-center">
-                        <span className="font-bold text-gray-400">Último:</span> {lastDiag.blockedBy || (lastDiag.passed ? 'sinal confirmado e emitido' : 'filtrado pelo motor')}
-                        {lastDiagTime && <span className="ml-2 text-gray-600">• {lastDiagTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
-                      </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -1075,22 +1082,22 @@ export default function SignalsPage() {
                   {/* ── DIREÇÃO CALL / PUT ── */}
                   <div className={`flex items-center justify-between p-3 rounded-xl border ${
                     lastDiag.blockedBy
-                      ? 'border-orange-500/20 bg-orange-500/6'
+                      ? 'border-white/6 bg-white/2'
                       : lastDiag.direction === 'CALL'
                         ? 'border-[var(--green)]/30 bg-[var(--green)]/8 shadow-[0_0_12px_rgba(0,255,135,0.12)]'
                         : 'border-[var(--red)]/30 bg-[var(--red)]/8 shadow-[0_0_12px_rgba(255,60,60,0.12)]'
                   }`}>
                     <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Direção</span>
                     <div className="flex items-center gap-2">
-                      {lastDiag.blockedBy && (
-                        <span className="text-[9px] text-orange-400 font-bold">BLOQ.</span>
+                      {lastDiag.blockedBy ? (
+                        <span className="text-[10px] text-gray-600 font-bold">⛔ filtrado</span>
+                      ) : (
+                        <span className={`text-xl font-black tracking-tight ${
+                          lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
+                        }`}>
+                          {lastDiag.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
+                        </span>
                       )}
-                      <span className={`text-xl font-black tracking-tight ${
-                        lastDiag.blockedBy ? 'text-orange-400 opacity-50' :
-                        lastDiag.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
-                      }`}>
-                        {lastDiag.direction === 'CALL' ? '▲ CALL' : '▼ PUT'}
-                      </span>
                     </div>
                   </div>
 
