@@ -645,6 +645,19 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
     rsi:    rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL',
   };
 
+  // ── EMA50 Trend Gate (gate primário — fix para sinais contra tendência) ──
+  // O bug: emaBull/emaBear só disparam com stack PERFEITO (ema9>ema21>ema50).
+  // Em pullbacks (ema9 cruzou ema21 mas ema21 ainda acima de ema50),
+  // nem emaBull nem emaBear é true → PUT passa sem bloqueio acima da EMA50.
+  // Fix: EMA50 + EMA21 definem a tendência macro — independente da EMA9.
+  const ema50BullTrend = lastEma21 > lastEma50 && lastClose > lastEma50;
+  const ema50BearTrend = lastEma21 < lastEma50 && lastClose < lastEma50;
+  // Exceção: zonas S/R muito fortes (5+ toques) com wick de rejeição
+  // podem sinalizar reversão legítima mesmo contra EMA50 trend
+  const strongReversalZone = zoneStrength >= 5 &&
+    ((direction === 'PUT' && srBounce.rejectionShort) ||
+     (direction === 'CALL' && srBounce.rejectionLong));
+
   const mins = new Date().getMinutes();
   let blockedBy: string | null = null;
 
@@ -654,6 +667,12 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
     blockedBy = 'Fora de zona S/R — aguardando toque';
   else if (candleScore === 0)
     blockedBy = `Sem padrão de reversão em ${direction === 'CALL' ? 'suporte' : 'resistência'} (${candle.pattern})`;
+  // ── EMA50 gate (verificado ANTES do stack perfeito) ──────────────────────
+  else if (direction === 'PUT' && ema50BullTrend && !strongReversalZone)
+    blockedBy = `EMA50 Trend Alta — PUT bloqueado (preço ${lastClose > lastEma50 ? 'acima' : ''} EMA50, EMA21>EMA50)`;
+  else if (direction === 'CALL' && ema50BearTrend && !strongReversalZone)
+    blockedBy = `EMA50 Trend Baixa — CALL bloqueado (preço ${lastClose < lastEma50 ? 'abaixo' : ''} EMA50, EMA21<EMA50)`;
+  // ── Stack perfeito (ema9/21/50 totalmente alinhadas) ─────────────────────
   else if (direction === 'CALL' && emaBear)
     blockedBy = 'EMA Bear Stack — contra tendência de baixa';
   else if (direction === 'PUT' && emaBull)
