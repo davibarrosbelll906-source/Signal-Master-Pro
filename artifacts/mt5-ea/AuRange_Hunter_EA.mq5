@@ -318,7 +318,7 @@ void PlaceBuyOrder(int stratId, StrategyParams &p)
    double entryPx = NormalizeDouble(ask + p.buyOffset * g_point, _Digits);
    double tp      = NormalizeDouble(entryPx + p.buyTP * g_point, _Digits);
    double sl      = NormalizeDouble(entryPx - p.buySL * g_point, _Digits);
-   datetime expiry = TimeCurrent() + (long)p.buyTimeEnd * 60;
+   datetime expiry = (datetime)(TimeCurrent() + (long)p.buyTimeEnd * 60);
    ENUM_ORDER_TYPE otype = GetBuyOrderType(p.buyOffset);
    string comment = "ARH_S" + IntegerToString(stratId + 1) + "_Buy";
 
@@ -339,7 +339,7 @@ void PlaceSellOrder(int stratId, StrategyParams &p)
    double entryPx = NormalizeDouble(bid + p.sellOffset * g_point, _Digits);
    double tp      = NormalizeDouble(entryPx - p.sellTP * g_point, _Digits);
    double sl      = NormalizeDouble(entryPx + p.sellSL * g_point, _Digits);
-   datetime expiry = TimeCurrent() + (long)p.sellTimeEnd * 60;
+   datetime expiry = (datetime)(TimeCurrent() + (long)p.sellTimeEnd * 60);
    ENUM_ORDER_TYPE otype = GetSellOrderType(p.sellOffset);
    string comment = "ARH_S" + IntegerToString(stratId + 1) + "_Sell";
 
@@ -517,11 +517,8 @@ void CheckDailyReset()
 
 void RunStrategy(int stratId)
 {
-   StrategyParams &p = g_params[stratId];
-   StrategyState  &s = g_state[stratId];
-
-   if (!p.enabled) return;
-   if (!IsTradingDay()) return;
+   if (!g_params[stratId].enabled) return;
+   if (!IsTradingDay())             return;
 
    int magicBuy  = BuildMagic(stratId, false);
    int magicSell = BuildMagic(stratId, true);
@@ -532,30 +529,33 @@ void RunStrategy(int stratId)
    bool hasSellPos     = HasPosition(magicSell);
 
    // ── Entry: place orders at session open ──────────────────────
-   if (!s.ordersPlaced && IsEntryMinute(p.entryHour, p.entryMinute)) {
+   if (!g_state[stratId].ordersPlaced &&
+       IsEntryMinute(g_params[stratId].entryHour, g_params[stratId].entryMinute)) {
+
       double spread = GetSpreadPts();
-      if (spread > p.spreadLimit) {
-         PrintFormat("[S%d] Spread too high: %.0f pts (limit %.0f) — skip", stratId + 1, spread, p.spreadLimit);
+      if (spread > g_params[stratId].spreadLimit) {
+         PrintFormat("[S%d] Spread too high: %.0f pts (limit %.0f) — skip",
+                     stratId + 1, spread, g_params[stratId].spreadLimit);
          return;
       }
 
-      if (p.allowBuy  && !hasBuyPending  && !hasBuyPos)  PlaceBuyOrder(stratId, p);
-      if (p.allowSell && !hasSellPending && !hasSellPos) PlaceSellOrder(stratId, p);
+      if (g_params[stratId].allowBuy  && !hasBuyPending  && !hasBuyPos)
+         PlaceBuyOrder(stratId, g_params[stratId]);
+      if (g_params[stratId].allowSell && !hasSellPending && !hasSellPos)
+         PlaceSellOrder(stratId, g_params[stratId]);
 
-      s.ordersPlaced = true;
-      s.entryTime    = TimeCurrent();
+      g_state[stratId].ordersPlaced = true;
+      g_state[stratId].entryTime    = TimeCurrent();
       return; // let tick settle before scalper runs
    }
 
    // ── Scalper Machine: maintain pending orders ──────────────────
-   if (s.ordersPlaced && (hasBuyPending || hasSellPending)) {
-      RunScalperMachine(stratId, p);
-   }
+   if (g_state[stratId].ordersPlaced && (hasBuyPending || hasSellPending))
+      RunScalperMachine(stratId, g_params[stratId]);
 
    // ── Position management: trail & BE ──────────────────────────
-   if (hasBuyPos || hasSellPos) {
-      ManagePositions(stratId, p);
-   }
+   if (hasBuyPos || hasSellPos)
+      ManagePositions(stratId, g_params[stratId]);
 }
 
 //──────────────────────────────────────────────────────────────────────
