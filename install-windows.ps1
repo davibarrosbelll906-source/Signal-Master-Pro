@@ -94,10 +94,10 @@ ok "PostgreSQL instalado"
 
 # ── Criar banco de dados ───────────────────────────────────────
 step "Criando banco de dados"
-$pgPath = (Get-Command psql -ErrorAction SilentlyContinue)?.Source
-if (-not $pgPath) {
-    $pgPath = "C:\Program Files\PostgreSQL\14\bin\psql.exe"
-}
+$pgCmd = Get-Command psql -ErrorAction SilentlyContinue
+if ($pgCmd) { $pgPath = $pgCmd.Source } else { $pgPath = "C:\Program Files\PostgreSQL\14\bin\psql.exe" }
+if (-not (Test-Path $pgPath)) { $pgPath = "C:\Program Files\PostgreSQL\15\bin\psql.exe" }
+if (-not (Test-Path $pgPath)) { $pgPath = "C:\Program Files\PostgreSQL\16\bin\psql.exe" }
 $env:PGPASSWORD = $DB_PASS
 & $pgPath -U postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASS';" 2>$null
 & $pgPath -U postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>$null
