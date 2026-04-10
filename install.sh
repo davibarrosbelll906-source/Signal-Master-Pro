@@ -45,6 +45,7 @@ read -p "  Senha para o banco de dados: " DB_PASS
 read -p "  SESSION_SECRET (chave secreta longa — pode inventar): " SESSION_SECRET
 [[ -z "$SESSION_SECRET" ]] && SESSION_SECRET=$(openssl rand -hex 32)
 
+read -p "  TWELVE_DATA_API_KEY (para Forex em tempo real — pressione Enter para pular): " TWELVE_KEY
 read -p "  RESEND_API_KEY (para envio de email — pressione Enter para pular): " RESEND_KEY
 
 read -p "  STRIPE_PRICE_PRO (ID do plano Stripe — pressione Enter para pular): " STRIPE_PRO
@@ -122,6 +123,7 @@ cat > "${INSTALL_DIR}/artifacts/api-server/.env" <<EOF
 DATABASE_URL=${DATABASE_URL}
 SESSION_SECRET=${SESSION_SECRET}
 REFRESH_SECRET=${SESSION_SECRET}
+TWELVE_DATA_API_KEY=${TWELVE_KEY}
 RESEND_API_KEY=${RESEND_KEY}
 STRIPE_PRICE_PRO=${STRIPE_PRO}
 STRIPE_PRICE_PREMIUM=${STRIPE_PREM}
