@@ -84,18 +84,7 @@ export interface FingerprintPoint {
   lowerShadow: number;
 }
 
-export const BASE_WEIGHTS: Record<string, number> = {
-  // Timeframe confluence
-  ema: 0.20, htf: 0.15, m15: 0.12,
-  // Momentum
-  rsi: 0.13, rsidiv: 0.14, macd: 0.13,
-  // Oscillators + structure
-  bb: 0.09, bsq: 0.10, stoch: 0.09,
-  // S/R + candle
-  sr: 0.12, candle: 0.09,
-  // Volume
-  volume: 0.07, obv: 0.07
-};
+// BASE_WEIGHTS removed — era dead code (nunca usado no scoring)
 
 // ─── INDICATORS ────────────────────────────────────────────────────────────
 
@@ -599,7 +588,7 @@ export function detectMarketRegime(
 
 export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): SignalResult | null {
   const m1 = buf.m1;
-  if (m1.length < 30) return null;
+  if (m1.length < 50) return null;
 
   const closes  = m1.map(c => c.c);
   const highs   = m1.map(c => c.h);
@@ -618,6 +607,10 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
   const candle   = detectCandlePattern(m1);
   const srBounce = detectSRBounce(highs, lows, closes, opens);
   const marketRegime = detectMarketRegime(highs, lows, closes);
+  const entropy  = calcEntropy(m1);
+  const volumes  = m1.map(c => c.v);
+  const obvTrend = calcOBVTrend(closes, volumes, 12);
+  const bbSq     = detectBBSqueeze(closes);
 
   // ── HTF tendência ────────────────────────────────────────────────────
   const m5closes  = deriveM5(m1).map(c => c.c);
@@ -731,34 +724,43 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
     else if (rsi > 50) rsiBonus = 2;
   }
 
-  // Normaliza (máx 108 → 0.0–1.0)
+  // Normaliza (máx 108 → 0.0–1.0) — FIX-5: floor honesto 0.25
   let rawScore = (srScore + candleScore + emaScore + htfScore + rsiBonus) / 108;
+  rawScore = Math.min(0.97, Math.max(0.25, rawScore + getPairSessionBonus(sess, category, asset) * 0.20));
 
-  // Bônus de sessão (peso reduzido)
-  rawScore = Math.min(0.97, Math.max(0.40, rawScore + getPairSessionBonus(sess, category, asset) * 0.20));
-
-  // ADX forte → pequeno bônus
   if (adx >= 30)      rawScore = Math.min(0.97, rawScore + 0.03);
   else if (adx >= 25) rawScore = Math.min(0.97, rawScore + 0.015);
-
-  // Regime trending → bônus
   if (marketRegime === 'TRENDING') rawScore = Math.min(0.97, rawScore + 0.04);
-
-  // MTF ambos concordam → bônus
   const htfAgrees = direction === 'CALL' ? htfBull : !htfBull;
   const m15Agrees = direction === 'CALL' ? m15Bull : !m15Bull;
   if (htfAgrees && m15Agrees) rawScore = Math.min(0.97, rawScore + 0.03);
 
+  // FIX-4: MACD momentum como modificador de score (±4%)
+  const macdMom  = calcMACDMomentum(closes);
+  const macdData = calcMACD(closes);
+  const macdAligned =
+    (direction === 'CALL' && macdData.hist > 0 && macdMom === 'growing') ||
+    (direction === 'PUT'  && macdData.hist < 0 && macdMom === 'growing');
+  if (!macdAligned) rawScore = Math.max(0.25, rawScore - 0.04);
+  else              rawScore = Math.min(0.97, rawScore + 0.02);
+
+  // ASSERT-4: Bollinger Squeeze booster (+5% quando breakout confirma direção)
+  const bbBoost =
+    bbSq.squeeze && bbSq.breakout !== null &&
+    ((direction === 'CALL' && bbSq.breakout === 'up') ||
+     (direction === 'PUT'  && bbSq.breakout === 'down'));
+  if (bbBoost) rawScore = Math.min(0.97, rawScore + 0.05);
+
   const score = Math.round(rawScore * 100);
 
-  // ── Qualidade ─────────────────────────────────────────────────────────
+  // ASSERT-3: thresholds calibrados
   let quality: SignalResult['quality'] = 'EVITAR';
-  if      (score >= 92) quality = 'ULTRA';
-  else if (score >= 84) quality = 'ELITE';
-  else if (score >= 76) quality = 'PREMIUM';
-  else if (score >= 68) quality = 'FORTE';
-  else if (score >= 60) quality = 'MÉDIO';
-  else if (score >= 52) quality = 'FRACO';
+  if      (score >= 90) quality = 'ULTRA';
+  else if (score >= 82) quality = 'ELITE';
+  else if (score >= 74) quality = 'PREMIUM';
+  else if (score >= 66) quality = 'FORTE';
+  else if (score >= 58) quality = 'MÉDIO';
+  else if (score >= 50) quality = 'FRACO';
 
   // ── Config gates ──────────────────────────────────────────────────────
   const cfg = (() => {
@@ -771,7 +773,14 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
   if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) return null;
   if (quality === 'EVITAR') return null;
 
-  // Luna Mode: exige zona ≥3 toques + wick de rejeição
+  // OBV gate — sem confirmação de volume retorna null no engine ativo
+  if (direction === 'CALL' && obvTrend === 'down') return null;
+  if (direction === 'PUT'  && obvTrend === 'up')   return null;
+
+  // Entropia alta — mercado aleatório
+  if (entropy > 0.88) return null;
+
+  // Luna Mode
   if (lunaMode && zoneStrength < 3) return null;
   if (lunaMode && direction === 'CALL' && !srBounce.rejectionLong)  return null;
   if (lunaMode && direction === 'PUT'  && !srBounce.rejectionShort) return null;
@@ -787,12 +796,15 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
     htf:    htfBull ? 'CALL' : 'PUT',
     m15:    m15closes.length >= 9 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL',
     rsi:    rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL',
+    obv:    obvTrend === 'up' ? 'CALL' : obvTrend === 'down' ? 'PUT' : 'NEUTRAL',
+    bb:     bbSq.squeeze ? (bbSq.breakout === 'up' ? 'CALL' : bbSq.breakout === 'down' ? 'PUT' : 'NEUTRAL') : 'NEUTRAL',
+    macd:   macdData.hist > 0 ? 'CALL' : macdData.hist < 0 ? 'PUT' : 'NEUTRAL',
   };
 
   return {
     direction, score, quality, marketRegime,
     adx: Math.round(adx), rsi: Math.round(rsi),
-    entropy: 0, dnaMatch: 0, consensus: Math.round(zoneStrength),
+    entropy: Math.round(entropy * 100) / 100, dnaMatch: 0, consensus: Math.round(zoneStrength),
     confirmed: candleScore > 0 ? 1 : 0,
     mmTrap: false, mmTrapType: '',
     sess, votes, asset, category,
@@ -819,7 +831,7 @@ export interface DiagResult {
 
 export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false): DiagResult | null {
   const m1 = buf.m1;
-  if (m1.length < 30) return null;
+  if (m1.length < 50) return null;
 
   const closes  = m1.map(c => c.c);
   const highs   = m1.map(c => c.h);
@@ -837,6 +849,10 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
   const candle   = detectCandlePattern(m1);
   const srBounce = detectSRBounce(highs, lows, closes, opens);
   const marketRegime = detectMarketRegime(highs, lows, closes);
+  const entropy  = calcEntropy(m1);
+  const volumes  = m1.map(c => c.v);
+  const obvTrend = calcOBVTrend(closes, volumes, 12);
+  const bbSq     = detectBBSqueeze(closes);
 
   const m5closes  = deriveM5(m1).map(c => c.c);
   const m5ema9    = calcEMA(m5closes, 9);
@@ -907,8 +923,9 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
     if (rsi > 70) rsiBonus = 8; else if (rsi > 60) rsiBonus = 4; else if (rsi > 50) rsiBonus = 2;
   }
 
+  // FIX-5: floor honesto 0.25
   let rawScore = (srScore + candleScore + emaScore + htfScore + rsiBonus) / 108;
-  rawScore = Math.min(0.97, Math.max(0.40, rawScore + getPairSessionBonus(sess, category, asset) * 0.20));
+  rawScore = Math.min(0.97, Math.max(0.25, rawScore + getPairSessionBonus(sess, category, asset) * 0.20));
   if (adx >= 30)      rawScore = Math.min(0.97, rawScore + 0.03);
   else if (adx >= 25) rawScore = Math.min(0.97, rawScore + 0.015);
   if (marketRegime === 'TRENDING') rawScore = Math.min(0.97, rawScore + 0.04);
@@ -916,15 +933,32 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
   const m15Agrees = direction === 'CALL' ? m15Bull : !m15Bull;
   if (htfAgrees && m15Agrees) rawScore = Math.min(0.97, rawScore + 0.03);
 
+  // FIX-4: MACD momentum modificador de score
+  const macdMomD  = calcMACDMomentum(closes);
+  const macdDataD = calcMACD(closes);
+  const macdAlignedD =
+    (direction === 'CALL' && macdDataD.hist > 0 && macdMomD === 'growing') ||
+    (direction === 'PUT'  && macdDataD.hist < 0 && macdMomD === 'growing');
+  if (!macdAlignedD) rawScore = Math.max(0.25, rawScore - 0.04);
+  else               rawScore = Math.min(0.97, rawScore + 0.02);
+
+  // ASSERT-4: BB Squeeze booster
+  const bbBoostD =
+    bbSq.squeeze && bbSq.breakout !== null &&
+    ((direction === 'CALL' && bbSq.breakout === 'up') ||
+     (direction === 'PUT'  && bbSq.breakout === 'down'));
+  if (bbBoostD) rawScore = Math.min(0.97, rawScore + 0.05);
+
   const score = Math.round(rawScore * 100);
 
+  // ASSERT-3: thresholds calibrados
   let quality = 'EVITAR';
-  if      (score >= 92) quality = 'ULTRA';
-  else if (score >= 84) quality = 'ELITE';
-  else if (score >= 76) quality = 'PREMIUM';
-  else if (score >= 68) quality = 'FORTE';
-  else if (score >= 60) quality = 'MÉDIO';
-  else if (score >= 52) quality = 'FRACO';
+  if      (score >= 90) quality = 'ULTRA';
+  else if (score >= 82) quality = 'ELITE';
+  else if (score >= 74) quality = 'PREMIUM';
+  else if (score >= 66) quality = 'FORTE';
+  else if (score >= 58) quality = 'MÉDIO';
+  else if (score >= 50) quality = 'FRACO';
 
   const cfg = (() => {
     try { return JSON.parse(localStorage.getItem('smpCfg7') || '{}'); } catch { return {}; }
@@ -939,6 +973,9 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
     htf:    htfBull ? 'CALL' : 'PUT',
     m15:    m15closes.length >= 9 ? (m15Bull ? 'CALL' : 'PUT') : 'NEUTRAL',
     rsi:    rsi < 40 ? 'CALL' : rsi > 60 ? 'PUT' : 'NEUTRAL',
+    obv:    obvTrend === 'up' ? 'CALL' : obvTrend === 'down' ? 'PUT' : 'NEUTRAL',
+    bb:     bbSq.squeeze ? (bbSq.breakout === 'up' ? 'CALL' : bbSq.breakout === 'down' ? 'PUT' : 'NEUTRAL') : 'NEUTRAL',
+    macd:   macdDataD.hist > 0 ? 'CALL' : macdDataD.hist < 0 ? 'PUT' : 'NEUTRAL',
   };
 
   let blockedBy: string | null = null;
@@ -960,6 +997,14 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
     blockedBy = `RSI ${Math.round(rsi)} sobrecomprado — CALL bloqueado`;
   else if (direction === 'PUT' && rsi < 25)
     blockedBy = `RSI ${Math.round(rsi)} sobrevendido — PUT bloqueado`;
+  // FIX-3: entropia alta — mercado aleatório
+  else if (entropy > 0.88)
+    blockedBy = `Entropia ${Math.round(entropy * 100)}% — mercado aleatório`;
+  // ASSERT-1: OBV sem confirmação de volume
+  else if (direction === 'CALL' && obvTrend === 'down')
+    blockedBy = 'OBV descendente — pressão vendedora apesar do sinal de compra';
+  else if (direction === 'PUT' && obvTrend === 'up')
+    blockedBy = 'OBV ascendente — pressão compradora apesar do sinal de venda';
   else if (marketRegime === 'CHOPPY')
     blockedBy = 'Regime CHOPPY — sem sinal';
   else if (score < minScore)
@@ -978,7 +1023,7 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
   return {
     direction, score, quality,
     adx: Math.round(adx), rsi: Math.round(rsi),
-    entropy: 0, consensus: Math.round(zoneStrength),
+    entropy: Math.round(entropy * 100) / 100, consensus: Math.round(zoneStrength),
     confirmed: candleScore > 0 ? 1 : 0,
     blockedBy, votes,
     passed: blockedBy === null,
@@ -996,24 +1041,26 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
 // ─── ORNSTEIN-UHLENBECK FOREX/COMMODITY SIMULATOR ──────────────────────────
 
 export function generateOUCandle(lastPrice: number, asset: string): Candle {
-  const mu = BASE_PRICES[asset] || lastPrice;
+  const mu    = BASE_PRICES[asset] || lastPrice;
   const theta = 0.05;
   const sigma = PAIR_VOL[asset] || 0.0003;
-  const dt = 1 / 1440;
+  const dt    = 1 / 1440;
   const drift = theta * (mu - lastPrice) * dt;
-  // Simulate using pseudo-random from time-based seed (deterministic enough)
-  const seed = Date.now() % 1000000;
-  const r1 = Math.abs(Math.sin(seed * 9301 + 49297) % 1);
-  const r2 = Math.abs(Math.sin(seed * 49297 + 233) % 1);
-  const normal = Math.sqrt(-2 * Math.log(r1 + 0.0001)) * Math.cos(2 * Math.PI * r2);
+
+  // Box-Muller correto — padrão da indústria, sem sin/cos de timestamp
+  let u1: number;
+  do { u1 = Math.random(); } while (u1 === 0);
+  const u2     = Math.random();
+  const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+
   const close = lastPrice + drift + sigma * normal * Math.sqrt(dt) * 100;
   const range = sigma * (0.8 + Math.abs(normal) * 0.5);
-  const open = lastPrice;
-  const high = Math.max(open, close) + range * 0.3;
-  const low = Math.min(open, close) - range * 0.3;
+  const open  = lastPrice;
+  const high  = Math.max(open, close) + range * 0.3;
+  const low   = Math.min(open, close) - range * 0.3;
   return {
-    o: open, h: high, l: low, c: close,
-    v: 1000 + Math.abs(normal) * 500,
+    o: open, h: high, l: low, c: Math.max(low + 0.0001, close),
+    v: 800 + Math.abs(normal) * 600,
     t: Date.now()
   };
 }
