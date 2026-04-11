@@ -25,8 +25,8 @@ interface Config {
 }
 
 const DEFAULTS: Config = {
-  minScore: 77,
-  forteOnly: true,
+  minScore: 66,
+  forteOnly: false,
   lunaMode: false,
   soundEnabled: true,
   soundOnlyStrong: true,
@@ -87,6 +87,12 @@ export default function SettingsPage() {
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('smpCfg7') || '{}');
+      // Migração: se o usuário tinha minScore=77 (default antigo), atualiza para 66
+      if (stored.minScore === 77 || stored.minScore === undefined) {
+        stored.minScore = DEFAULTS.minScore;
+        stored.forteOnly = DEFAULTS.forteOnly;
+        localStorage.setItem('smpCfg7', JSON.stringify({ ...DEFAULTS, ...stored }));
+      }
       setCfg({ ...DEFAULTS, ...stored });
     } catch {}
   }, []);

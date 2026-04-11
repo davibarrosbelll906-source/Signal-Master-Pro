@@ -649,32 +649,33 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
     else if (candle.pattern === 'bullEngulfing') candleScore = 24;
     else if (srBounce.rejectionLong) candleScore = 18;
     else if (candle.pattern === 'doji') candleScore = 10;
-    else return null;
+    // Sem padrão: score 0 (penaliza ≈28% do max) — não bloqueia mais
+    else candleScore = 0;
   } else {
     if (candle.pattern === 'shootingStar' || candle.pattern === 'threeBlackCrows') candleScore = 30;
     else if (candle.pattern === 'bearEngulfing') candleScore = 24;
     else if (srBounce.rejectionShort) candleScore = 18;
     else if (candle.pattern === 'doji') candleScore = 10;
-    else return null;
+    else candleScore = 0;
   }
 
-  // ── GATE 3: Tendência EMA não pode ser oposta ─────────────────────────
+  // ── GATE 3: EMA Stack perfeito oposto bloqueia (ema9/21/50 alinhadas) ─
   if (direction === 'CALL' && emaBear) return null;
   if (direction === 'PUT'  && emaBull) return null;
 
-  // ── GATE 4: ADX mínimo ────────────────────────────────────────────────
-  if (adx < 15) return null;
+  // ── GATE 4: ADX — crypto M1 pode ter ADX baixo mesmo em tendência
+  if (adx < 10) return null;
 
-  // ── GATE 5: ATR — mercado não morto / não caótico ─────────────────────
-  if (atrPct < 0.0003) return null;
+  // ── GATE 5: ATR — apenas mercado verdadeiramente congelado (<1 bp)
+  if (atrPct < 0.0001) return null;
   if (atrPct > 0.025)  return null;
 
   // ── GATE 6: RSI extremo contrário bloqueia ───────────────────────────
   if (direction === 'CALL' && rsi > 75) return null;
   if (direction === 'PUT'  && rsi < 25) return null;
 
-  // ── GATE 7: Mercado CHOPPY ────────────────────────────────────────────
-  if (marketRegime === 'CHOPPY') return null;
+  // CHOPPY: hard block removido — score já penaliza naturalmente (sem TRENDING +4%, sem ADX bônus)
+  // Em zonas S/R fortes, mercado RANGING/CHOPPY pode produzir bons bounces em binary options
 
   // ── SCORE (máximo 108 pontos) ─────────────────────────────────────────
   // 1. Força da zona S/R (0–40 pts)
@@ -751,6 +752,10 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
      (direction === 'PUT'  && bbSq.breakout === 'down'));
   if (bbBoost) rawScore = Math.min(0.97, rawScore + 0.05);
 
+  // OBV: penalidade –8% aplicada ANTES do score final
+  if (direction === 'CALL' && obvTrend === 'down') rawScore = Math.max(0.25, rawScore - 0.08);
+  if (direction === 'PUT'  && obvTrend === 'up')   rawScore = Math.max(0.25, rawScore - 0.08);
+
   const score = Math.round(rawScore * 100);
 
   // ASSERT-3: thresholds calibrados
@@ -766,19 +771,15 @@ export function runEngine(buf: CandleBuffer, asset: string, lunaMode = false): S
   const cfg = (() => {
     try { return JSON.parse(localStorage.getItem('smpCfg7') || '{}'); } catch { return {}; }
   })();
-  const minScore  = cfg.minScore ?? 77;
-  const forteOnly = cfg.forteOnly ?? true;
+  const minScore  = cfg.minScore ?? 66;
+  const forteOnly = cfg.forteOnly ?? false;
 
   if (score < minScore) return null;
   if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality)) return null;
   if (quality === 'EVITAR') return null;
 
-  // OBV gate — sem confirmação de volume retorna null no engine ativo
-  if (direction === 'CALL' && obvTrend === 'down') return null;
-  if (direction === 'PUT'  && obvTrend === 'up')   return null;
-
-  // Entropia alta — mercado aleatório
-  if (entropy > 0.88) return null;
+  // Entropia crypto M1 é estruturalmente alta (90%+); só bloqueia acima de 96%
+  if (entropy > 0.96) return null;
 
   // Luna Mode
   if (lunaMode && zoneStrength < 3) return null;
@@ -963,8 +964,8 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
   const cfg = (() => {
     try { return JSON.parse(localStorage.getItem('smpCfg7') || '{}'); } catch { return {}; }
   })();
-  const minScore  = cfg.minScore ?? 77;
-  const forteOnly = cfg.forteOnly ?? true;
+  const minScore  = cfg.minScore ?? 66;
+  const forteOnly = cfg.forteOnly ?? false;
 
   const votes: Record<string, string> = {
     sr:     direction,
@@ -981,32 +982,25 @@ export function runEngineDiag(buf: CandleBuffer, asset: string, lunaMode = false
   let blockedBy: string | null = null;
   if (!srBounce.nearSupport && !srBounce.nearResistance)
     blockedBy = 'Fora de zona S/R — aguardando toque';
-  else if (candleScore === 0)
-    blockedBy = `Sem padrão de reversão em ${direction === 'CALL' ? 'suporte' : 'resistência'} (${candle.pattern})`;
+  // candleScore=0 não bloqueia mais — já penaliza o score em ≈28%
   else if (direction === 'CALL' && emaBear)
     blockedBy = 'EMA Bear Stack — tendência de baixa, sem CALL';
   else if (direction === 'PUT' && emaBull)
     blockedBy = 'EMA Bull Stack — tendência de alta, sem PUT';
-  else if (adx < 15)
-    blockedBy = `ADX ${Math.round(adx)} < 15 — mercado sem força`;
-  else if (atrPct < 0.0003)
-    blockedBy = 'Mercado morto — ATR < 3 bps';
+  else if (adx < 10)
+    blockedBy = `ADX ${Math.round(adx)} < 10 — mercado completamente sem força`;
+  else if (atrPct < 0.0001)
+    blockedBy = 'Mercado congelado — ATR < 1 bp';
   else if (atrPct > 0.025)
     blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps`;
   else if (direction === 'CALL' && rsi > 75)
     blockedBy = `RSI ${Math.round(rsi)} sobrecomprado — CALL bloqueado`;
   else if (direction === 'PUT' && rsi < 25)
     blockedBy = `RSI ${Math.round(rsi)} sobrevendido — PUT bloqueado`;
-  // FIX-3: entropia alta — mercado aleatório
-  else if (entropy > 0.88)
-    blockedBy = `Entropia ${Math.round(entropy * 100)}% — mercado aleatório`;
-  // ASSERT-1: OBV sem confirmação de volume
-  else if (direction === 'CALL' && obvTrend === 'down')
-    blockedBy = 'OBV descendente — pressão vendedora apesar do sinal de compra';
-  else if (direction === 'PUT' && obvTrend === 'up')
-    blockedBy = 'OBV ascendente — pressão compradora apesar do sinal de venda';
-  else if (marketRegime === 'CHOPPY')
-    blockedBy = 'Regime CHOPPY — sem sinal';
+  // FIX-3: só bloqueia entropia >96% (crypto M1 tem estruturalmente 90%+)
+  else if (entropy > 0.96)
+    blockedBy = `Entropia ${Math.round(entropy * 100)}% — mercado completamente aleatório`;
+  // CHOPPY: não bloqueia mais — score reflete adequadamente o risco
   else if (score < minScore)
     blockedBy = `Score ${score}% < mínimo ${minScore}% — zona fraca ou candle fraco`;
   else if (forteOnly && !['FORTE', 'PREMIUM', 'ELITE', 'ULTRA'].includes(quality))

@@ -636,6 +636,22 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
      (direction === 'PUT'  && bbSq.breakout === 'down'));
   if (bbBoost) rawScore = Math.min(0.97, rawScore + 0.05);
 
+  // ASSERT-1: OBV contrário → penalidade –8% (não hard gate — mercado bearish geral mata tudo)
+  if (direction === 'CALL' && obvTrend === 'down') rawScore = Math.max(0.25, rawScore - 0.08);
+  if (direction === 'PUT'  && obvTrend === 'up')   rawScore = Math.max(0.25, rawScore - 0.08);
+
+  // ── Exceções de reversão (calculadas ANTES do score final) ───────────────
+  // Exceção 1: zona 3+ toques + wick de rejeição → sem penalidade
+  const strongReversalZone = zoneStrength >= 3 &&
+    ((direction === 'PUT' && srBounce.rejectionShort) ||
+     (direction === 'CALL' && srBounce.rejectionLong));
+  // Exceção 2: zona muito forte (4+ toques) + RSI exausto → -12% de penalidade
+  const counterTrendException = !strongReversalZone && zoneStrength >= 4 &&
+    ((direction === 'CALL' && rsi < 38) ||
+     (direction === 'PUT'  && rsi > 62));
+  if (counterTrendException) rawScore = Math.max(0.25, rawScore - 0.12);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const score = Math.round(rawScore * 100);
 
   // ASSERT-3: thresholds calibrados (ligeiramente mais conservadores)
@@ -666,18 +682,13 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
   // Fix: EMA50 + EMA21 definem a tendência macro — independente da EMA9.
   const ema50BullTrend = lastEma21 > lastEma50 && lastClose > lastEma50;
   const ema50BearTrend = lastEma21 < lastEma50 && lastClose < lastEma50;
-  // Exceção: zonas S/R muito fortes (5+ toques) com wick de rejeição
-  // podem sinalizar reversão legítima mesmo contra EMA50 trend
-  const strongReversalZone = zoneStrength >= 5 &&
-    ((direction === 'PUT' && srBounce.rejectionShort) ||
-     (direction === 'CALL' && srBounce.rejectionLong));
-
   // ── HTF hard gate: M5 + M15 devem confirmar a direção ───────────────────
   // Se AMBOS M5 e M15 são bullish → PUT bloqueado (bounce em andamento)
   // Se AMBOS M5 e M15 são bearish → CALL bloqueado (queda em andamento)
-  // Exceção: strongReversalZone (zona de 5+ toques com wick de rejeição)
+  // Exceções: strongReversalZone ou counterTrendException
   const htfStrongBull = htfBull && m15Bull;
   const htfStrongBear = !htfBull && !m15Bull;
+  const htfException  = strongReversalZone || counterTrendException;
 
   const mins = new Date().getMinutes();
   let blockedBy: string | null = null;
@@ -686,43 +697,37 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
     blockedBy = 'Horário morto (min :00 ou :59)';
   else if (!srBounce.nearSupport && !srBounce.nearResistance)
     blockedBy = 'Fora de zona S/R — aguardando toque';
-  else if (candleScore === 0)
-    blockedBy = `Sem padrão de reversão em ${direction === 'CALL' ? 'suporte' : 'resistência'} (${candle.pattern})`;
+  // Sem padrão de vela → não bloqueia, já penaliza o score (candleScore=0 → -28% no raw)
   // ── HTF gate (M5+M15 confirmação obrigatória) ────────────────────────────
-  else if (direction === 'PUT' && htfStrongBull && !strongReversalZone)
+  else if (direction === 'PUT' && htfStrongBull && !htfException)
     blockedBy = 'HTF Alta (M5+M15 bullish) — PUT bloqueado contra tendência superior';
-  else if (direction === 'CALL' && htfStrongBear && !strongReversalZone)
+  else if (direction === 'CALL' && htfStrongBear && !htfException)
     blockedBy = 'HTF Baixa (M5+M15 bearish) — CALL bloqueado contra tendência superior';
   // ── EMA50 gate (verificado ANTES do stack perfeito) ──────────────────────
-  else if (direction === 'PUT' && ema50BullTrend && !strongReversalZone)
+  else if (direction === 'PUT' && ema50BullTrend && !htfException)
     blockedBy = `EMA50 Trend Alta — PUT bloqueado (preço ${lastClose > lastEma50 ? 'acima' : ''} EMA50, EMA21>EMA50)`;
-  else if (direction === 'CALL' && ema50BearTrend && !strongReversalZone)
+  else if (direction === 'CALL' && ema50BearTrend && !htfException)
     blockedBy = `EMA50 Trend Baixa — CALL bloqueado (preço ${lastClose < lastEma50 ? 'abaixo' : ''} EMA50, EMA21<EMA50)`;
   // ── Stack perfeito (ema9/21/50 totalmente alinhadas) ─────────────────────
   else if (direction === 'CALL' && emaBear)
     blockedBy = 'EMA Bear Stack — contra tendência de baixa';
   else if (direction === 'PUT' && emaBull)
     blockedBy = 'EMA Bull Stack — contra tendência de alta';
-  else if (adx < 15)
-    blockedBy = `ADX ${Math.round(adx)} < 15 — mercado sem força`;
-  else if (atrPct < 0.0003)
-    blockedBy = 'Mercado morto — ATR < 3 bps';
+  else if (adx < 10)
+    blockedBy = `ADX ${Math.round(adx)} < 10 — mercado completamente sem força`;
+  else if (atrPct < 0.0001)
+    blockedBy = 'Mercado congelado — ATR < 1 bp';
   else if (atrPct > 0.025)
     blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps`;
   else if (direction === 'CALL' && rsi > 75)
     blockedBy = `RSI ${Math.round(rsi)} sobrecomprado — CALL bloqueado`;
   else if (direction === 'PUT' && rsi < 25)
     blockedBy = `RSI ${Math.round(rsi)} sobrevendido — PUT bloqueado`;
-  // FIX-3: Gate de entropia — mercado aleatório/ruidoso
-  else if (entropy > 0.88)
-    blockedBy = `Entropia ${Math.round(entropy * 100)}% — mercado aleatório`;
-  // ASSERT-1: Gate de OBV — sem confirmação de volume
-  else if (direction === 'CALL' && obvTrend === 'down')
-    blockedBy = 'OBV descendente — pressão vendedora apesar do sinal de compra';
-  else if (direction === 'PUT' && obvTrend === 'up')
-    blockedBy = 'OBV ascendente — pressão compradora apesar do sinal de venda';
-  else if (marketRegime === 'CHOPPY')
-    blockedBy = 'Regime CHOPPY — sem sinal';
+  // FIX-3: Entropia — só bloqueia acima de 96% (crypto M1 tem 90%+ estruturalmente)
+  else if (entropy > 0.96)
+    blockedBy = `Entropia ${Math.round(entropy * 100)}% — mercado completamente aleatório`;
+  // CHOPPY: penalidade já embutida no score (sem TRENDING +4%, sem ADX bônus, MACD desalinhado)
+  // Hard block removido — score reflete o risco adequadamente
   else if (quality === 'EVITAR')
     blockedBy = `Score ${score}% — zona fraca (${zoneStrength} toques) ou candle fraco (${candle.pattern})`;
   else if (lunaMode && zoneStrength < 3)
