@@ -10,6 +10,7 @@ import lunaRouter from "./luna.js";
 import marketRouter from "./market.js";
 import backtestRouter from "./backtest.js";
 import analystRouter from "./analyst.js";
+import aiChatRouter from "./aichat.js";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,7 @@ router.use("/leaderboard", leaderboardRouter);
 router.use("/stripe", stripeRouter);
 router.use("/luna", lunaRouter);
 router.use("/analyst", analystRouter);
+router.use("/ai-chat", aiChatRouter);
 router.use("/", marketRouter);
 
 export default router;
