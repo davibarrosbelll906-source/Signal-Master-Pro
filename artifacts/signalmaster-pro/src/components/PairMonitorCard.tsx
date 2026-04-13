@@ -227,6 +227,17 @@ export default function PairMonitorCard({ asset, timeframe = 'M1', onRemove }: P
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Score badge — sempre visível se houver sinal */}
+            {backendSignal && (
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-black transition-all ${
+                backendSignal.direction === 'CALL'
+                  ? 'bg-[var(--green)]/10 border-[var(--green)]/25 text-[var(--green)]'
+                  : 'bg-[var(--red)]/10 border-[var(--red)]/25 text-[var(--red)]'
+              }`}>
+                <span>{backendSignal.direction === 'CALL' ? '▲' : '▼'}</span>
+                <span className="tabular-nums">{backendSignal.score}%</span>
+              </div>
+            )}
             {/* Connection dot */}
             <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-[var(--green)] animate-pulse' : 'bg-yellow-500 animate-pulse'}`} />
             <button

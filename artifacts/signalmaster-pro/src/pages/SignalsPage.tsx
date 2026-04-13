@@ -76,6 +76,7 @@ export default function SignalsPage() {
   const [lunaLoading, setLunaLoading] = useState(false);
   const lunaExplanations = useSignalStore((s) => s.lunaExplanations);
   const newsBlackouts = useSignalStore((s) => s.newsBlackouts);
+  const allSignals = useSignalStore((s) => s.signals);
   const activeNewsBlackout: NewsBlackout | null = newsBlackouts[asset] ?? null;
 
   // ── Calendário Econômico + Notícias ──
@@ -620,11 +621,32 @@ export default function SignalsPage() {
                     <div className={`text-[10px] font-black text-${color}-400/80 uppercase tracking-widest mb-2`}>{label}</div>
                     <div className="flex flex-wrap gap-2">
                       {assets.map(a => {
-                        const sel = watchedPairs.includes(a); const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                        const sel = watchedPairs.includes(a);
+                        const full = !sel && watchedPairs.length >= MAX_PAIRS;
+                        const sig = allSignals[a];
+                        const hasScore = sig && sig.score && sig.score > 0;
                         return (
-                          <button key={a} onClick={() => togglePair(a)} disabled={full} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                            sel ? `bg-${color}-400/12 text-${color}-300 border-${color}-400/25` : full ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed' : `bg-white/4 text-gray-400 border-white/8 hover:text-${color}-400`
-                          }`}>{ASSET_ICONS[a] || ''} {a.replace('USD','')}{sel && <span className={`inline-block w-1.5 h-1.5 rounded-full bg-${color}-400 ml-1.5 align-middle`} />}</button>
+                          <button
+                            key={a}
+                            onClick={() => togglePair(a)}
+                            disabled={full}
+                            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                              sel
+                                ? `bg-${color}-400/12 text-${color}-300 border-${color}-400/25`
+                                : full
+                                  ? 'bg-white/2 text-gray-800 border-white/5 cursor-not-allowed'
+                                  : `bg-white/4 text-gray-400 border-white/8 hover:text-${color}-400`
+                            }`}
+                          >
+                            <span>{ASSET_ICONS[a] || ''} {a.replace('USD','')}</span>
+                            {hasScore && (
+                              <span className={`text-[9px] font-black tabular-nums ${
+                                sig.direction === 'CALL' ? 'text-[var(--green)]' : 'text-[var(--red)]'
+                              }`}>
+                                {sig.direction === 'CALL' ? '▲' : '▼'} {sig.score}%
+                              </span>
+                            )}
+                          </button>
                         );
                       })}
                     </div>
