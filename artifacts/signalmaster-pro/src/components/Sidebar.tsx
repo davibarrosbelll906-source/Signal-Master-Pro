@@ -5,7 +5,7 @@ import {
   Activity, History, BarChart2, Map, Beaker, Trophy, BookOpen, Goal,
   ShieldAlert, Wallet, PieChart, Video, Calendar, DollarSign, Users,
   Link as LinkIcon, Award, Send, Bell, User, Settings, LogOut, Home,
-  Menu, X, ChevronDown, ChevronRight, Brain, RadioTower, ChevronDown as ChevDown, Crown, Sparkles, LibraryBig
+  Menu, X, ChevronDown, ChevronRight, Brain, RadioTower, ChevronDown as ChevDown, Crown, Sparkles, LibraryBig, Bot
 } from "lucide-react";
 import { getCurrentSession } from "@/lib/signalEngine";
 import { useAccountMode, KNOWN_BROKERS } from "@/lib/useAccountMode";
@@ -119,6 +119,7 @@ export function Sidebar() {
         { href: "/dashboard/leaderboard", label: "Ranking", icon: Award },
         { href: "/dashboard/achievements", label: "Conquistas", icon: Trophy },
         { href: "/dashboard/projector", label: "Projetor", icon: Video },
+        { href: "/dashboard/analyst", label: "Analista IA", icon: Bot },
       ]
     },
     {

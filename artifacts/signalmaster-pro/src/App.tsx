@@ -68,6 +68,7 @@ import AdminPage from "@/pages/AdminPage";
 import DashboardHomePage from "@/pages/DashboardHomePage";
 import PlansPage from "@/pages/PlansPage";
 import LunaAnalysesPage from "@/pages/LunaAnalysesPage";
+import AnalystPage from "@/pages/AnalystPage";
 
 import NotFound from "@/pages/not-found";
 
@@ -141,6 +142,7 @@ function Router() {
       <Route path="/dashboard/admin" component={() => <D component={AdminPage} />} />
       <Route path="/dashboard/plans" component={() => <D component={PlansPage} />} />
       <Route path="/dashboard/luna-analyses" component={() => <D component={LunaAnalysesPage} />} />
+      <Route path="/dashboard/analyst" component={() => <D component={AnalystPage} />} />
 
       {/* Projector — full screen overlay, rendered inside dashboard layout so auth is enforced */}
       <Route path="/dashboard/projector" component={() => <D component={ProjectorPage} />} />
