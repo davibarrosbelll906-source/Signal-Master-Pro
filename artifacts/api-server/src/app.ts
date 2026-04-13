@@ -114,7 +114,20 @@ onSignalReady((signal) => {
     "[Orchestrator] Sinal emitido");
 });
 
-// Servir frontend estático (para VPS sem Nginx)
+// ── Servir OmniChat em /ai-chat/ ─────────────────────────────────────────
+const aiChatDist = path.resolve(process.cwd(), "../ai-chat/dist/public");
+if (existsSync(aiChatDist)) {
+  logger.info({ aiChatDist }, "Servindo OmniChat em /ai-chat/");
+  app.use("/ai-chat", express.static(aiChatDist, { maxAge: "1d" }));
+  app.get("/ai-chat", (_req: Request, res: Response) => {
+    res.sendFile(path.join(aiChatDist, "index.html"));
+  });
+  app.get("/ai-chat/{*path}", (_req: Request, res: Response) => {
+    res.sendFile(path.join(aiChatDist, "index.html"));
+  });
+}
+
+// ── Servir SignalMaster Pro na raiz ───────────────────────────────────────
 const frontendDist = process.env["FRONTEND_DIST"] ||
   path.resolve(process.cwd(), "../signalmaster-pro/dist/public");
 
@@ -125,7 +138,6 @@ if (existsSync(frontendDist)) {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
-  // 404 — rota não encontrada (sem frontend)
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: "Rota não encontrada" });
   });
