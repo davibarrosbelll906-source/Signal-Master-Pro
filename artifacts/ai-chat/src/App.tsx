@@ -1,48 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────
-type Provider = "claude" | "chatgpt" | "gemini" | "grok";
-interface Message { role: "user" | "assistant"; content: string; provider?: Provider; ts?: number; }
+type Provider = "claude" | "chatgpt" | "gemini" | "grok" | "dalle";
+type MsgType = "text" | "image";
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  provider?: Provider;
+  ts?: number;
+  type?: MsgType;
+  imageUrl?: string;
+  revised_prompt?: string;
+}
 interface Conversation { id: string; title: string; provider: Provider; messages: Message[]; created: number; }
 
 // ── Provider config ───────────────────────────────────────────────────────
-const PROVIDERS: { id: Provider; name: string; model: string; color: string; bg: string; border: string; icon: string }[] = [
-  {
-    id: "claude",
-    name: "Claude",
-    model: "Sonnet 4.6",
-    color: "#d4956a",
-    bg: "rgba(212,149,106,0.10)",
-    border: "rgba(212,149,106,0.25)",
-    icon: "✦",
-  },
-  {
-    id: "chatgpt",
-    name: "ChatGPT",
-    model: "GPT-5.2",
-    color: "#10a37f",
-    bg: "rgba(16,163,127,0.10)",
-    border: "rgba(16,163,127,0.25)",
-    icon: "◈",
-  },
-  {
-    id: "gemini",
-    name: "Gemini",
-    model: "3.1 Pro",
-    color: "#4488ff",
-    bg: "rgba(68,136,255,0.10)",
-    border: "rgba(68,136,255,0.25)",
-    icon: "◆",
-  },
-  {
-    id: "grok",
-    name: "Grok",
-    model: "Grok-3",
-    color: "#e040fb",
-    bg: "rgba(224,64,251,0.10)",
-    border: "rgba(224,64,251,0.25)",
-    icon: "⬡",
-  },
+const PROVIDERS: { id: Provider; name: string; model: string; color: string; bg: string; border: string; icon: string; isImage?: boolean }[] = [
+  { id: "claude",  name: "Claude",   model: "Sonnet 4.6",   color: "#d4956a", bg: "rgba(212,149,106,0.10)", border: "rgba(212,149,106,0.25)", icon: "✦" },
+  { id: "chatgpt", name: "ChatGPT",  model: "GPT-5.2",      color: "#10a37f", bg: "rgba(16,163,127,0.10)",  border: "rgba(16,163,127,0.25)",  icon: "◈" },
+  { id: "gemini",  name: "Gemini",   model: "3.1 Pro",      color: "#4488ff", bg: "rgba(68,136,255,0.10)",  border: "rgba(68,136,255,0.25)",  icon: "◆" },
+  { id: "grok",    name: "Grok",     model: "Grok-3",       color: "#e040fb", bg: "rgba(224,64,251,0.10)",  border: "rgba(224,64,251,0.25)",  icon: "⬡" },
+  { id: "dalle",   name: "DALL-E 3", model: "Ultra HD",     color: "#ff6b6b", bg: "rgba(255,107,107,0.10)", border: "rgba(255,107,107,0.25)", icon: "🎨", isImage: true },
 ];
 
 const providerMap = Object.fromEntries(PROVIDERS.map(p => [p.id, p])) as Record<Provider, typeof PROVIDERS[0]>;
@@ -109,6 +87,22 @@ async function streamChat(
   onDone();
 }
 
+async function generateImage(
+  prompt: string,
+  size: "1024x1024" | "1792x1024" | "1024x1792",
+): Promise<{ url: string; revised_prompt: string }> {
+  const res = await fetch(`${API_BASE}/image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, quality: "hd", size }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro desconhecido" }));
+    throw new Error(err.error ?? "Erro ao gerar imagem");
+  }
+  return res.json();
+}
+
 // ── Markdown-lite renderer ────────────────────────────────────────────────
 function renderMarkdown(text: string): string {
   return text
@@ -138,10 +132,19 @@ function ProviderChip({ p, active, onClick }: { p: typeof PROVIDERS[0]; active: 
       cursor: "pointer", transition: "all .15s",
       color: active ? p.color : "rgba(220,220,240,0.5)",
       fontFamily: "inherit", fontSize: 13, fontWeight: active ? 700 : 400,
+      position: "relative",
     }}>
-      <span style={{ fontSize: 16 }}>{p.icon}</span>
+      <span style={{ fontSize: p.isImage ? 14 : 16 }}>{p.icon}</span>
       <span>{p.name}</span>
       <span style={{ fontSize: 10, opacity: 0.6, marginLeft: 2 }}>{p.model}</span>
+      {p.isImage && (
+        <span style={{
+          position: "absolute", top: -6, right: -4,
+          background: p.color, color: "#fff",
+          fontSize: 8, fontWeight: 800, padding: "1px 5px",
+          borderRadius: 6, letterSpacing: "0.04em",
+        }}>IMG</span>
+      )}
     </button>
   );
 }
@@ -149,20 +152,20 @@ function ProviderChip({ p, active, onClick }: { p: typeof PROVIDERS[0]; active: 
 function MessageBubble({ msg, isStreaming }: { msg: Message; isStreaming?: boolean }) {
   const isUser = msg.role === "user";
   const prov = msg.provider ? providerMap[msg.provider] : null;
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
     <div style={{
       display: "flex", flexDirection: isUser ? "row-reverse" : "row",
       gap: 12, marginBottom: 18, alignItems: "flex-start",
     }}>
-      {/* Avatar */}
       {!isUser && (
         <div style={{
           width: 34, height: 34, borderRadius: 10, flexShrink: 0, marginTop: 2,
           background: prov ? prov.bg : "rgba(255,255,255,0.06)",
           border: `1px solid ${prov ? prov.border : "rgba(255,255,255,0.1)"}`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 16, color: prov?.color,
+          fontSize: prov?.isImage ? 14 : 16, color: prov?.color,
         }}>
           {prov?.icon ?? "AI"}
         </div>
@@ -173,39 +176,81 @@ function MessageBubble({ msg, isStreaming }: { msg: Message; isStreaming?: boole
           background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 15, color: "rgba(220,220,240,0.7)",
-        }}>
-          U
-        </div>
+        }}>U</div>
       )}
 
-      {/* Bubble */}
-      <div style={{ maxWidth: "75%", minWidth: 80 }}>
+      <div style={{ maxWidth: msg.type === "image" ? "520px" : "75%", minWidth: 80 }}>
         {!isUser && prov && (
           <div style={{ fontSize: 11, color: prov.color, marginBottom: 4, fontWeight: 600, letterSpacing: "0.04em" }}>
             {prov.name} · {prov.model}
           </div>
         )}
-        <div style={{
-          padding: "12px 16px",
-          borderRadius: isUser ? "16px 6px 16px 16px" : "6px 16px 16px 16px",
-          background: isUser
-            ? "rgba(255,255,255,0.07)"
-            : "rgba(255,255,255,0.04)",
-          border: isUser
-            ? "1px solid rgba(255,255,255,0.1)"
-            : `1px solid ${prov ? prov.border : "rgba(255,255,255,0.07)"}`,
-          fontSize: 14, lineHeight: 1.65, color: "#dde2f0",
-          wordBreak: "break-word",
-        }}>
-          {isUser ? (
-            <span>{msg.content}</span>
-          ) : (
-            <>
-              <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
-              {isStreaming && <span className="cursor" style={{ color: prov?.color ?? "#4488ff", marginLeft: 2 }}>▌</span>}
-            </>
-          )}
-        </div>
+
+        {/* Image message */}
+        {msg.type === "image" && msg.imageUrl ? (
+          <div>
+            <div style={{
+              borderRadius: 16, overflow: "hidden",
+              border: `1px solid ${prov ? prov.border : "rgba(255,255,255,0.1)"}`,
+              background: "rgba(0,0,0,0.3)",
+              position: "relative",
+            }}>
+              {!imgLoaded && (
+                <div style={{
+                  width: 480, height: 480, display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "rgba(220,220,240,0.3)", fontSize: 13,
+                }}>
+                  Carregando imagem…
+                </div>
+              )}
+              <img
+                src={msg.imageUrl}
+                alt={msg.content}
+                onLoad={() => setImgLoaded(true)}
+                style={{
+                  maxWidth: "100%", display: imgLoaded ? "block" : "none",
+                  borderRadius: 16,
+                }}
+              />
+            </div>
+            {msg.revised_prompt && (
+              <div style={{
+                marginTop: 8, padding: "8px 12px", borderRadius: 10,
+                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                fontSize: 11, color: "rgba(220,220,240,0.4)", lineHeight: 1.5,
+              }}>
+                <strong style={{ color: "rgba(220,220,240,0.6)" }}>Prompt revisado:</strong> {msg.revised_prompt}
+              </div>
+            )}
+            <a href={msg.imageUrl} download target="_blank" rel="noreferrer" style={{
+              display: "inline-block", marginTop: 8, padding: "6px 14px",
+              borderRadius: 8, border: "1px solid rgba(255,107,107,0.3)",
+              background: "rgba(255,107,107,0.08)", color: "#ff6b6b",
+              fontSize: 12, textDecoration: "none",
+            }}>
+              ⬇ Baixar imagem
+            </a>
+          </div>
+        ) : (
+          <div style={{
+            padding: "12px 16px",
+            borderRadius: isUser ? "16px 6px 16px 16px" : "6px 16px 16px 16px",
+            background: isUser ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.04)",
+            border: isUser
+              ? "1px solid rgba(255,255,255,0.1)"
+              : `1px solid ${prov ? prov.border : "rgba(255,255,255,0.07)"}`,
+            fontSize: 14, lineHeight: 1.65, color: "#dde2f0", wordBreak: "break-word",
+          }}>
+            {isUser ? (
+              <span>{msg.content}</span>
+            ) : (
+              <>
+                <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+                {isStreaming && <span className="cursor" style={{ color: prov?.color ?? "#4488ff", marginLeft: 2 }}>▌</span>}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -213,30 +258,45 @@ function MessageBubble({ msg, isStreaming }: { msg: Message; isStreaming?: boole
 
 function ThinkingIndicator({ provider }: { provider: Provider }) {
   const p = providerMap[provider];
+  const isImg = p.isImage;
   return (
     <div style={{ display: "flex", gap: 12, marginBottom: 18, alignItems: "flex-start" }}>
       <div style={{
         width: 34, height: 34, borderRadius: 10, flexShrink: 0, marginTop: 2,
         background: p.bg, border: `1px solid ${p.border}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 16, color: p.color,
+        fontSize: isImg ? 14 : 16, color: p.color,
       }}>{p.icon}</div>
       <div style={{
         padding: "14px 18px", borderRadius: "6px 16px 16px 16px",
         background: "rgba(255,255,255,0.04)", border: `1px solid ${p.border}`,
-        display: "flex", gap: 5, alignItems: "center",
+        display: "flex", gap: 8, alignItems: "center", color: "rgba(220,220,240,0.4)", fontSize: 13,
       }}>
-        {[0, 1, 2].map(i => (
-          <span key={i} className="thinking-dot" style={{
-            width: 7, height: 7, borderRadius: "50%", background: p.color,
-            display: "inline-block",
-            animationDelay: `${i * 0.2}s`,
-          }} />
-        ))}
+        {isImg ? (
+          <>
+            <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span>
+            Gerando imagem ultra-realista…
+          </>
+        ) : (
+          [0, 1, 2].map(i => (
+            <span key={i} className="thinking-dot" style={{
+              width: 7, height: 7, borderRadius: "50%", background: p.color,
+              display: "inline-block", animationDelay: `${i * 0.2}s`,
+            }} />
+          ))
+        )}
       </div>
     </div>
   );
 }
+
+// ── Image size picker ──────────────────────────────────────────────────────
+type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
+const IMG_SIZES: { value: ImgSize; label: string }[] = [
+  { value: "1024x1024", label: "Quadrado (1:1)" },
+  { value: "1792x1024", label: "Paisagem (16:9)" },
+  { value: "1024x1792", label: "Retrato (9:16)" },
+];
 
 // ── Main App ──────────────────────────────────────────────────────────────
 export default function App() {
@@ -249,10 +309,13 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [systemPrompt, setSystemPrompt] = useState("Você é um assistente inteligente, útil e direto. Responda sempre em português.");
   const [showSettings, setShowSettings] = useState(false);
+  const [imgSize, setImgSize] = useState<ImgSize>("1024x1024");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeConvo = convos.find(c => c.id === activeId) ?? null;
+  const isImageMode = provider === "dalle";
+  const activeProvider = providerMap[provider];
 
   useEffect(() => { saveConvos(convos); }, [convos]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [activeConvo?.messages.length, streamMsg]);
@@ -293,27 +356,44 @@ export default function App() {
     const updatedMessages = [...convo.messages, userMsg];
 
     setConvos(prev => prev.map(c => c.id === convo!.id ? {
-      ...c,
-      provider,
+      ...c, provider,
       messages: updatedMessages,
       title: c.messages.length === 0 ? titleFrom(text) : c.title,
     } : c));
 
     setStreaming(true);
     setStreamMsg("");
-
-    let full = "";
     const cid = convo.id;
     const prov = provider;
 
+    // ── Image generation mode ───────────────────────────────────────────
+    if (isImageMode) {
+      try {
+        const { url, revised_prompt } = await generateImage(text, imgSize);
+        const imgMsg: Message = {
+          role: "assistant", content: text,
+          provider: prov, ts: Date.now(),
+          type: "image", imageUrl: url, revised_prompt,
+        };
+        setConvos(prev => prev.map(c => c.id === cid ? { ...c, messages: [...updatedMessages, imgMsg] } : c));
+      } catch (err: any) {
+        const errMsg: Message = {
+          role: "assistant", content: `❌ Erro ao gerar imagem: ${err.message}`,
+          provider: prov, ts: Date.now(),
+        };
+        setConvos(prev => prev.map(c => c.id === cid ? { ...c, messages: [...updatedMessages, errMsg] } : c));
+      }
+      setStreaming(false);
+      return;
+    }
+
+    // ── Text streaming mode ─────────────────────────────────────────────
+    let full = "";
     await streamChat(
       prov,
       updatedMessages,
       systemPrompt,
-      (chunk) => {
-        full += chunk;
-        setStreamMsg(full);
-      },
+      (chunk) => { full += chunk; setStreamMsg(full); },
       () => {
         const assistantMsg: Message = { role: "assistant", content: full || "Sem resposta.", provider: prov, ts: Date.now() };
         setConvos(prev => prev.map(c => c.id === cid ? { ...c, messages: [...updatedMessages, assistantMsg] } : c));
@@ -333,8 +413,6 @@ export default function App() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const activeProvider = providerMap[provider];
-
   return (
     <div style={{ display: "flex", height: "100dvh", background: "hsl(222 47% 5%)", color: "#dde2f0", fontFamily: "Inter, system-ui, sans-serif", overflow: "hidden" }}>
 
@@ -344,18 +422,16 @@ export default function App() {
         transition: "width .2s ease", borderRight: sidebarOpen ? "1px solid rgba(255,255,255,0.07)" : "none",
         background: "hsl(222 40% 6%)", display: "flex", flexDirection: "column",
       }}>
-        {/* Logo */}
         <div style={{ padding: "18px 16px 12px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#4488ff,#e040fb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>⊞</div>
             <div>
               <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: -0.3 }}>OmniChat</div>
-              <div style={{ fontSize: 10, color: "rgba(220,220,240,0.4)" }}>Multi-IA Ilimitado</div>
+              <div style={{ fontSize: 10, color: "rgba(220,220,240,0.4)" }}>Multi-IA + Imagens</div>
             </div>
           </div>
         </div>
 
-        {/* New chat button */}
         <div style={{ padding: "10px 10px 4px" }}>
           <button onClick={startNew} style={{
             width: "100%", padding: "9px 14px", borderRadius: 10, border: "1px dashed rgba(255,255,255,0.15)",
@@ -366,7 +442,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Conversations */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 10px" }}>
           {convos.length === 0 && (
             <div style={{ textAlign: "center", padding: "24px 12px", color: "rgba(220,220,240,0.3)", fontSize: 12 }}>
@@ -399,7 +474,6 @@ export default function App() {
           })}
         </div>
 
-        {/* Settings button */}
         <div style={{ padding: "8px 10px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
           <button onClick={() => setShowSettings(v => !v)} style={{
             width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)",
@@ -415,11 +489,10 @@ export default function App() {
       {/* ── Main area ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
 
-        {/* Top bar */}
         <div style={{
           display: "flex", alignItems: "center", gap: 10, padding: "12px 20px",
           borderBottom: "1px solid rgba(255,255,255,0.07)", background: "hsl(222 40% 6%)",
-          flexShrink: 0,
+          flexShrink: 0, flexWrap: "wrap",
         }}>
           <button onClick={() => setSidebarOpen(v => !v)} style={{
             background: "none", border: "none", color: "rgba(220,220,240,0.4)", cursor: "pointer", fontSize: 18, padding: 4,
@@ -427,10 +500,9 @@ export default function App() {
 
           <div style={{ width: 1, height: 22, background: "rgba(255,255,255,0.1)", flexShrink: 0 }} />
 
-          {/* Provider chips */}
           <div style={{ display: "flex", gap: 6, flex: 1, flexWrap: "wrap" }}>
             {PROVIDERS.map(p => (
-              <ProviderChip key={p.id} p={p} active={provider === p.id} onClick={() => { setProvider(p.id); }} />
+              <ProviderChip key={p.id} p={p} active={provider === p.id} onClick={() => setProvider(p.id)} />
             ))}
           </div>
 
@@ -445,12 +517,8 @@ export default function App() {
           )}
         </div>
 
-        {/* System prompt editor */}
-        {showSettings && (
-          <div style={{
-            padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)",
-            background: "rgba(255,255,255,0.03)",
-          }}>
+        {showSettings && !isImageMode && (
+          <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
             <div style={{ fontSize: 11, color: "rgba(220,220,240,0.4)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Instruções do sistema (system prompt)
             </div>
@@ -465,6 +533,28 @@ export default function App() {
           </div>
         )}
 
+        {/* Image mode controls */}
+        {isImageMode && (
+          <div style={{
+            padding: "10px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)",
+            background: "rgba(255,107,107,0.04)",
+            display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+          }}>
+            <div style={{ fontSize: 12, color: "#ff6b6b", fontWeight: 700 }}>🎨 DALL-E 3 · Imagens ultra-realistas</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "rgba(220,220,240,0.4)" }}>Formato:</span>
+              {IMG_SIZES.map(s => (
+                <button key={s.value} onClick={() => setImgSize(s.value)} style={{
+                  padding: "4px 10px", borderRadius: 7, border: `1px solid ${imgSize === s.value ? "rgba(255,107,107,0.5)" : "rgba(255,255,255,0.1)"}`,
+                  background: imgSize === s.value ? "rgba(255,107,107,0.15)" : "transparent",
+                  color: imgSize === s.value ? "#ff6b6b" : "rgba(220,220,240,0.45)",
+                  fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                }}>{s.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 0" }}>
           {(!activeConvo || activeConvo.messages.length === 0) && !streaming && (
@@ -474,16 +564,34 @@ export default function App() {
                 background: `linear-gradient(135deg,${activeProvider.bg},${activeProvider.border})`,
                 border: `1px solid ${activeProvider.border}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 32, color: activeProvider.color,
+                fontSize: isImageMode ? 28 : 32, color: activeProvider.color,
               }}>{activeProvider.icon}</div>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>Chat com {activeProvider.name}</div>
+                <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>
+                  {isImageMode ? "Geração de Imagens" : `Chat com ${activeProvider.name}`}
+                </div>
                 <div style={{ fontSize: 13, color: "rgba(220,220,240,0.4)" }}>
-                  {activeProvider.model} · Pronto para conversar
+                  {isImageMode
+                    ? "DALL-E 3 HD · Descreva a imagem que deseja criar"
+                    : `${activeProvider.model} · Pronto para conversar`}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: 480 }}>
-                {["O que você pode fazer?", "Explique machine learning", "Escreva um código Python", "Faça um resumo do Brasil"].map(s => (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: 520 }}>
+                {isImageMode ? [
+                  "Uma paisagem futurista cyberpunk ultra-realista",
+                  "Retrato fotorrealista de um guerreiro medieval",
+                  "Cidade à beira-mar ao pôr do sol, 8K",
+                  "Floresta encantada com criaturas mágicas",
+                ].map(s => (
+                  <button key={s} onClick={() => { setInput(s); textareaRef.current?.focus(); }} style={{
+                    padding: "8px 14px", borderRadius: 20, border: `1px solid ${activeProvider.border}`,
+                    background: activeProvider.bg, color: activeProvider.color, cursor: "pointer",
+                    fontSize: 12, fontFamily: "inherit",
+                  }}>{s}</button>
+                )) : [
+                  "O que você pode fazer?", "Explique machine learning",
+                  "Escreva um código Python", "Faça um resumo do Brasil",
+                ].map(s => (
                   <button key={s} onClick={() => { setInput(s); textareaRef.current?.focus(); }} style={{
                     padding: "8px 14px", borderRadius: 20, border: `1px solid ${activeProvider.border}`,
                     background: activeProvider.bg, color: activeProvider.color, cursor: "pointer",
@@ -516,8 +624,7 @@ export default function App() {
             background: "rgba(255,255,255,0.05)", border: `1px solid ${streaming ? activeProvider.border : "rgba(255,255,255,0.12)"}`,
             borderRadius: 16, padding: "10px 14px", transition: "border-color .2s",
           }}>
-            {/* Provider icon */}
-            <div style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: activeProvider.color }}>
+            <div style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: isImageMode ? 16 : 18, color: activeProvider.color }}>
               {activeProvider.icon}
             </div>
 
@@ -526,7 +633,10 @@ export default function App() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={`Mensagem para ${activeProvider.name}… (Enter para enviar, Shift+Enter para nova linha)`}
+              placeholder={isImageMode
+                ? "Descreva a imagem que deseja criar… (Enter para gerar)"
+                : `Mensagem para ${activeProvider.name}… (Enter para enviar, Shift+Enter para nova linha)`
+              }
               disabled={streaming}
               style={{
                 flex: 1, background: "transparent", border: "none", outline: "none",
@@ -535,30 +645,45 @@ export default function App() {
               }}
               rows={1}
               onInput={e => {
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = Math.min(el.scrollHeight, 160) + "px";
+                const t = e.currentTarget;
+                t.style.height = "auto";
+                t.style.height = Math.min(t.scrollHeight, 160) + "px";
               }}
             />
 
-            <button onClick={sendMessage} disabled={!input.trim() || streaming} style={{
-              width: 36, height: 36, borderRadius: 10, border: "none",
-              background: streaming ? "rgba(255,255,255,0.05)" : activeProvider.color,
-              color: streaming ? "rgba(220,220,240,0.2)" : "#fff",
-              cursor: streaming || !input.trim() ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 17, flexShrink: 0, transition: "all .15s",
-              opacity: !input.trim() || streaming ? 0.4 : 1,
-            }}>
-              {streaming ? "…" : "↑"}
+            <button
+              onClick={sendMessage}
+              disabled={streaming || !input.trim()}
+              style={{
+                width: 36, height: 36, borderRadius: 10, border: "none", flexShrink: 0,
+                background: input.trim() && !streaming ? activeProvider.color : "rgba(255,255,255,0.08)",
+                color: input.trim() && !streaming ? "#fff" : "rgba(220,220,240,0.3)",
+                cursor: input.trim() && !streaming ? "pointer" : "default",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16, transition: "all .15s",
+              }}
+            >
+              {isImageMode ? "🎨" : "↑"}
             </button>
           </div>
 
-          <div style={{ textAlign: "center", fontSize: 11, color: "rgba(220,220,240,0.25)", marginTop: 8 }}>
-            OmniChat · Claude, ChatGPT, Gemini & Grok · Ilimitado via Replit AI
+          <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "rgba(220,220,240,0.2)" }}>
+            OmniChat · Claude, ChatGPT, Gemini, Grok & DALL-E 3 · Ilimitado via Replit AI
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes pulse { 0%,100%{opacity:.4;transform:scale(.85)} 50%{opacity:1;transform:scale(1)} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        .thinking-dot { animation: pulse 1.2s ease-in-out infinite; }
+        .cursor { animation: pulse 1s ease-in-out infinite; }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        pre { background: rgba(0,0,0,0.35); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; border: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
+        code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+      `}</style>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import OpenAI from "openai";
 
 const router = Router();
 
-type Provider = "claude" | "chatgpt" | "gemini" | "grok";
+type Provider = "claude" | "chatgpt" | "gemini" | "grok" | "dalle";
 
 interface ChatMessage { role: "user" | "assistant"; content: string; }
 
@@ -129,5 +129,40 @@ router.post("/stream", async (req, res) => {
 });
 
 router.options("/stream", (_req, res) => res.sendStatus(200));
+
+// ── Geração de imagem com DALL-E 3 ────────────────────────────────────────
+router.post("/image", async (req, res) => {
+  const { prompt, quality = "hd", size = "1024x1024" } = req.body as {
+    prompt: string;
+    quality?: "standard" | "hd";
+    size?: "1024x1024" | "1792x1024" | "1024x1792";
+  };
+
+  if (!prompt?.trim()) {
+    return res.status(400).json({ error: "prompt é obrigatório" });
+  }
+
+  try {
+    const response = await openaiClient.images.generate({
+      model: "dall-e-3",
+      prompt: prompt.trim(),
+      n: 1,
+      size,
+      quality,
+      response_format: "url",
+    });
+
+    const url = response.data[0]?.url;
+    const revised = response.data[0]?.revised_prompt;
+
+    if (!url) return res.status(500).json({ error: "Imagem não gerada" });
+
+    res.json({ url, revised_prompt: revised });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Erro ao gerar imagem" });
+  }
+});
+
+router.options("/image", (_req, res) => res.sendStatus(200));
 
 export default router;
