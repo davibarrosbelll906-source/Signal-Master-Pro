@@ -93,8 +93,7 @@ export function Sidebar() {
       title: "Operações",
       links: [
         { href: "/dashboard", label: "Overview", icon: Home },
-        { href: "/dashboard/signals", label: "Sinais M1", icon: Activity },
-        { href: "/dashboard/sr-signals", label: "SR + EMA 50", icon: RadioTower },
+        { href: "/dashboard/signals", label: "Sinais SR + EMA 50", icon: Activity },
         { href: "/dashboard/history", label: "Histórico", icon: History },
         { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2 },
         { href: "/dashboard/heatmap", label: "Heatmap", icon: Map },
