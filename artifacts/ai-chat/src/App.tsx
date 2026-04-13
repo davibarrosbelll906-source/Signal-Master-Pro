@@ -20,7 +20,7 @@ const PROVIDERS: { id: Provider; name: string; model: string; color: string; bg:
   { id: "chatgpt", name: "ChatGPT",  model: "GPT-5.2",      color: "#10a37f", bg: "rgba(16,163,127,0.10)",  border: "rgba(16,163,127,0.25)",  icon: "◈" },
   { id: "gemini",  name: "Gemini",   model: "3.1 Pro",      color: "#4488ff", bg: "rgba(68,136,255,0.10)",  border: "rgba(68,136,255,0.25)",  icon: "◆" },
   { id: "grok",    name: "Grok",     model: "Grok-3",       color: "#e040fb", bg: "rgba(224,64,251,0.10)",  border: "rgba(224,64,251,0.25)",  icon: "⬡" },
-  { id: "dalle",   name: "DALL-E 3", model: "Ultra HD",     color: "#ff6b6b", bg: "rgba(255,107,107,0.10)", border: "rgba(255,107,107,0.25)", icon: "🎨", isImage: true },
+  { id: "dalle",   name: "Imagem AI", model: "gpt-image-1",  color: "#ff6b6b", bg: "rgba(255,107,107,0.10)", border: "rgba(255,107,107,0.25)", icon: "🎨", isImage: true },
 ];
 
 const providerMap = Object.fromEntries(PROVIDERS.map(p => [p.id, p])) as Record<Provider, typeof PROVIDERS[0]>;
@@ -89,12 +89,12 @@ async function streamChat(
 
 async function generateImage(
   prompt: string,
-  size: "1024x1024" | "1792x1024" | "1024x1792",
-): Promise<{ url: string; revised_prompt: string }> {
+  size: "1024x1024" | "1536x1024" | "1024x1536",
+): Promise<{ b64_json: string }> {
   const res = await fetch(`${API_BASE}/image`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, quality: "hd", size }),
+    body: JSON.stringify({ prompt, size }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Erro desconhecido" }));
@@ -193,43 +193,35 @@ function MessageBubble({ msg, isStreaming }: { msg: Message; isStreaming?: boole
               borderRadius: 16, overflow: "hidden",
               border: `1px solid ${prov ? prov.border : "rgba(255,255,255,0.1)"}`,
               background: "rgba(0,0,0,0.3)",
-              position: "relative",
             }}>
               {!imgLoaded && (
                 <div style={{
-                  width: 480, height: 480, display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 400, height: 400, display: "flex", alignItems: "center", justifyContent: "center",
                   color: "rgba(220,220,240,0.3)", fontSize: 13,
                 }}>
                   Carregando imagem…
                 </div>
               )}
               <img
-                src={msg.imageUrl}
+                src={`data:image/png;base64,${msg.imageUrl}`}
                 alt={msg.content}
                 onLoad={() => setImgLoaded(true)}
-                style={{
-                  maxWidth: "100%", display: imgLoaded ? "block" : "none",
-                  borderRadius: 16,
-                }}
+                style={{ maxWidth: "100%", display: imgLoaded ? "block" : "none", borderRadius: 16 }}
               />
             </div>
-            {msg.revised_prompt && (
-              <div style={{
-                marginTop: 8, padding: "8px 12px", borderRadius: 10,
-                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-                fontSize: 11, color: "rgba(220,220,240,0.4)", lineHeight: 1.5,
-              }}>
-                <strong style={{ color: "rgba(220,220,240,0.6)" }}>Prompt revisado:</strong> {msg.revised_prompt}
-              </div>
-            )}
-            <a href={msg.imageUrl} download target="_blank" rel="noreferrer" style={{
+            <button onClick={() => {
+              const a = document.createElement("a");
+              a.href = `data:image/png;base64,${msg.imageUrl}`;
+              a.download = "imagem-ai.png";
+              a.click();
+            }} style={{
               display: "inline-block", marginTop: 8, padding: "6px 14px",
               borderRadius: 8, border: "1px solid rgba(255,107,107,0.3)",
               background: "rgba(255,107,107,0.08)", color: "#ff6b6b",
-              fontSize: 12, textDecoration: "none",
+              fontSize: 12, cursor: "pointer", fontFamily: "inherit",
             }}>
               ⬇ Baixar imagem
-            </a>
+            </button>
           </div>
         ) : (
           <div style={{
@@ -291,11 +283,11 @@ function ThinkingIndicator({ provider }: { provider: Provider }) {
 }
 
 // ── Image size picker ──────────────────────────────────────────────────────
-type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
+type ImgSize = "1024x1024" | "1536x1024" | "1024x1536";
 const IMG_SIZES: { value: ImgSize; label: string }[] = [
   { value: "1024x1024", label: "Quadrado (1:1)" },
-  { value: "1792x1024", label: "Paisagem (16:9)" },
-  { value: "1024x1792", label: "Retrato (9:16)" },
+  { value: "1536x1024", label: "Paisagem (3:2)" },
+  { value: "1024x1536", label: "Retrato (2:3)" },
 ];
 
 // ── Main App ──────────────────────────────────────────────────────────────
@@ -369,11 +361,11 @@ export default function App() {
     // ── Image generation mode ───────────────────────────────────────────
     if (isImageMode) {
       try {
-        const { url, revised_prompt } = await generateImage(text, imgSize);
+        const { b64_json } = await generateImage(text, imgSize);
         const imgMsg: Message = {
           role: "assistant", content: text,
           provider: prov, ts: Date.now(),
-          type: "image", imageUrl: url, revised_prompt,
+          type: "image", imageUrl: b64_json,
         };
         setConvos(prev => prev.map(c => c.id === cid ? { ...c, messages: [...updatedMessages, imgMsg] } : c));
       } catch (err: any) {

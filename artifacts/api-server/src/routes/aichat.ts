@@ -2,6 +2,7 @@ import { Router } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { openai as openaiClient } from "@workspace/integrations-openai-ai-server";
 import { ai as geminiAI } from "@workspace/integrations-gemini-ai";
+
 import OpenAI from "openai";
 
 const router = Router();
@@ -130,12 +131,11 @@ router.post("/stream", async (req, res) => {
 
 router.options("/stream", (_req, res) => res.sendStatus(200));
 
-// ── Geração de imagem com DALL-E 3 ────────────────────────────────────────
+// ── Geração de imagem com gpt-image-1 ────────────────────────────────────
 router.post("/image", async (req, res) => {
-  const { prompt, quality = "hd", size = "1024x1024" } = req.body as {
+  const { prompt, size = "1024x1024" } = req.body as {
     prompt: string;
-    quality?: "standard" | "hd";
-    size?: "1024x1024" | "1792x1024" | "1024x1792";
+    size?: "1024x1024" | "1536x1024" | "1024x1536";
   };
 
   if (!prompt?.trim()) {
@@ -143,21 +143,14 @@ router.post("/image", async (req, res) => {
   }
 
   try {
-    const response = await openaiClient.images.generate({
-      model: "dall-e-3",
+    const response = await (openaiClient.images.generate as any)({
+      model: "gpt-image-1",
       prompt: prompt.trim(),
-      n: 1,
       size,
-      quality,
-      response_format: "url",
     });
-
-    const url = response.data[0]?.url;
-    const revised = response.data[0]?.revised_prompt;
-
-    if (!url) return res.status(500).json({ error: "Imagem não gerada" });
-
-    res.json({ url, revised_prompt: revised });
+    const b64 = response.data[0]?.b64_json ?? "";
+    if (!b64) return res.status(500).json({ error: "Imagem não retornada" });
+    res.json({ b64_json: b64 });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Erro ao gerar imagem" });
   }
