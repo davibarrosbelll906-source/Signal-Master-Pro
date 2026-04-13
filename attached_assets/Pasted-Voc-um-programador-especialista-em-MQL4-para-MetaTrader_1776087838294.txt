@@ -1,0 +1,29 @@
+Você é um programador especialista em MQL4 para MetaTrader 4.
+Crie um indicador personalizado chamado “StrongSR_Signals_v2” com as seguintes especificações:
+FUNCIONALIDADE PRINCIPAL:
+Detectar automaticamente zonas fortes de Suporte e Resistência no day trade. Uma zona só é considerada FORTE se tiver no mínimo 3 toques/rejeições claras (swing highs/lows). Desenhar as zonas como retângulos semi-transparentes: suporte forte em verde (clrLimeGreen) e resistência forte em vermelho (clrRed), ambos com fundo atrás das velas (OBJPROP_BACK = true). Gerar seta azul para cima (compra) quando o preço toca zona de suporte forte com candle bullish (martelo, engulfing, alta simples), e seta vermelha para baixo (venda) quando toca resistência forte com candle bearish (estrela cadente, engulfing, baixa simples).
+REQUISITOS TÉCNICOS OBRIGATÓRIOS:
+	•	Swing highs/lows com período ajustável (extern int SwingPeriod = 8)
+	•	Agrupamento de toques por tolerância (extern double ZoneWidthPips = 15.0)
+	•	Mínimo de toques configurável (extern int MinTouches = 3)
+	•	Setas via SetIndexBuffer + DRAW_ARROW: código 233 (compra) e 234 (venda)
+	•	Distância da seta à zona configurável (extern int SignalDistance = 15)
+	•	Alertas sonoros e popup ao fechar barra com sinal (extern bool UseAlerts = true)
+	•	ANTI-REPAINT OBRIGATÓRIO: sinais gerados SOMENTE em barras já fechadas (rates_total - 2). A barra 0 (aberta) deve sempre ter EMPTY_VALUE nos buffers. Alerta só dispara na barra recém-fechada, uma única vez por barra
+	•	Limpar buffers completamente apenas em recalculo completo (prev_calculated == 0)
+	•	Funcionar em M5 e M15 (WIN, WDO, ações brasileiras)
+	•	Rótulo com número de toques via OBJ_TEXT próximo à zona
+PARÂMETROS EXTERNOS:
+SwingPeriod, MinTouches, ZoneWidthPips, ShowSignals, UseAlerts, ShowZones, ColorSupporte, ColorResist, SignalDistance, MaxZones, LookbackBars
+COMPATIBILIDADE MQL4 PURA — REGRAS CRÍTICAS:
+	•	ObjectsTotal() — sem argumentos
+	•	ObjectName(i) — só o índice, sem janela
+	•	ObjectDelete(nome) — só o nome, sem janela
+	•	ObjectFind(nome) — só o nome, sem janela
+	•	ObjectCreate(nome, tipo, janela, t1, p1, t2, p2) — formato MQL4
+	•	Usar ObjectSet() e ObjectSetText() — NÃO usar ObjectSetInteger()/ObjectSetString()
+	•	Usar DoubleToStr() — NÃO usar DoubleToString()
+	•	Alert() com concatenação direta — NÃO usar StringFormat() dentro de Alert
+	•	Usar Digits (variável global) — NÃO usar SymbolInfoInteger(..., SYMBOL_DIGITS)
+	•	#property strict obrigatório no topo
+CABEÇALHO:
