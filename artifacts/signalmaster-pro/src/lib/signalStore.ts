@@ -1,5 +1,21 @@
 import { create } from 'zustand';
 
+export interface SignalIndicators {
+  ema9: number;
+  ema21: number;
+  ema50: number;
+  lastClose: number;
+  macdHist: number;
+  macdSignal: number;
+  bbPct: number;
+  obvTrend: string;
+  candlePattern: string;
+  zoneStrength: number;
+  m5Bull: boolean;
+  m15Bull: boolean;
+  atrPct: number;
+}
+
 export interface BackendSignal {
   direction: 'CALL' | 'PUT';
   score: number;
@@ -19,6 +35,11 @@ export interface BackendSignal {
   category: string;
   ts: number;
   passed: boolean;
+  indicators?: SignalIndicators;
+  oracleApproved?: boolean;
+  oracleConfidence?: number;
+  oracleReason?: string;
+  claudeVote?: 'CONFIRM' | 'REJECT' | 'NEUTRAL';
 }
 
 export interface PriceUpdate {

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal SR Forte + EMA 50 — M1</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07090f;
+  --bg2: #0d1017;
+  --bg3: #131720;
+  --border: #1e2535;
+  --border2: #2a3348;
+  --text: #e8eaf0;
+  --muted: #5a6480;
+  --dim: #323b52;
+  --green: #00e87a;
+  --green2: #00ff88;
+  --green-bg: rgba(0,232,122,0.08);
+  --green-border: rgba(0,232,122,0.25);
+  --red: #ff4466;
+  --red2: #ff2255;
+  --red-bg: rgba(255,68,102,0.08);
+  --red-border: rgba(255,68,102,0.25);
+  --amber: #ffaa00;
+  --amber-bg: rgba(255,170,0,0.08);
+  --blue: #4488ff;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Syne', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ALERT OVERLAY */
+#alert-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.85);
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn .15s ease;
+}
+#alert-overlay.show { display: flex; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+.alert-box {
+  border-radius: 16px;
+  padding: 36px 48px;
+  text-align: center;
+  min-width: 340px;
+  position: relative;
+  overflow: hidden;
+}
+.alert-box.call {
+  background: #040f08;
+  border: 1.5px solid var(--green);
+  box-shadow: 0 0 60px rgba(0,232,122,0.3), inset 0 0 40px rgba(0,232,122,0.05);
+}
+.alert-box.put {
+  background: #0f0408;
+  border: 1.5px solid var(--red);
+  box-shadow: 0 0 60px rgba(255,68,102,0.3), inset 0 0 40px rgba(255,68,102,0.05);
+}
+.alert-dir {
+  font-family: var(--font-display);
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.alert-box.call .alert-dir { color: var(--green2); }
+.alert-box.put .alert-dir { color: var(--red2); }
+.alert-pair { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; font-family: var(--font-display); }
+.alert-info { font-size: 11px; color: var(--muted); margin-bottom: 20px; line-height: 1.7; }
+.alert-timer {
+  font-size: 38px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  margin-bottom: 16px;
+}
+.alert-box.call .alert-timer { color: var(--green); }
+.alert-box.put .alert-timer { color: var(--red); }
+.alert-close {
+  display: inline-block;
+  padding: 8px 24px;
+  border-radius: 8px;
+  font-size: 11px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  font-family: var(--font-mono);
+  letter-spacing: .05em;
+}
+.alert-close:hover { color: var(--text); border-color: var(--dim); }
+.alert-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  animation: pulse-ring 1s ease-out infinite;
+  pointer-events: none;
+}
+.alert-box.call .alert-pulse { border: 2px solid rgba(0,232,122,0.4); }
+.alert-box.put .alert-pulse { border: 2px solid rgba(255,68,102,0.4); }
+@keyframes pulse-ring {
+  0%{transform:scale(1);opacity:.6}
+  100%{transform:scale(1.04);opacity:0}
+}
+
+/* HEADER */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2s infinite;
+}
+@keyframes blink {
+  0%,100%{opacity:1;box-shadow:0 0 8px var(--green)}
+  50%{opacity:.4;box-shadow:none}
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.3px;
+}
+.brand-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+.header-right { display: flex; align-items: center; gap: 16px; }
+
+.candle-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+.candle-timer-label { font-size: 10px; color: var(--muted); }
+.candle-timer-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 32px;
+  text-align: right;
+  font-family: var(--font-display);
+  transition: color .3s;
+}
+.candle-timer-val.warning { color: var(--amber); }
+.candle-timer-val.critical { color: var(--red); animation: flash .4s infinite; }
+@keyframes flash { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.last-update { font-size: 10px; color: var(--muted); }
+
+/* CONTROLS */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  flex-wrap: wrap;
+}
+.ctrl-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+select {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+}
+select:focus { border-color: var(--blue); }
+.btn {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn:hover { color: var(--text); border-color: var(--dim); }
+.sound-btn { border-color: var(--border2); }
+.sound-btn.on { color: var(--green); border-color: var(--green-border); }
+
+/* STATS BAR */
+.stats-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.stat {
+  flex: 1;
+  padding: 10px 20px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat:last-child { border-right: none; }
+.stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.stat-val { font-size: 16px; font-weight: 700; font-family: var(--font-display); color: var(--text); }
+.stat-val.green { color: var(--green); }
+.stat-val.red { color: var(--red); }
+.stat-val.amber { color: var(--amber); }
+
+/* GRID */
+.main { padding: 20px 24px; }
+.section-label {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--border);
+  position: relative;
+  transition: border-color .2s, box-shadow .2s;
+}
+.card.call {
+  border-left: 3px solid var(--green);
+  background: linear-gradient(135deg, rgba(0,232,122,0.04) 0%, var(--bg2) 60%);
+  box-shadow: 0 0 20px rgba(0,232,122,0.08);
+}
+.card.put {
+  border-left: 3px solid var(--red);
+  background: linear-gradient(135deg, rgba(255,68,102,0.04) 0%, var(--bg2) 60%);
+  box-shadow: 0 0 20px rgba(255,68,102,0.08);
+}
+.card.loading { opacity: .5; }
+
+.c-pair { font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: .05em; }
+.c-price { font-size: 20px; font-weight: 700; font-family: var(--font-display); color: var(--text); margin-bottom: 5px; line-height: 1; }
+.c-ema { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+.c-trend { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-left: 4px; }
+.trend-up { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.trend-dn { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+.trend-nt { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: .02em;
+  margin-bottom: 8px;
+}
+.badge-call { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.badge-put  { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
+.badge-wait { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
+
+.touch-info { font-size: 10px; margin-bottom: 6px; }
+.touch-info.active-call { color: var(--green); }
+.touch-info.active-put  { color: var(--red); }
+.touch-info.none { color: var(--muted); }
+
+.strength-row { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
+.strength-lbl { font-size: 9px; color: var(--muted); }
+.dots { display: flex; gap: 3px; }
+.dot-sq {
+  width: 7px; height: 7px; border-radius: 2px;
+  background: var(--border);
+}
+.dot-sq.fill-s { background: var(--green); }
+.dot-sq.fill-r { background: var(--red); }
+
+.zones-row { font-size: 9px; color: var(--muted); line-height: 1.9; }
+.ztag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  margin: 1px;
+}
+.ztag-s { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.ztag-r { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
+
+/* LOG */
+.log-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.log-header {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.log-body { max-height: 160px; overflow-y: auto; }
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  animation: slideIn .2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+.log-row:last-child { border-bottom: none; }
+.log-time { color: var(--muted); min-width: 60px; font-size: 10px; }
+.log-sig { font-weight: 700; font-family: var(--font-display); font-size: 12px; min-width: 40px; }
+.log-sig.c { color: var(--green); }
+.log-sig.p { color: var(--red); }
+.log-detail { color: var(--text); flex: 1; }
+.log-zone { color: var(--muted); font-size: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ALERT OVERLAY -->
+<div id="alert-overlay">
+  <div class="alert-box" id="alert-box">
+    <div class="alert-pulse"></div>
+    <div class="alert-dir" id="alert-dir">▲ COMPRA</div>
+    <div class="alert-pair" id="alert-pair">BTC/USDT</div>
+    <div class="alert-info" id="alert-info">Zona suporte forte ×3 @ 65.200<br>Tendência: ALTA — EMA 50</div>
+    <div class="alert-timer" id="alert-timer">12</div>
+    <button class="alert-close" onclick="closeAlert()">FECHAR</button>
+  </div>
+</div>
+
+<header>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div>
+      <div class="brand-name">Signal SR + EMA 50</div>
+      <div class="brand-sub">M1 · Binance · Zonas Fortes</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="candle-timer">
+      <div class="candle-timer-label">Fecha em</div>
+      <div class="candle-timer-val" id="candle-countdown">60</div>
+      <div class="candle-timer-label">s</div>
+    </div>
+    <div class="last-update" id="last-update">—</div>
+  </div>
+</header>
+
+<div class="controls">
+  <span class="ctrl-label">Par</span>
+  <select id="psel" onchange="selPair()">
+    <option value="all">Todos</option>
+    <option value="BTCUSDT">BTC/USDT</option>
+    <option value="ETHUSDT">ETH/USDT</option>
+    <option value="SOLUSDT">SOL/USDT</option>
+    <option value="BNBUSDT">BNB/USDT</option>
+    <option value="XRPUSDT">XRP/USDT</option>
+    <option value="DOGEUSDT">DOGE/USDT</option>
+  </select>
+  <span class="ctrl-label" style="margin-left:8px">Alerta</span>
+  <button class="btn sound-btn on" id="sound-btn" onclick="toggleSound()">🔔 Som ON</button>
+  <button class="btn" onclick="fetchAll()">↻ Atualizar</button>
+  <span style="font-size:10px;color:var(--muted)" id="fetch-status"></span>
+</div>
+
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-label">Sinais hoje</div>
+    <div class="stat-val" id="s-total">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Compra</div>
+    <div class="stat-val green" id="s-call">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Venda</div>
+    <div class="stat-val red" id="s-put">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Pares ativos</div>
+    <div class="stat-val amber" id="s-active">0</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="section-label">Pares monitorados</div>
+  <div class="grid" id="grid"></div>
+  <div class="section-label">Log de sinais</div>
+  <div class="log-wrap">
+    <div class="log-header">Histórico da sessão</div>
+    <div class="log-body" id="log-body">
+      <div class="log-row"><span class="log-time">--:--:--</span><span class="log-detail" style="color:var(--muted)">Aguardando dados da Binance...</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PAIRS = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT'];
+const LOOKBACK = 200;
+const EMA_PERIOD = 50;
+const MIN_TOUCHES = 2;
+const ZONE_PCT = 0.0025;
+const ALERT_SECONDS = 12;
+
+let state = {};
+let logs = [];
+let sel = 'all';
+let soundOn = true;
+let statsCall = 0, statsPut = 0;
+let alertActive = false;
+let alertCountdown = 0;
+let alertInterval = null;
+let signalCache = {}; // evita re-alertar o mesmo sinal
+
+// ---- EMA ----
+function calcEMA(closes, period) {
+  if (closes.length < period) return null;
+  const k = 2 / (period + 1);
+  let e = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < closes.length; i++) e = closes[i] * k + e * (1 - k);
+  return e;
+}
+
+// ---- ZONAS FORTES ----
+function findStrongZones(candles) {
+  const highs = candles.map(c => c.high);
+  const lows  = candles.map(c => c.low);
+  const n = candles.length;
+  const pivotLows = [], pivotHighs = [];
+
+  for (let i = 3; i < n - 3; i++) {
+    if (lows[i] < lows[i-1] && lows[i] < lows[i-2] && lows[i] < lows[i-3] &&
+        lows[i] < lows[i+1] && lows[i] < lows[i+2] && lows[i] < lows[i+3])
+      pivotLows.push(lows[i]);
+    if (highs[i] > highs[i-1] && highs[i] > highs[i-2] && highs[i] > highs[i-3] &&
+        highs[i] > highs[i+1] && highs[i] > highs[i+2] && highs[i] > highs[i+3])
+      pivotHighs.push(highs[i]);
+  }
+
+  function cluster(pivots, type) {
+    const sorted = [...pivots].sort((a, b) => a - b);
+    const clusters = [];
+    for (const p of sorted) {
+      const ex = clusters.find(c => Math.abs(c.price - p) / c.price < ZONE_PCT);
+      if (ex) { ex.touches++; ex.price = (ex.price + p) / 2; }
+      else clusters.push({ price: p, touches: 1, type });
+    }
+    return clusters.filter(c => c.touches >= MIN_TOUCHES);
+  }
+
+  return [
+    ...cluster(pivotLows, 'S'),
+    ...cluster(pivotHighs, 'R')
+  ].sort((a, b) => b.price - a.price);
+}
+
+// ---- ANÁLISE ----
+function analyze(candles) {
+  const closes = candles.map(c => c.close);
+  const last   = candles[candles.length - 1];
+  const price  = last.close;
+  const low    = last.low;
+  const high   = last.high;
+
+  const ema50  = calcEMA(closes, EMA_PERIOD);
+  const trend  = !ema50 ? 'NEUTRO'
+    : price > ema50 * 1.001 ? 'ALTA'
+    : price < ema50 * 0.999 ? 'BAIXA'
+    : 'NEUTRO';
+
+  const zones = findStrongZones(candles.slice(-LOOKBACK));
+  let signal = 'AGUARDAR', touchedZone = null;
+
+  for (const z of zones) {
+    const touchPrice = z.type === 'S' ? low : high;
+    if (Math.abs(touchPrice - z.price) / z.price < ZONE_PCT) {
+      if (z.type === 'S' && trend === 'ALTA') { signal = 'CALL'; touchedZone = z; break; }
+      if (z.type === 'R' && trend === 'BAIXA') { signal = 'PUT';  touchedZone = z; break; }
+    }
+  }
+
+  return {
+    signal, trend, price, ema50, touchedZone,
+    supports:    zones.filter(z => z.type === 'S').slice(0, 3),
+    resistances: zones.filter(z => z.type === 'R').slice(0, 3)
+  };
+}
+
+// ---- FORMAT ----
+function fmt(p) {
+  if (!p) return '—';
+  if (p > 1000) return p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p > 1)    return p.toFixed(4);
+  return p.toFixed(6);
+}
+function nowStr() {
+  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+// ---- BEEP ----
+function beep(type) {
+  if (!soundOn) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = type === 'CALL' ? 880 : 440;
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    osc.start(); osc.stop(ctx.currentTime + 0.6);
+    // segundo beep
+    setTimeout(() => {
+      const o2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      o2.connect(g2); g2.connect(ctx.destination);
+      o2.type = 'sine';
+      o2.frequency.value = type === 'CALL' ? 1100 : 330;
+      g2.gain.setValueAtTime(0.4, ctx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      o2.start(); o2.stop(ctx.currentTime + 0.5);
+    }, 200);
+  } catch(e) {}
+}
+
+// ---- ALERT OVERLAY ----
+function showAlert(pair, result) {
+  const { signal, touchedZone, trend, price } = result;
+  const box = document.getElementById('alert-box');
+  box.className = 'alert-box ' + (signal === 'CALL' ? 'call' : 'put');
+  document.getElementById('alert-dir').textContent = signal === 'CALL' ? '▲ COMPRA' : '▼ VENDA';
+  document.getElementById('alert-pair').textContent = pair.replace('USDT', '') + '/USDT';
+  document.getElementById('alert-info').innerHTML =
+    `Zona ${touchedZone.type === 'S' ? 'suporte' : 'resistência'} forte ×${touchedZone.touches} @ ${fmt(touchedZone.price)}<br>Tendência: ${trend} — EMA 50`;
+  document.getElementById('alert-overlay').classList.add('show');
+
+  alertCountdown = ALERT_SECONDS;
+  document.getElementById('alert-timer').textContent = alertCountdown;
+  clearInterval(alertInterval);
+  alertInterval = setInterval(() => {
+    alertCountdown--;
+    document.getElementById('alert-timer').textContent = alertCountdown;
+    if (alertCountdown <= 0) closeAlert();
+  }, 1000);
+
+  beep(signal);
+}
+
+function closeAlert() {
+  document.getElementById('alert-overlay').classList.remove('show');
+  clearInterval(alertInterval);
+}
+
+// ---- RENDER CARDS ----
+function strengthDots(touches, type) {
+  return Array.from({ length: 5 }, (_, i) =>
+    `<div class="dot-sq ${i < touches ? (type === 'S' ? 'fill-s' : 'fill-r') : ''}"></div>`
+  ).join('');
+}
+
+function renderCards() {
+  const pairs = sel === 'all' ? PAIRS : [sel];
+  let active = 0;
+  document.getElementById('grid').innerHTML = pairs.map(pair => {
+    const d = state[pair];
+    if (!d) return `<div class="card loading"><div class="c-pair">${pair.replace('USDT','')}/USDT</div><div class="c-price" style="font-size:13px;color:var(--muted)">Carregando...</div></div>`;
+    const { signal, trend, price, ema50, touchedZone, supports, resistances } = d;
+    if (signal !== 'AGUARDAR') active++;
+    const cls = signal === 'CALL' ? 'call' : signal === 'PUT' ? 'put' : '';
+    const tCls = trend === 'ALTA' ? 'trend-up' : trend === 'BAIXA' ? 'trend-dn' : 'trend-nt';
+    const tArrow = trend === 'ALTA' ? '▲' : trend === 'BAIXA' ? '▼' : '→';
+    const bCls = signal === 'CALL' ? 'badge-call' : signal === 'PUT' ? 'badge-put' : 'badge-wait';
+    const bTxt = signal === 'CALL' ? '▲ COMPRA' : signal === 'PUT' ? '▼ VENDA' : '· Aguardar';
+    const touchHtml = touchedZone
+      ? `<div class="touch-info ${signal === 'CALL' ? 'active-call' : 'active-put'}">Tocou ${touchedZone.type === 'S' ? 'suporte' : 'resist.'} forte ×${touchedZone.touches} @ ${fmt(touchedZone.price)}</div>`
+      : `<div class="touch-info none">Sem toque em zona forte</div>`;
+    const strengthHtml = touchedZone
+      ? `<div class="strength-row"><span class="strength-lbl">Força:</span><div class="dots">${strengthDots(Math.min(touchedZone.touches, 5), touchedZone.type)}</div></div>`
+      : '';
+    const rTags = resistances.map(z => `<span class="ztag ztag-r">${fmt(z.price)} ×${z.touches}</span>`).join('');
+    const sTags = supports.map(z => `<span class="ztag ztag-s">${fmt(z.price)} ×${z.touches}</span>`).join('');
+    return `<div class="card ${cls}">
+      <div class="c-pair">${pair.replace('USDT','')}/USDT</div>
+      <div class="c-price">${fmt(price)}</div>
+      <div class="c-ema">EMA 50: ${fmt(ema50)} <span class="c-trend ${tCls}">${tArrow} ${trend}</span></div>
+      <span class="badge ${bCls}">${bTxt}</span>
+      ${touchHtml}
+      ${strengthHtml}
+      <div class="zones-row">
+        ${rTags ? '<div>R: ' + rTags + '</div>' : ''}
+        ${sTags ? '<div>S: ' + sTags + '</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('s-active').textContent = active;
+}
+
+// ---- LOG ----
+function addLog(pair, signal, price, zone) {
+  const entry = {
+    t: nowStr(),
+    pair: pair.replace('USDT',''),
+    signal,
+    price: fmt(price),
+    zType: zone.type === 'S' ? 'suporte' : 'resist.',
+    zPrice: fmt(zone.price),
+    touches: zone.touches
+  };
+  logs.unshift(entry);
+  if (logs.length > 50) logs.pop();
+  if (signal === 'CALL') statsCall++;
+  else statsPut++;
+  document.getElementById('s-call').textContent = statsCall;
+  document.getElementById('s-put').textContent  = statsPut;
+  document.getElementById('s-total').textContent = statsCall + statsPut;
+
+  document.getElementById('log-body').innerHTML = logs.map(l =>
+    `<div class="log-row">
+      <span class="log-time">${l.t}</span>
+      <span class="log-sig ${l.signal === 'CALL' ? 'c' : 'p'}">${l.signal}</span>
+      <span class="log-detail">${l.pair} @ ${l.price}</span>
+      <span class="log-zone">${l.zType} ×${l.touches} @ ${l.zPrice}</span>
+    </div>`
+  ).join('');
+}
+
+// ---- FETCH ----
+async function fetchAll() {
+  document.getElementById('fetch-status').textContent = 'Atualizando...';
+  const prev = JSON.parse(JSON.stringify(state));
+  await Promise.allSettled(PAIRS.map(async pair => {
+    try {
+      const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=${LOOKBACK + 10}`);
+      const data = await r.json();
+      const candles = data.map(c => ({ open: +c[1], high: +c[2], low: +c[3], close: +c[4] }));
+      const result = analyze(candles);
+      const prevSig = prev[pair]?.signal;
+      state[pair] = result;
+      // novo sinal diferente do anterior
+      if (result.signal !== 'AGUARDAR' && result.signal !== prevSig && result.touchedZone) {
+        const key = pair + result.signal + fmt(result.touchedZone.price);
+        if (signalCache[key] !== nowStr().slice(0,5)) { // janela de 1min
+          signalCache[key] = nowStr().slice(0,5);
+          addLog(pair, result.signal, result.price, result.touchedZone);
+          showAlert(pair, result);
+        }
+      }
+    } catch(e) {}
+  }));
+  renderCards();
+  document.getElementById('last-update').textContent = 'Atualizado ' + nowStr();
+  document.getElementById('fetch-status').textContent = '';
+}
+
+// ---- CANDLE COUNTDOWN ----
+// calcula segundos restantes até fechamento da vela M1
+function getCandleSecondsLeft() {
+  const now = Math.floor(Date.now() / 1000);
+  return 60 - (now % 60);
+}
+
+setInterval(() => {
+  const left = getCandleSecondsLeft();
+  const el = document.getElementById('candle-countdown');
+  el.textContent = left;
+  el.className = 'candle-timer-val' + (left <= ALERT_SECONDS ? ' critical' : left <= 20 ? ' warning' : '');
+
+  // dispara busca 2s ANTES do fechamento para ter dados prontos na hora certa
+  if (left === 2) fetchAll();
+}, 1000);
+
+function selPair() { sel = document.getElementById('psel').value; renderCards(); }
+function toggleSound() {
+  soundOn = !soundOn;
+  const btn = document.getElementById('sound-btn');
+  btn.textContent = soundOn ? '🔔 Som ON' : '🔕 Som OFF';
+  btn.className = 'btn sound-btn ' + (soundOn ? 'on' : '');
+}
+
+// init
+fetchAll();
+</script>
+</body>
+</html>

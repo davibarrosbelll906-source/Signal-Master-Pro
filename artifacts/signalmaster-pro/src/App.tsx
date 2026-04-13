@@ -69,6 +69,7 @@ import DashboardHomePage from "@/pages/DashboardHomePage";
 import PlansPage from "@/pages/PlansPage";
 import LunaAnalysesPage from "@/pages/LunaAnalysesPage";
 import AnalystPage from "@/pages/AnalystPage";
+import SRSignalsPage from "@/pages/SRSignalsPage";
 
 import NotFound from "@/pages/not-found";
 
@@ -118,6 +119,7 @@ function Router() {
       {/* Dashboard routes — each has its own flat route for reliable matching */}
       <Route path="/dashboard" component={() => <D component={DashboardHomePage} />} />
       <Route path="/dashboard/signals" component={() => <D component={SignalsPage} />} />
+      <Route path="/dashboard/sr-signals" component={() => <D component={SRSignalsPage} />} />
       <Route path="/dashboard/history" component={() => <D component={HistoryPage} />} />
       <Route path="/dashboard/analytics" component={() => <D component={AnalyticsPage} />} />
       <Route path="/dashboard/heatmap" component={() => <D component={HeatmapPage} />} />
