@@ -770,6 +770,32 @@ export default function SignalsPage() {
                       </div>
                     )}
 
+                    {/* Claude Analyst verdict */}
+                    {(signal as any).claudeAnalysis && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-4 px-4 py-3 rounded-2xl border border-indigo-500/20 bg-indigo-950/30"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-700 flex items-center justify-center text-[11px] flex-shrink-0">🤖</div>
+                          <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Analista IA</span>
+                          {(signal as any).claudeVote && (
+                            <span className={`ml-auto text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                              (signal as any).claudeVote === 'CONFIRM'
+                                ? 'text-[var(--green)] border-[var(--green)]/30 bg-[var(--green)]/8'
+                                : (signal as any).claudeVote === 'REJECT'
+                                ? 'text-red-400 border-red-500/30 bg-red-900/20'
+                                : 'text-gray-400 border-white/10 bg-white/5'
+                            }`}>
+                              {(signal as any).claudeVote === 'CONFIRM' ? '✓ CONFIRMA' : (signal as any).claudeVote === 'REJECT' ? '✗ REJEITA' : '→ NEUTRO'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-300 text-xs leading-relaxed pl-8">{(signal as any).claudeAnalysis}</p>
+                      </motion.div>
+                    )}
+
                     {/* Luna explanation */}
                     <div className="border-t border-white/6 pt-6">
                       {lunaLoading && !lunaExplanation && (

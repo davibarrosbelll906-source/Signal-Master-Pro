@@ -217,9 +217,12 @@ export function initSignalEngine(io: IOServer) {
           return;
         }
 
-        // Oracle APROVOU — calcula score final com boost
+        // Oracle APROVOU — calcula score final com boost/penalidade do Claude
         const rawFinal = result.score + oracle.scoreBoost;
-        const finalScore = Math.min(99, Math.max(result.score, rawFinal)); // boost só aumenta
+        // CONFIRM: boost só aumenta | NEUTRAL/REJECT-leve: pode reduzir
+        const finalScore = oracle.claudeVote === 'CONFIRM'
+          ? Math.min(99, Math.max(result.score, rawFinal))
+          : Math.min(99, Math.max(30, rawFinal));
         const approved: SignalResult = {
           ...result,
           score: Math.round(finalScore),
@@ -228,6 +231,8 @@ export function initSignalEngine(io: IOServer) {
           oracleConfidence: oracle.confidence,
           oracleReason: oracle.reason,
           oracleScore: Math.round(finalScore),
+          claudeAnalysis: oracle.claudeAnalysis,
+          claudeVote: oracle.claudeVote,
         } as SignalResult & { timeframe: string };
 
         latestSignals.set(asset, approved as any);

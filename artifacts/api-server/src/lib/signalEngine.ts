@@ -34,6 +34,22 @@ export interface Candle {
 
 export type MarketRegime = 'TRENDING' | 'RANGING' | 'CHOPPY';
 
+export interface SignalIndicators {
+  ema9: number;
+  ema21: number;
+  ema50: number;
+  lastClose: number;
+  macdHist: number;
+  macdSignal: number;
+  bbPct: number;
+  obvTrend: string;
+  candlePattern: string;
+  zoneStrength: number;
+  m5Bull: boolean;
+  m15Bull: boolean;
+  atrPct: number;
+}
+
 export interface SignalResult {
   direction: 'CALL' | 'PUT';
   score: number;
@@ -53,11 +69,15 @@ export interface SignalResult {
   category: string;
   ts: number;
   passed: boolean;
-  // Luna Oracle fields (populated by backendSignalEngine after Oracle review)
+  // Raw indicator snapshot (sent to Claude for independent analysis)
+  indicators?: SignalIndicators;
+  // Luna Oracle / Claude Analyst fields
   oracleApproved?: boolean;
   oracleConfidence?: number;
   oracleReason?: string;
   oracleScore?: number;
+  claudeAnalysis?: string;
+  claudeVote?: 'CONFIRM' | 'REJECT' | 'NEUTRAL';
 }
 
 // BASE_WEIGHTS removed — era dead code (nunca usado no scoring)
@@ -623,6 +643,7 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
   // FIX-4: MACD momentum como modificador de score (±4%)
   const macdMom  = calcMACDMomentum(closes);
   const macdData = calcMACD(closes);
+  const bbData   = calcBollinger(closes);
   const macdAligned =
     (direction === 'CALL' && macdData.hist > 0 && macdMom === 'growing') ||
     (direction === 'PUT'  && macdData.hist < 0 && macdMom === 'growing');
@@ -745,6 +766,21 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
     blockedBy, mmTrap: false, mmTrapType: '',
     sess, votes, asset, category,
     ts: Date.now(), passed: blockedBy === null,
+    indicators: {
+      ema9: Math.round(lastEma9 * 10000) / 10000,
+      ema21: Math.round(lastEma21 * 10000) / 10000,
+      ema50: Math.round(lastEma50 * 10000) / 10000,
+      lastClose: Math.round(lastClose * 10000) / 10000,
+      macdHist: Math.round(macdData.hist * 100000) / 100000,
+      macdSignal: Math.round(macdData.signal * 100000) / 100000,
+      bbPct: Math.round(bbData.pct * 1000) / 1000,
+      obvTrend,
+      candlePattern: candle.pattern,
+      zoneStrength,
+      m5Bull: htfBull,
+      m15Bull,
+      atrPct: Math.round(atrPct * 100000) / 100000,
+    },
   };
 }
 
