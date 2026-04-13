@@ -18,3 +18,9 @@ id = "FMF_uTYCcBbrEHjn1afk5"
 uri = "file://artifacts/smp-extension-v1.1.tar.gz"
 type = "unspecified"
 title = "SignalMaster Pro Extensão v1.1 — Atualizado (TradingView)"
+
+[[outputs]]
+id = "cEopwlUWWv-wAcjhz9L6C"
+uri = "file://artifacts/smp-extension-v2.0.tar.gz"
+type = "unspecified"
+title = "SignalMaster Pro v2.0 — Sinais Rápidos + Alta Assertividade"
