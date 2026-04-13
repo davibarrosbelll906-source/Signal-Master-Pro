@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignalMaster Pro</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 280px;
+      min-height: 200px;
+      background: #07070d;
+      color: #e0e0e0;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 13px;
+    }
+
+    .header {
+      padding: 12px 16px;
+      background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(100,100,255,0.05));
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-icon { font-size: 18px; }
+    .header-text h1 { font-size: 13px; font-weight: 700; color: #00ff88; }
+    .header-text p  { font-size: 10px; color: #555; margin-top: 1px; }
+
+    .body { padding: 14px; }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      color: #555;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #333;
+      flex-shrink: 0;
+    }
+    .dot.on  { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+    .dot.off { background: #ff4466; }
+
+    .signal-card {
+      background: rgba(255,255,255,0.04);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .signal-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .direction {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .direction.call { color: #00ff88; }
+    .direction.put  { color: #ff4466; }
+    .direction.wait { color: #555; font-size: 14px; }
+
+    .score-block { text-align: right; }
+    .score { font-size: 20px; font-weight: 800; color: #fff; }
+    .quality {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 2px;
+    }
+    .q-elite   { background: rgba(255,215,0,0.2);  color: #ffd700; }
+    .q-premium { background: rgba(180,100,255,0.2); color: #c084fc; }
+    .q-forte   { background: rgba(0,255,136,0.15); color: #00ff88; }
+    .q-fraco   { background: rgba(255,165,0,0.15); color: #ffa500; }
+    .q-wait    { background: rgba(100,100,100,0.2); color: #555; }
+
+    .asset { font-size: 12px; font-weight: 600; color: #ccc; margin-bottom: 6px; }
+
+    .indicators {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .ind { font-size: 10px; }
+    .ind-label { color: #444; }
+    .ind-value { color: #aaa; font-weight: 600; }
+    .ind-value.bull { color: #00ff88; }
+    .ind-value.bear { color: #ff4466; }
+
+    .reason {
+      font-size: 10px;
+      color: #444;
+      line-height: 1.4;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .no-signal {
+      text-align: center;
+      padding: 20px;
+      color: #444;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .no-signal .icon { font-size: 28px; margin-bottom: 8px; }
+
+    .footer {
+      padding: 8px 14px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      font-size: 10px;
+      color: #333;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .open-ebinex {
+      display: block;
+      width: 100%;
+      background: rgba(0,255,136,0.12);
+      color: #00ff88;
+      border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 7px;
+      padding: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+    }
+    .open-ebinex:hover { background: rgba(0,255,136,0.2); }
+
+    #ts { color: #333; font-size: 10px; margin-top: 6px; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-icon">⚡</div>
+    <div class="header-text">
+      <h1>SignalMaster Pro</h1>
+      <p>Sinais para Ebinex · M1</p>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="status-row">
+      <div class="dot" id="conn-dot"></div>
+      <span id="conn-label">Verificando página...</span>
+    </div>
+
+    <button class="open-ebinex" id="btn-ebinex">🌐 Abrir Ebinex</button>
+
+    <div id="signal-area">
+      <div class="no-signal">
+        <div class="icon">📡</div>
+        <div>Abra a Ebinex para começar a receber sinais em tempo real.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>SMP v1.0 · Ebinex Only</span>
+    <span id="ts">—</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

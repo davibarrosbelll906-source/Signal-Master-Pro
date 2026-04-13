@@ -6,3 +6,9 @@ id = "W2C2iFxOn4SuAjPp1vKVX"
 uri = "file://signalmaster_pro_codigo.txt"
 type = "text"
 title = "SignalMaster Pro — Código Completo (52 arquivos core)"
+
+[[outputs]]
+id = "GoyVyCyTSKy-wRCo04ubM"
+uri = "file://artifacts/smp-extension.tar.gz"
+type = "unspecified"
+title = "SignalMaster Pro — Extensão Chrome (.tar.gz)"
