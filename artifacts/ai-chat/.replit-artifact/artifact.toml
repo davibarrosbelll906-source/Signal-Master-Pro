@@ -18,9 +18,14 @@ localPort = 25374
 run = "pnpm --filter @workspace/ai-chat run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/ai-chat", "run", "build" ]
 publicDir = "artifacts/ai-chat/dist/public"
 serve = "static"
+
+[services.production.build]
+args = ["pnpm", "--filter", "@workspace/ai-chat", "run", "build"]
+
+[services.production.build.env]
+BASE_PATH = "/ai-chat/"
 
 [[services.production.rewrites]]
 from = "/*"
