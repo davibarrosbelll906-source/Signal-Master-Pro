@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, RefreshCw, ChevronDown, BarChart2, Zap, AlertCircle } from "lucide-react";
 import { useAppStore } from "@/lib/store";
+import { getToken } from "@/lib/apiClient";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -25,7 +26,6 @@ const SUGGESTIONS = [
 
 export default function AnalystPage() {
   const currentUser = useAppStore((s) => s.currentUser);
-  const token = useAppStore((s) => s.token);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -46,6 +46,11 @@ export default function AnalystPage() {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || streaming) return;
+      const token = getToken();
+      if (!token) {
+        setError("Sessão expirada. Faça login novamente.");
+        return;
+      }
 
       setError(null);
       setShowSuggestions(false);
@@ -130,7 +135,7 @@ export default function AnalystPage() {
         setTimeout(() => inputRef.current?.focus(), 100);
       }
     },
-    [messages, streaming, token]
+    [messages, streaming]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
