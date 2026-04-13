@@ -1,7 +1,7 @@
 /**
  * SignalMaster Pro — Content Script (MAIN world)
- * Intercepta WebSocket/Fetch da Ebinex, calcula indicadores e exibe HUD com sinal CALL/PUT.
- * Roda no contexto da página (MAIN world) para ter acesso direto ao WebSocket da corretora.
+ * Suporte completo ao protocolo TradingView (~m~) + fallback DOM Ebinex.
+ * app.ebinex.com/traderoom
  */
 (function () {
   'use strict';
@@ -10,20 +10,21 @@
   // ESTADO GLOBAL
   // ─────────────────────────────────────────────
   const STATE = {
-    ticks: {},          // { 'BTCUSD': [{ price, ts }] }
-    candles: {},        // { 'BTCUSD': [{ o,h,l,c,v,t }] }
+    ticks: {},
+    candles: {},
     currentAsset: null,
     lastSignal: null,
     wsConnected: false,
+    wsMessageCount: 0,
     dataSource: 'aguardando...',
-    errors: [],
     tickCount: 0,
     lastPrice: {},
+    tvSymbolMap: {},   // { 'BINANCE:BTCUSDT' → 'BTCUSD' }
   };
 
-  const MAX_CANDLES = 100;
-  const CANDLE_MS   = 60_000; // 1 minuto
-  const MIN_CANDLES = 15;     // mínimo para calcular indicadores
+  const MAX_CANDLES = 120;
+  const CANDLE_MS   = 60_000;
+  const MIN_CANDLES = 15;
 
   // ─────────────────────────────────────────────
   // 1. INTERCEPTAÇÃO WEBSOCKET
@@ -33,122 +34,224 @@
   window.WebSocket = function (...args) {
     const ws = new OriginalWS(...args);
     STATE.wsConnected = true;
-    updateHUD();
-
-    console.log('[SMP] WebSocket interceptado:', args[0]);
+    console.log('[SMP] WS interceptado:', args[0]);
 
     ws.addEventListener('message', (event) => {
       try {
-        const raw = event.data;
-
-        // dados binários — ignora
-        if (raw instanceof ArrayBuffer || raw instanceof Blob) return;
-
-        let parsed;
-        try { parsed = JSON.parse(raw); } catch { return; }
-
-        const result = parseAnyFormat(parsed);
-        if (result) {
-          feedTick(result.asset, result.price, result.ts);
-          STATE.dataSource = 'WebSocket (real-time)';
-        }
+        STATE.wsMessageCount++;
+        handleWSMessage(event.data);
       } catch (e) {
-        STATE.errors.push(e.message);
+        console.warn('[SMP] WS parse error:', e.message);
       }
     });
 
     return ws;
   };
-
-  // Copia propriedades estáticas do WebSocket original
   Object.assign(window.WebSocket, OriginalWS);
   window.WebSocket.prototype = OriginalWS.prototype;
 
   // ─────────────────────────────────────────────
-  // 2. INTERCEPTAÇÃO FETCH (dados históricos de velas)
+  // 2. HANDLER PRINCIPAL DE MENSAGENS WS
   // ─────────────────────────────────────────────
-  const OriginalFetch = window.fetch;
+  function handleWSMessage(raw) {
+    if (!raw || typeof raw !== 'string') return;
 
-  window.fetch = function (...args) {
-    return OriginalFetch.apply(this, args).then(async (response) => {
-      try {
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-        const ct  = response.headers.get('content-type') || '';
+    // ── PROTOCOLO TRADINGVIEW: ~m~LENGTH~m~PAYLOAD
+    if (raw.startsWith('~m~')) {
+      parseTradingViewMessage(raw);
+      return;
+    }
 
-        if (!ct.includes('json')) return response;
+    // ── JSON simples
+    let obj;
+    try { obj = JSON.parse(raw); } catch { return; }
 
-        // Clona para não consumir o body original
-        const clone = response.clone();
-        clone.json().then((data) => {
-          const candles = extractCandlesFromResponse(data, url);
-          if (candles.length > 0) {
-            const asset = guessAssetFromURL(url) || STATE.currentAsset;
-            if (asset) {
-              STATE.candles[asset] = candles.slice(-MAX_CANDLES);
-              STATE.dataSource = 'HTTP (histórico)';
-              recalcSignal(asset);
-            }
-          }
-        }).catch(() => {});
-      } catch (e) {}
-      return response;
-    });
-  };
+    const result = parseGenericJSON(obj);
+    if (result) {
+      feedTick(result.asset, result.price, result.ts);
+      STATE.dataSource = 'WebSocket ✓';
+    }
 
-  // ─────────────────────────────────────────────
-  // 3. PARSERS MULTI-FORMATO
-  // ─────────────────────────────────────────────
-  function parseAnyFormat(obj) {
-    if (!obj || typeof obj !== 'object') return null;
-
-    // Flatten arrays
+    // ── Pode ter múltiplos objetos numa mensagem (array)
     if (Array.isArray(obj)) {
       for (const item of obj) {
-        const r = parseAnyFormat(item);
-        if (r) return r;
+        const r = parseGenericJSON(item);
+        if (r) { feedTick(r.asset, r.price, r.ts); STATE.dataSource = 'WebSocket ✓'; }
       }
-      return null;
     }
+  }
 
-    // Extrai campos comuns
-    const price  = extractNum(obj, ['price','rate','close','c','last','bid','ask','value','p']);
-    const asset  = extractStr(obj, ['symbol','asset','pair','instrument','name','s','ticker','market','currency_pair']);
-    const ts     = extractNum(obj, ['timestamp','time','ts','t','date','created_at']);
+  // ─────────────────────────────────────────────
+  // 3. PARSER TRADINGVIEW  ~m~LEN~m~PAYLOAD
+  // ─────────────────────────────────────────────
+  function parseTradingViewMessage(raw) {
+    // Uma mensagem pode ter múltiplos pacotes: ~m~5~m~hello~m~10~m~{"m":"..."}
+    const packets = raw.split('~m~').filter((s, i) => i % 2 === 0 && s !== '');
+    // Pega os payloads (índices ímpares após o split pelo delimitador)
+    const parts = raw.split(/~m~\d+~m~/g).filter(Boolean);
+
+    for (const part of parts) {
+      if (!part || !part.startsWith('{')) continue;
+      let obj;
+      try { obj = JSON.parse(part); } catch { continue; }
+
+      const m  = obj.m;
+      const p  = obj.p;
+
+      if (!m || !Array.isArray(p)) continue;
+
+      // ── qsd: quote symbol data (preço em tempo real)
+      // {"m":"qsd","p":["qs_xxx",{"n":"BINANCE:BTCUSDT","s":"ok","v":{"lp":72471,"ch":100,...}}]}
+      if (m === 'qsd' && p[1]) {
+        const data = p[1];
+        const sym  = data.n || data.name;
+        const v    = data.v || data;
+        const lp   = v.lp || v.last_price || v.close;
+        if (sym && lp) {
+          const asset = tvSymToAsset(sym);
+          if (asset) { feedTick(asset, lp, Date.now()); STATE.dataSource = 'TradingView WS ✓'; }
+        }
+      }
+
+      // ── du: data update (tick em tempo real)
+      // {"m":"du","p":["qs_xxx",{"BINANCE:BTCUSDT":{"lp":72471,...}}]}
+      if (m === 'du' && p[1] && typeof p[1] === 'object') {
+        for (const [sym, v] of Object.entries(p[1])) {
+          if (typeof v !== 'object') continue;
+          const lp = v.lp || v.last_price || v.close || v.price;
+          if (lp) {
+            const asset = tvSymToAsset(sym);
+            if (asset) { feedTick(asset, lp, Date.now()); STATE.dataSource = 'TradingView WS ✓'; }
+          }
+        }
+      }
+
+      // ── timescale_update: dados históricos de velas OHLCV
+      // {"m":"timescale_update","p":["cs_xxx",{"s1":{"s":[{"i":[ts,o,h,l,c,v]},...],"ns":...}}]}
+      if ((m === 'timescale_update' || m === 'series_loading') && p[1]) {
+        parseTVBars(p[1]);
+      }
+
+      // ── cr (series complete): velas completas
+      if (m === 'series_data' && p[1]) {
+        parseTVBars(p[1]);
+      }
+
+      // ── quote_add_symbols: registra mapeamento de símbolo
+      // {"m":"quote_add_symbols","p":["qs_xxx","BINANCE:BTCUSDT",...]}
+      if (m === 'quote_add_symbols') {
+        for (const item of p) {
+          if (typeof item === 'string' && item.includes(':')) {
+            const asset = tvSymToAsset(item);
+            if (asset) {
+              STATE.tvSymbolMap[item] = asset;
+              if (!STATE.currentAsset) STATE.currentAsset = asset;
+              updateHUD();
+            }
+          }
+        }
+      }
+
+      // ── resolve_symbol: confirma símbolo ativo
+      if (m === 'resolve_symbol' && p[1] && typeof p[1] === 'string') {
+        const info = JSON.parse(p[1]);
+        const sym  = info?.pro_name || info?.name;
+        if (sym) {
+          const asset = tvSymToAsset(sym);
+          if (asset && !STATE.currentAsset) { STATE.currentAsset = asset; updateHUD(); }
+        }
+      }
+    }
+  }
+
+  // Extrai velas de mensagens timescale_update
+  function parseTVBars(data) {
+    if (!data || typeof data !== 'object') return;
+
+    for (const [seriesKey, series] of Object.entries(data)) {
+      const bars = series?.s || series?.bars || series?.data;
+      if (!Array.isArray(bars) || bars.length === 0) continue;
+
+      // Detecta símbolo pela chave ou campo
+      const sym   = series?.symbol || series?.ticker || series?.name;
+      let asset   = sym ? tvSymToAsset(sym) : STATE.currentAsset;
+      if (!asset) asset = STATE.currentAsset;
+      if (!asset) continue;
+
+      const candles = [];
+      for (const bar of bars) {
+        // Formato array: { i: [ts, o, h, l, c, v] }
+        const i = bar?.i || bar;
+        if (Array.isArray(i) && i.length >= 5) {
+          const [t, o, h, l, c, v = 0] = i;
+          candles.push({ o, h, l, c, v, t: t * 1000 });
+        }
+        // Formato objeto
+        else if (typeof bar === 'object') {
+          const o  = bar.open  || bar.o;
+          const h  = bar.high  || bar.h;
+          const l  = bar.low   || bar.l;
+          const c  = bar.close || bar.c || bar.last;
+          const v  = bar.volume || bar.v || 0;
+          const t  = (bar.time || bar.timestamp || bar.t || 0);
+          if (o && h && l && c) candles.push({ o, h, l, c, v, t: t > 1e10 ? t : t * 1000 });
+        }
+      }
+
+      if (candles.length > 0) {
+        STATE.candles[asset] = candles.slice(-MAX_CANDLES);
+        STATE.dataSource = 'TradingView Bars ✓';
+        console.log(`[SMP] ${candles.length} velas TradingView → ${asset}`);
+        recalcSignal(asset);
+      }
+    }
+  }
+
+  // Converte símbolo TradingView → par Ebinex
+  function tvSymToAsset(sym) {
+    if (!sym) return null;
+    const s = sym.toUpperCase().replace(/^[\w]+:/, ''); // remove exchange prefix
+
+    const MAP = {
+      'BTCUSDT': 'BTCUSD', 'BTCUSD': 'BTCUSD', 'XBTUSD': 'BTCUSD',
+      'ETHUSDT': 'ETHUSD', 'ETHUSD': 'ETHUSD',
+      'SOLUSDT': 'SOLUSD', 'SOLUSD': 'SOLUSD',
+      'BNBUSDT': 'BNBUSD', 'BNBUSD': 'BNBUSD',
+      'XRPUSDT': 'XRPUSD', 'XRPUSD': 'XRPUSD',
+      'ADAUSDT': 'ADAUSD', 'ADAUSD': 'ADAUSD',
+      'DOGEUSDT':'DOGEUSD','DOGEUSD':'DOGEUSD',
+      'LTCUSDT': 'LTCUSD', 'LTCUSD': 'LTCUSD',
+      'AVAXUSDT':'AVAXUSD','AVAXUSD':'AVAXUSD',
+      'DOTUSDT': 'DOTUSD', 'DOTUSD': 'DOTUSD',
+      'LINKUSDT':'LINKUSD','LINKUSD':'LINKUSD',
+      'MATICUSDT':'MATICUSD','MATICUSD':'MATICUSD','POLUSDT':'MATICUSD',
+    };
+    return MAP[s] || null;
+  }
+
+  // ─────────────────────────────────────────────
+  // 4. PARSER JSON GENÉRICO (outros formatos)
+  // ─────────────────────────────────────────────
+  function parseGenericJSON(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+
+    const price = extractNum(obj, ['price','rate','close','c','last','bid','ask','lp','last_price','p','value']);
+    const asset = extractStr(obj, ['symbol','asset','pair','instrument','ticker','s','n','name','market']);
+    const ts    = extractNum(obj, ['timestamp','time','ts','t','date']) || Date.now();
 
     if (price && price > 0 && asset) {
-      return { asset: normalizeAsset(asset), price, ts: ts || Date.now() };
+      const norm = tvSymToAsset(asset) || normalizeAsset(asset);
+      if (norm) return { asset: norm, price, ts };
     }
 
-    // Tenta buscar em campos aninhados
-    for (const key of Object.keys(obj)) {
-      const val = obj[key];
-      if (val && typeof val === 'object') {
-        const r = parseAnyFormat(val);
+    // Recursão em campos aninhados
+    for (const val of Object.values(obj)) {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        const r = parseGenericJSON(val);
         if (r) return r;
       }
     }
     return null;
-  }
-
-  function extractCandlesFromResponse(data, url) {
-    const candles = [];
-    const candidates = Array.isArray(data) ? data : (data?.data || data?.candles || data?.bars || data?.ohlc || data?.result || []);
-
-    if (!Array.isArray(candidates)) return candles;
-
-    for (const c of candidates) {
-      if (!c || typeof c !== 'object') continue;
-      const o = extractNum(c, ['open','o']);
-      const h = extractNum(c, ['high','h']);
-      const l = extractNum(c, ['low','l']);
-      const cl = extractNum(c, ['close','c','last']);
-      const v = extractNum(c, ['volume','v','vol']) || 0;
-      const t = extractNum(c, ['time','timestamp','ts','t','date','open_time']) || 0;
-      if (o && h && l && cl) {
-        candles.push({ o, h, l, c: cl, v, t: t > 1e12 ? t : t * 1000 });
-      }
-    }
-    return candles;
   }
 
   function extractNum(obj, keys) {
@@ -167,51 +270,30 @@
   }
 
   function normalizeAsset(s) {
-    return s.toUpperCase()
-      .replace(/[_\-\/]/g, '')
-      .replace('MATICUSD','MATICUSD')
-      .replace('XBT','BTC');
-  }
-
-  function guessAssetFromURL(url) {
-    const knownPairs = ['BTCUSD','ETHUSD','SOLUSD','BNBUSD','XRPUSD','ADAUSD',
-                        'DOGEUSD','LTCUSD','AVAXUSD','DOTUSD','LINKUSD','MATICUSD'];
-    const u = url.toUpperCase();
-    for (const p of knownPairs) {
-      if (u.includes(p) || u.includes(p.replace('USD','/USD')) || u.includes(p.replace('USD','-USD'))) return p;
-    }
-    return null;
+    return s.toUpperCase().replace(/[_\-\/]/g, '').replace('USDT','USD').replace('XBT','BTC');
   }
 
   // ─────────────────────────────────────────────
-  // 4. CONSTRUÇÃO DE VELAS A PARTIR DE TICKS
+  // 5. CONSTRUÇÃO DE VELAS A PARTIR DE TICKS
   // ─────────────────────────────────────────────
   function feedTick(asset, price, ts) {
-    if (!asset || !price) return;
+    if (!asset || !price || price <= 0) return;
 
     STATE.lastPrice[asset] = price;
     STATE.tickCount++;
+    if (!STATE.currentAsset) { STATE.currentAsset = asset; }
 
     if (!STATE.ticks[asset]) STATE.ticks[asset] = [];
 
-    // Detecta ativo atual pela URL
-    detectCurrentAsset();
+    STATE.ticks[asset].push({ price, ts: ts || Date.now() });
 
-    const tick = { price, ts };
-    STATE.ticks[asset].push(tick);
-
-    // Remove ticks mais antigos que 3 minutos
-    const cutoff = Date.now() - 3 * CANDLE_MS;
+    // Mantém só os últimos 5 minutos de ticks
+    const cutoff = Date.now() - 5 * CANDLE_MS;
     STATE.ticks[asset] = STATE.ticks[asset].filter(t => t.ts > cutoff);
 
-    // Constrói velas de 1 minuto a partir dos ticks
     buildCandlesFromTicks(asset);
 
-    // Se é o ativo atual, recalcula sinal
-    if (!STATE.currentAsset || STATE.currentAsset === asset) {
-      if (!STATE.currentAsset) STATE.currentAsset = asset;
-      recalcSignal(asset);
-    }
+    if (STATE.currentAsset === asset) recalcSignal(asset);
   }
 
   function buildCandlesFromTicks(asset) {
@@ -220,7 +302,6 @@
 
     if (!STATE.candles[asset]) STATE.candles[asset] = [];
 
-    // Agrupa ticks em velas de 1 minuto
     const groups = {};
     for (const tick of ticks) {
       const min = Math.floor(tick.ts / CANDLE_MS) * CANDLE_MS;
@@ -230,21 +311,19 @@
 
     for (const [minStr, prices] of Object.entries(groups)) {
       const t = parseInt(minStr);
-      const o = prices[0];
-      const c = prices[prices.length - 1];
-      const h = Math.max(...prices);
-      const l = Math.min(...prices);
-      const v = prices.length;
-
-      const existing = STATE.candles[asset].findIndex(cd => cd.t === t);
-      if (existing >= 0) {
-        STATE.candles[asset][existing] = { o, h, l, c, v, t };
-      } else {
-        STATE.candles[asset].push({ o, h, l, c, v, t });
-      }
+      const candle = {
+        o: prices[0],
+        c: prices[prices.length - 1],
+        h: Math.max(...prices),
+        l: Math.min(...prices),
+        v: prices.length,
+        t,
+      };
+      const idx = STATE.candles[asset].findIndex(cd => cd.t === t);
+      if (idx >= 0) STATE.candles[asset][idx] = candle;
+      else STATE.candles[asset].push(candle);
     }
 
-    // Ordena por tempo e limita
     STATE.candles[asset].sort((a, b) => a.t - b.t);
     if (STATE.candles[asset].length > MAX_CANDLES) {
       STATE.candles[asset] = STATE.candles[asset].slice(-MAX_CANDLES);
@@ -252,15 +331,141 @@
   }
 
   // ─────────────────────────────────────────────
-  // 5. MOTOR DE SINAIS (EMA, MACD, RSI, BB)
+  // 6. DETECÇÃO DE ATIVO NA TELA (Ebinex)
+  // ─────────────────────────────────────────────
+  function detectCurrentAsset() {
+    // Ebinex: cabeçalho mostra "BTC/USDT" ou "ETH/USDT" etc.
+    const ebinexSelectors = [
+      // Header do traderoom
+      '.trading-header .asset-name',
+      '.header-symbol',
+      '.instrument-selector span',
+      '.asset-info .name',
+      '[class*="HeaderSymbol"]',
+      '[class*="assetName"]',
+      '[class*="symbol-name"]',
+      '[class*="pair-name"]',
+      '[class*="instrument-name"]',
+      // Seletor genérico para o texto BTC/USDT no topo
+      '.tv-chart-toolbar__symbol',
+      '[data-symbol]',
+      // TradingView toolbar
+      '.chart-toolbar .symbol',
+      '.js-symbol-full',
+      '.chart-header-symbol-name',
+    ];
+
+    for (const sel of ebinexSelectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const text = el.textContent.trim().toUpperCase();
+        const asset = tvSymToAsset(text.replace('/','')) || tvSymToAsset(text) ;
+        if (asset) { STATE.currentAsset = asset; return; }
+      } catch {}
+    }
+
+    // Lê texto de todos elementos com "BTC", "ETH" etc. em texto visível
+    const SYMBOLS = ['BTC','ETH','SOL','BNB','XRP','ADA','DOGE','LTC','AVAX','DOT','LINK','MATIC','POL'];
+    for (const sym of SYMBOLS) {
+      const els = document.querySelectorAll(`*`);
+      for (const el of els) {
+        if (el.children.length > 0) continue; // só leaf nodes
+        const text = el.textContent.trim().toUpperCase();
+        if ((text === sym + '/USDT' || text === sym + 'USDT' || text === sym + '/USD') && el.offsetParent) {
+          const asset = tvSymToAsset(sym + 'USDT') || tvSymToAsset(sym + 'USD');
+          if (asset) { STATE.currentAsset = asset; return; }
+        }
+      }
+    }
+
+    // Fallback: ativo com mais ticks recentes
+    const entries = Object.entries(STATE.ticks).filter(([,v]) => v.length > 0);
+    if (entries.length > 0) {
+      entries.sort((a, b) => b[1].length - a[1].length);
+      STATE.currentAsset = entries[0][0];
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 7. POLLING DOM — lê preço direto da tela Ebinex
+  // ─────────────────────────────────────────────
+  let lastDomPrice = 0;
+  let lastDomAsset = null;
+
+  function pollDOM() {
+    detectCurrentAsset();
+
+    // Selectors específicos para Ebinex / TradingView
+    const priceSelectors = [
+      // TradingView last price na escala de preço (barra amarela/vermelha)
+      '.price-axis-last-value',
+      '.js-last-value',
+      '[class*="lastPrice"]',
+      '[class*="last-price"]',
+      '[class*="currentPrice"]',
+      '[class*="current-price"]',
+      // Ebinex UI
+      '.bid-price', '.ask-price', '.spot-price',
+      '.chart-status-row .value',
+      '[class*="price-value"]',
+      '[class*="priceValue"]',
+      // TradingView tooltip / crosshair (quando mouse sobre gráfico)
+      '.chart-tooltip-price',
+      // Ebinex traderoom rate
+      '[class*="Rate"]',
+      '[class*="rate"]',
+    ];
+
+    for (const sel of priceSelectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (!el || !el.offsetParent) continue;
+        const raw = el.textContent.replace(/[^0-9.,]/g, '').replace(',', '');
+        const val = parseFloat(raw);
+        if (val > 0.001 && Math.abs(val - lastDomPrice) / (lastDomPrice || 1) < 0.2) {
+          if (val !== lastDomPrice) {
+            lastDomPrice = val;
+            const asset = STATE.currentAsset;
+            if (asset) {
+              feedTick(asset, val, Date.now());
+              STATE.dataSource = 'DOM Ebinex ✓';
+            }
+          }
+          return;
+        }
+      } catch {}
+    }
+
+    // Busca mais agressiva: encontra todos os números na tela que parecem preço do ativo atual
+    if (STATE.currentAsset) {
+      const price = STATE.lastPrice[STATE.currentAsset];
+      if (price) {
+        // Procura elemento com número próximo ao último preço conhecido (±1%)
+        const all = document.querySelectorAll('span, div, p');
+        for (const el of all) {
+          if (el.children.length > 0 || !el.offsetParent) continue;
+          const raw = el.textContent.replace(/[^0-9.]/g, '');
+          const val = parseFloat(raw);
+          if (val > 0 && Math.abs(val - price) / price < 0.01 && val !== lastDomPrice) {
+            lastDomPrice = val;
+            feedTick(STATE.currentAsset, val, Date.now());
+            STATE.dataSource = 'DOM scan ✓';
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 8. MOTOR DE SINAIS
   // ─────────────────────────────────────────────
   function ema(closes, period) {
     if (closes.length < period) return null;
     const k = 2 / (period + 1);
     let val = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
-    for (let i = period; i < closes.length; i++) {
-      val = closes[i] * k + val * (1 - k);
-    }
+    for (let i = period; i < closes.length; i++) val = closes[i] * k + val * (1 - k);
     return val;
   }
 
@@ -268,144 +473,122 @@
     if (closes.length < period + 1) return null;
     let gains = 0, losses = 0;
     for (let i = closes.length - period; i < closes.length; i++) {
-      const diff = closes[i] - closes[i - 1];
-      if (diff > 0) gains += diff;
-      else losses += Math.abs(diff);
+      const d = closes[i] - closes[i - 1];
+      if (d > 0) gains += d; else losses += -d;
     }
     const rs = losses === 0 ? 100 : gains / losses;
     return 100 - 100 / (1 + rs);
   }
 
-  function macd(closes) {
+  function macdLine(closes) {
     const e12 = ema(closes, 12);
     const e26 = ema(closes, 26);
     if (!e12 || !e26) return null;
-    const line = e12 - e26;
-    // Signal line (9 EMA of MACD would need more data, simplified)
-    return { line, bullish: line > 0 };
+    return { value: e12 - e26, bullish: e12 > e26 };
   }
 
-  function bollingerBands(closes, period = 20, mult = 2) {
+  function bollingerBands(closes, period = 20) {
     if (closes.length < period) return null;
     const slice = closes.slice(-period);
-    const mean = slice.reduce((a, b) => a + b, 0) / period;
-    const std  = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period);
-    const upper = mean + mult * std;
-    const lower = mean - mult * std;
-    const current = closes[closes.length - 1];
-    const pct = std === 0 ? 50 : ((current - lower) / (upper - lower)) * 100;
-    return { upper, lower, mean, pct: Math.max(0, Math.min(100, pct)) };
+    const mean  = slice.reduce((a, b) => a + b, 0) / period;
+    const std   = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period);
+    if (std === 0) return null;
+    const upper = mean + 2 * std;
+    const lower = mean - 2 * std;
+    const cur   = closes[closes.length - 1];
+    return { pct: Math.max(0, Math.min(100, ((cur - lower) / (upper - lower)) * 100)), upper, lower, mean };
   }
 
   function recalcSignal(asset) {
     const candles = STATE.candles[asset] || [];
+
     if (candles.length < MIN_CANDLES) {
       STATE.lastSignal = {
-        asset,
-        dir: null,
-        score: 0,
-        quality: 'AGUARDANDO',
-        reason: `Coletando dados... (${candles.length}/${MIN_CANDLES} velas)`,
-        indicators: {},
+        asset, dir: null, score: 0, quality: 'AGUARDANDO',
+        reason: `Coletando velas... (${candles.length}/${MIN_CANDLES})`,
+        indicators: { candles: candles.length },
         ts: Date.now(),
       };
       updateHUD();
+      window.dispatchEvent(new CustomEvent('smp:signal', { detail: STATE.lastSignal }));
       return;
     }
 
     const closes = candles.map(c => c.c);
-    const highs  = candles.map(c => c.h);
-    const lows   = candles.map(c => c.l);
     const last   = closes[closes.length - 1];
 
-    const ema9  = ema(closes, 9);
-    const ema21 = ema(closes, 21);
-    const ema50 = ema(closes, 50) || ema(closes, Math.min(50, closes.length));
-    const rsiVal = rsi(closes, 7);
-    const macdVal = macd(closes);
-    const bbVal  = bollingerBands(closes, 20);
+    const e9   = ema(closes, 9);
+    const e21  = ema(closes, 21);
+    const e50  = ema(closes, Math.min(50, closes.length));
+    const rsiV = rsi(closes, 7);
+    const macd = macdLine(closes);
+    const bb   = bollingerBands(closes, Math.min(20, closes.length));
 
-    // Padrão de vela atual
-    const lastCandle = candles[candles.length - 1];
-    const prevCandle = candles[candles.length - 2] || lastCandle;
-    const isBullCandle = lastCandle.c > lastCandle.o;
-    const isPrevBull   = prevCandle.c > prevCandle.o;
+    const c0 = candles[candles.length - 1];
+    const c1 = candles[candles.length - 2] || c0;
 
-    // ── Pontuação
-    let score = 50;
-    let votes = { call: 0, put: 0, neutral: 0 };
+    let callV = 0, putV = 0;
     const reasons = [];
 
     // EMA trend
-    if (ema9 && ema21) {
-      if (ema9 > ema21) { votes.call++; reasons.push('EMA9>EMA21'); }
-      else              { votes.put++;  reasons.push('EMA9<EMA21'); }
+    if (e9 && e21) {
+      if (e9 > e21) { callV += 2; reasons.push('EMA9>21▲'); }
+      else           { putV  += 2; reasons.push('EMA9<21▼'); }
     }
-    if (ema21 && ema50) {
-      if (ema21 > ema50) { votes.call++; reasons.push('EMA21>EMA50'); }
-      else               { votes.put++;  reasons.push('EMA21<EMA50'); }
+    if (e21 && e50) {
+      if (e21 > e50) { callV++; reasons.push('EMA21>50▲'); }
+      else            { putV++;  reasons.push('EMA21<50▼'); }
     }
-    if (ema9 && last) {
-      if (last > ema9) { votes.call++; }
-      else             { votes.put++;  }
-    }
+    if (e9 && last > e9)  callV++;
+    if (e9 && last < e9)  putV++;
 
     // RSI
-    if (rsiVal !== null) {
-      if (rsiVal < 30)      { votes.call += 2; reasons.push(`RSI ${rsiVal.toFixed(0)} (sobrevend)`); }
-      else if (rsiVal > 70) { votes.put  += 2; reasons.push(`RSI ${rsiVal.toFixed(0)} (sobrecomp)`); }
-      else if (rsiVal > 55) { votes.call++; }
-      else if (rsiVal < 45) { votes.put++;  }
+    if (rsiV !== null) {
+      if (rsiV < 25)       { callV += 3; reasons.push(`RSI ${rsiV.toFixed(0)}↓ sobrevendido`); }
+      else if (rsiV < 40)  { callV++;    reasons.push(`RSI ${rsiV.toFixed(0)} baixo`); }
+      else if (rsiV > 75)  { putV  += 3; reasons.push(`RSI ${rsiV.toFixed(0)}↑ sobrecomprado`); }
+      else if (rsiV > 60)  { putV++;     reasons.push(`RSI ${rsiV.toFixed(0)} alto`); }
     }
 
     // MACD
-    if (macdVal) {
-      if (macdVal.bullish) { votes.call++; reasons.push('MACD ▲'); }
-      else                 { votes.put++;  reasons.push('MACD ▼'); }
+    if (macd) {
+      if (macd.bullish) { callV++; reasons.push('MACD▲'); }
+      else               { putV++;  reasons.push('MACD▼'); }
     }
 
     // Bollinger Bands
-    if (bbVal) {
-      if (bbVal.pct < 20)  { votes.call++; reasons.push(`BB ${bbVal.pct.toFixed(0)}% (baixo)`); }
-      else if (bbVal.pct > 80) { votes.put++; reasons.push(`BB ${bbVal.pct.toFixed(0)}% (alto)`); }
+    if (bb) {
+      if (bb.pct < 15)      { callV += 2; reasons.push(`BB ${bb.pct.toFixed(0)}% fundo`); }
+      else if (bb.pct > 85) { putV  += 2; reasons.push(`BB ${bb.pct.toFixed(0)}% topo`); }
     }
 
     // Padrão de vela
-    if (isBullCandle && isPrevBull) { votes.call++; reasons.push('Velas bullish'); }
-    else if (!isBullCandle && !isPrevBull) { votes.put++; reasons.push('Velas bearish'); }
+    const bullCandle = c0.c > c0.o;
+    const prevBull   = c1.c > c1.o;
+    if (bullCandle && prevBull)   { callV++; reasons.push('Velas verdes'); }
+    if (!bullCandle && !prevBull) { putV++;  reasons.push('Velas vermelhas'); }
 
-    const totalVotes = votes.call + votes.put + votes.neutral;
-    const dir = votes.call > votes.put ? 'CALL' : votes.put > votes.call ? 'PUT' : null;
+    const total = callV + putV || 1;
+    const dir   = callV > putV ? 'CALL' : putV > callV ? 'PUT' : null;
 
-    if (dir === 'CALL') {
-      score = 50 + Math.round((votes.call / totalVotes) * 50);
-    } else if (dir === 'PUT') {
-      score = 50 + Math.round((votes.put / totalVotes) * 50);
-    } else {
-      score = 50;
-    }
+    let score;
+    if (dir === 'CALL')      score = 50 + Math.round((callV / total) * 50);
+    else if (dir === 'PUT')  score = 50 + Math.round((putV  / total) * 50);
+    else                     score = 50;
+    score = Math.max(30, Math.min(99, score));
 
-    score = Math.min(99, Math.max(30, score));
-
-    let quality;
-    if (score >= 80)      quality = 'ELITE';
-    else if (score >= 72) quality = 'PREMIUM';
-    else if (score >= 66) quality = 'FORTE';
-    else                  quality = 'FRACO';
+    const quality = score >= 80 ? 'ELITE' : score >= 72 ? 'PREMIUM' : score >= 66 ? 'FORTE' : 'FRACO';
 
     STATE.lastSignal = {
-      asset,
-      dir,
-      score,
-      quality,
-      reason: reasons.join(' | '),
+      asset, dir, score, quality,
+      reason: reasons.join(' · '),
       indicators: {
-        ema9:  ema9  ? ema9.toFixed(4)  : '—',
-        ema21: ema21 ? ema21.toFixed(4) : '—',
-        ema50: ema50 ? ema50.toFixed(4) : '—',
-        rsi:   rsiVal !== null ? rsiVal.toFixed(1) : '—',
-        macd:  macdVal ? (macdVal.line > 0 ? '▲' : '▼') : '—',
-        bb:    bbVal ? bbVal.pct.toFixed(0) + '%' : '—',
+        ema9:  e9  ? e9.toFixed(2)  : '—',
+        ema21: e21 ? e21.toFixed(2) : '—',
+        ema50: e50 ? e50.toFixed(2) : '—',
+        rsi:   rsiV !== null ? rsiV.toFixed(1) : '—',
+        macd:  macd ? (macd.bullish ? '▲' : '▼') : '—',
+        bb:    bb ? bb.pct.toFixed(0) + '%' : '—',
         price: last.toFixed(last > 100 ? 2 : 5),
         candles: candles.length,
       },
@@ -413,70 +596,13 @@
     };
 
     updateHUD();
-
-    // Emite evento para o mundo isolado
-    window.dispatchEvent(new CustomEvent('smp:signal', {
-      detail: STATE.lastSignal,
-    }));
+    window.dispatchEvent(new CustomEvent('smp:signal', { detail: STATE.lastSignal }));
   }
 
   // ─────────────────────────────────────────────
-  // 6. DETECÇÃO DO ATIVO ATUAL NA TELA
-  // ─────────────────────────────────────────────
-  const KNOWN_PAIRS = ['BTCUSD','ETHUSD','SOLUSD','BNBUSD','XRPUSD','ADAUSD',
-                       'DOGEUSD','LTCUSD','AVAXUSD','DOTUSD','LINKUSD','MATICUSD',
-                       'BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD',
-                       'ADA/USD','DOGE/USD','LTC/USD','AVAX/USD','DOT/USD',
-                       'LINK/USD','MATIC/USD','POL/USD'];
-
-  function detectCurrentAsset() {
-    // 1. URL
-    const url = window.location.href.toUpperCase();
-    for (const p of KNOWN_PAIRS) {
-      if (url.includes(p.replace('/','')) || url.includes(p)) {
-        const norm = normalizeAsset(p);
-        if (norm !== STATE.currentAsset) {
-          STATE.currentAsset = norm;
-        }
-        return;
-      }
-    }
-
-    // 2. DOM — título ou breadcrumb
-    const domSelectors = [
-      '.asset-name', '.instrument-name', '.currency-pair',
-      '.active-asset', '.pair-name', '[class*="asset"]',
-      '[class*="instrument"]', '[class*="market"]',
-      'h1', 'h2', '.title', '.header-title',
-    ];
-    for (const sel of domSelectors) {
-      try {
-        const el = document.querySelector(sel);
-        if (!el) continue;
-        const text = el.textContent.toUpperCase();
-        for (const p of KNOWN_PAIRS) {
-          if (text.includes(p) || text.includes(p.replace('/USD','')) ) {
-            const norm = normalizeAsset(p);
-            STATE.currentAsset = norm;
-            return;
-          }
-        }
-      } catch {}
-    }
-
-    // 3. Usa o ativo com mais ticks recentes
-    if (Object.keys(STATE.ticks).length > 0) {
-      const best = Object.entries(STATE.ticks)
-        .sort((a, b) => b[1].length - a[1].length)[0];
-      if (best) STATE.currentAsset = best[0];
-    }
-  }
-
-  // ─────────────────────────────────────────────
-  // 7. HUD — OVERLAY FLUTUANTE
+  // 9. HUD — OVERLAY FLUTUANTE
   // ─────────────────────────────────────────────
   let hudEl = null;
-  let hudVisible = true;
 
   function injectStyles() {
     if (document.getElementById('smp-styles')) return;
@@ -484,480 +610,279 @@
     s.id = 'smp-styles';
     s.textContent = `
       #smp-hud {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 2147483647;
-        width: 280px;
-        font-family: 'Inter', 'Segoe UI', sans-serif;
-        font-size: 13px;
-        user-select: none;
-        border-radius: 14px;
-        overflow: hidden;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);
-        background: rgba(10,10,20,0.92);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        transition: all 0.3s ease;
+        position:fixed;top:20px;right:20px;z-index:2147483647;
+        width:270px;font-family:'Inter','Segoe UI',sans-serif;font-size:13px;
+        user-select:none;border-radius:14px;overflow:hidden;
+        box-shadow:0 8px 32px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.08);
+        background:rgba(7,7,18,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
       }
-      #smp-hud.minimized { width: 180px; }
-      #smp-hud-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        background: rgba(255,255,255,0.04);
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        cursor: move;
+      #smp-hud.mini #smp-body{display:none}
+      #smp-hud.mini{width:160px}
+      #smp-head{
+        display:flex;align-items:center;justify-content:space-between;
+        padding:9px 12px;background:rgba(255,255,255,0.04);
+        border-bottom:1px solid rgba(255,255,255,0.06);cursor:move;
       }
-      #smp-hud-title {
-        font-weight: 700;
-        font-size: 12px;
-        color: #00ff88;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
+      #smp-title{font-weight:700;font-size:11px;color:#00ff88;letter-spacing:.5px;text-transform:uppercase}
+      #smp-ctrl{display:flex;gap:5px}
+      #smp-ctrl button{
+        background:rgba(255,255,255,0.07);border:none;border-radius:4px;
+        color:#666;font-size:11px;cursor:pointer;padding:1px 6px;
       }
-      #smp-hud-controls { display: flex; gap: 6px; }
-      #smp-hud-controls button {
-        background: rgba(255,255,255,0.08);
-        border: none;
-        border-radius: 4px;
-        color: #888;
-        font-size: 11px;
-        cursor: pointer;
-        padding: 2px 6px;
-        transition: all 0.2s;
+      #smp-ctrl button:hover{background:rgba(255,255,255,0.15);color:#fff}
+      #smp-body{padding:12px}
+      #smp-assetrow{
+        display:flex;justify-content:space-between;align-items:center;
+        margin-bottom:8px;font-size:11px;
       }
-      #smp-hud-controls button:hover { background: rgba(255,255,255,0.15); color: #fff; }
-      #smp-hud-body { padding: 14px; }
-      #smp-hud.minimized #smp-hud-body { display: none; }
-      #smp-signal-block {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12px;
+      #smp-asset{color:#fff;font-weight:700;font-size:13px}
+      #smp-tf{color:#444;font-size:10px}
+      #smp-sigblock{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+      #smp-dir{font-size:30px;font-weight:900;line-height:1;letter-spacing:-1px}
+      #smp-dir.call{color:#00ff88;text-shadow:0 0 20px rgba(0,255,136,.4)}
+      #smp-dir.put {color:#ff4466;text-shadow:0 0 20px rgba(255,68,102,.4)}
+      #smp-dir.wait{color:#444;font-size:14px;font-weight:600}
+      #smp-scoreblk{text-align:right}
+      #smp-score{font-size:22px;font-weight:800;color:#fff}
+      #smp-qual{
+        font-size:9px;font-weight:700;letter-spacing:.8px;padding:2px 7px;
+        border-radius:4px;display:inline-block;margin-top:2px;
       }
-      #smp-direction {
-        font-size: 28px;
-        font-weight: 900;
-        line-height: 1;
-        letter-spacing: -1px;
+      .qe{background:rgba(255,215,0,.18);color:#ffd700;border:1px solid rgba(255,215,0,.3)}
+      .qp{background:rgba(180,100,255,.18);color:#c084fc;border:1px solid rgba(180,100,255,.3)}
+      .qf{background:rgba(0,255,136,.12);color:#00ff88;border:1px solid rgba(0,255,136,.25)}
+      .qw{background:rgba(255,165,0,.12);color:#ffa500;border:1px solid rgba(255,165,0,.25)}
+      .qa{background:rgba(100,100,100,.15);color:#555;border:1px solid rgba(100,100,100,.2)}
+      #smp-inds{
+        background:rgba(255,255,255,0.03);border-radius:8px;
+        padding:9px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;
       }
-      #smp-direction.call { color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.5); }
-      #smp-direction.put  { color: #ff4466; text-shadow: 0 0 20px rgba(255,68,102,0.5); }
-      #smp-direction.wait { color: #888; font-size: 16px; }
-      #smp-score-block { text-align: right; }
-      #smp-score {
-        font-size: 22px;
-        font-weight: 800;
-        color: #fff;
+      .si{font-size:10px;display:flex;justify-content:space-between}
+      .sl{color:#444}.sv{color:#aaa;font-weight:600}
+      .sv.bull{color:#00ff88}.sv.bear{color:#ff4466}
+      #smp-reason{font-size:10px;color:#444;line-height:1.4;margin-bottom:8px;border-top:1px solid rgba(255,255,255,.04);padding-top:7px}
+      #smp-status{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#333}
+      #smp-dot{
+        display:inline-block;width:6px;height:6px;border-radius:50%;
+        background:#333;margin-right:4px;vertical-align:middle;
       }
-      #smp-quality {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 1px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        display: inline-block;
-        margin-top: 2px;
-      }
-      .q-elite   { background: rgba(255,215,0,0.2);  color: #ffd700; border: 1px solid rgba(255,215,0,0.4); }
-      .q-premium { background: rgba(180,100,255,0.2); color: #c084fc; border: 1px solid rgba(180,100,255,0.4); }
-      .q-forte   { background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
-      .q-fraco   { background: rgba(255,165,0,0.15); color: #ffa500; border: 1px solid rgba(255,165,0,0.3); }
-      .q-wait    { background: rgba(100,100,100,0.2); color: #888; border: 1px solid rgba(100,100,100,0.3); }
-      #smp-asset-row {
-        font-size: 11px;
-        color: #aaa;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-      }
-      #smp-asset-name { color: #fff; font-weight: 600; font-size: 13px; }
-      #smp-indicators {
-        background: rgba(255,255,255,0.04);
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 10px;
-      }
-      .smp-ind-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 4px;
-        font-size: 11px;
-      }
-      .smp-ind-row:last-child { margin-bottom: 0; }
-      .smp-ind-label { color: #666; }
-      .smp-ind-value { color: #ccc; font-weight: 600; }
-      .smp-ind-value.bull { color: #00ff88; }
-      .smp-ind-value.bear { color: #ff4466; }
-      #smp-reason {
-        font-size: 10px;
-        color: #555;
-        line-height: 1.4;
-        margin-bottom: 10px;
-        border-top: 1px solid rgba(255,255,255,0.04);
-        padding-top: 8px;
-      }
-      #smp-status-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 10px;
-        color: #444;
-      }
-      #smp-ws-dot {
-        display: inline-block;
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        background: #333;
-        margin-right: 4px;
-        vertical-align: middle;
-      }
-      #smp-ws-dot.connected { background: #00ff88; box-shadow: 0 0 6px #00ff88; animation: pulse 2s infinite; }
-      #smp-ws-dot.waiting   { background: #ffa500; animation: pulse 1s infinite; }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
-      }
-      #smp-ticker {
-        display: flex;
-        gap: 4px;
-        flex-wrap: wrap;
-        margin-bottom: 8px;
-      }
-      .smp-pair-chip {
-        font-size: 9px;
-        padding: 2px 5px;
-        border-radius: 3px;
-        background: rgba(255,255,255,0.06);
-        color: #555;
-        cursor: pointer;
-        border: 1px solid transparent;
-        transition: all 0.2s;
-      }
-      .smp-pair-chip.active {
-        background: rgba(0,255,136,0.12);
-        color: #00ff88;
-        border-color: rgba(0,255,136,0.3);
-      }
-      #smp-hud-toggle {
-        position: fixed;
-        right: 20px;
-        top: 20px;
-        z-index: 2147483646;
-        background: rgba(0,255,136,0.9);
-        color: #000;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 14px;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        display: none;
-        box-shadow: 0 4px 12px rgba(0,255,136,0.3);
+      #smp-dot.ok{background:#00ff88;box-shadow:0 0 5px #00ff88;animation:smpPulse 2s infinite}
+      #smp-dot.wait{background:#ffa500;animation:smpPulse 1s infinite}
+      @keyframes smpPulse{0%,100%{opacity:1}50%{opacity:.3}}
+      #smp-reopen{
+        position:fixed;right:16px;top:16px;z-index:2147483646;
+        background:#00ff88;color:#000;border:none;border-radius:8px;
+        padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;
+        box-shadow:0 4px 12px rgba(0,255,136,.4);display:none;
       }
     `;
     document.head.appendChild(s);
   }
 
   function createHUD() {
-    if (document.getElementById('smp-hud')) return;
-
+    if (document.getElementById('smp-hud')) { hudEl = document.getElementById('smp-hud'); return; }
     injectStyles();
 
     hudEl = document.createElement('div');
     hudEl.id = 'smp-hud';
     hudEl.innerHTML = `
-      <div id="smp-hud-header">
-        <span id="smp-hud-title">⚡ SignalMaster Pro</span>
-        <div id="smp-hud-controls">
-          <button id="smp-btn-min" title="Minimizar">_</button>
-          <button id="smp-btn-close" title="Fechar">✕</button>
+      <div id="smp-head">
+        <span id="smp-title">⚡ SignalMaster Pro</span>
+        <div id="smp-ctrl">
+          <button id="smp-min">—</button>
+          <button id="smp-close">✕</button>
         </div>
       </div>
-      <div id="smp-hud-body">
-        <div id="smp-asset-row">
-          <span id="smp-asset-name">—</span>
-          <span id="smp-timeframe">M1 · Ebinex</span>
+      <div id="smp-body">
+        <div id="smp-assetrow">
+          <span id="smp-asset">—</span>
+          <span id="smp-tf">M1 · Ebinex</span>
         </div>
-        <div id="smp-signal-block">
-          <div id="smp-direction" class="wait">AGUARD.</div>
-          <div id="smp-score-block">
+        <div id="smp-sigblock">
+          <div id="smp-dir" class="wait">AGUARD.</div>
+          <div id="smp-scoreblk">
             <div id="smp-score">—</div>
-            <div id="smp-quality" class="q-wait">—</div>
+            <div id="smp-qual" class="qa">—</div>
           </div>
         </div>
-        <div id="smp-indicators">
-          <div class="smp-ind-row">
-            <span class="smp-ind-label">EMA 9/21/50</span>
-            <span class="smp-ind-value" id="smp-ema">—</span>
-          </div>
-          <div class="smp-ind-row">
-            <span class="smp-ind-label">RSI (7)</span>
-            <span class="smp-ind-value" id="smp-rsi">—</span>
-          </div>
-          <div class="smp-ind-row">
-            <span class="smp-ind-label">MACD</span>
-            <span class="smp-ind-value" id="smp-macd">—</span>
-          </div>
-          <div class="smp-ind-row">
-            <span class="smp-ind-label">Bollinger %B</span>
-            <span class="smp-ind-value" id="smp-bb">—</span>
-          </div>
-          <div class="smp-ind-row">
-            <span class="smp-ind-label">Preço atual</span>
-            <span class="smp-ind-value" id="smp-price">—</span>
-          </div>
-          <div class="smp-ind-row">
-            <span class="smp-ind-label">Velas coletadas</span>
-            <span class="smp-ind-value" id="smp-candles">0</span>
-          </div>
+        <div id="smp-inds">
+          <div class="si"><span class="sl">EMA 9/21</span><span class="sv" id="si-ema">—</span></div>
+          <div class="si"><span class="sl">RSI(7)</span><span class="sv" id="si-rsi">—</span></div>
+          <div class="si"><span class="sl">MACD</span><span class="sv" id="si-macd">—</span></div>
+          <div class="si"><span class="sl">BB%</span><span class="sv" id="si-bb">—</span></div>
+          <div class="si"><span class="sl">Preço</span><span class="sv" id="si-price">—</span></div>
+          <div class="si"><span class="sl">Velas</span><span class="sv" id="si-can">0</span></div>
         </div>
-        <div id="smp-reason">Aguardando dados do mercado...</div>
-        <div id="smp-status-row">
-          <span><span id="smp-ws-dot" class="waiting"></span><span id="smp-ws-label">conectando...</span></span>
-          <span id="smp-ts">—</span>
+        <div id="smp-reason">Aguardando dados...</div>
+        <div id="smp-status">
+          <span><span id="smp-dot" class="wait"></span><span id="smp-src">conectando...</span></span>
+          <span id="smp-time">—</span>
         </div>
       </div>
     `;
 
     document.body.appendChild(hudEl);
-    makeDraggable(hudEl, document.getElementById('smp-hud-header'));
+    makeDraggable(hudEl, document.getElementById('smp-head'));
 
-    document.getElementById('smp-btn-min').addEventListener('click', () => {
-      hudEl.classList.toggle('minimized');
-    });
-
-    document.getElementById('smp-btn-close').addEventListener('click', () => {
+    document.getElementById('smp-min').onclick   = () => hudEl.classList.toggle('mini');
+    document.getElementById('smp-close').onclick = () => {
       hudEl.style.display = 'none';
-      const btn = document.getElementById('smp-hud-toggle');
+      const btn = document.getElementById('smp-reopen');
       if (btn) btn.style.display = 'block';
-    });
+    };
 
-    // Botão para reabrir HUD quando fechado
-    const toggleBtn = document.createElement('button');
-    toggleBtn.id = 'smp-hud-toggle';
-    toggleBtn.textContent = '⚡ SMP';
-    toggleBtn.addEventListener('click', () => {
-      hudEl.style.display = 'block';
-      toggleBtn.style.display = 'none';
-    });
-    document.body.appendChild(toggleBtn);
+    const reopen = document.createElement('button');
+    reopen.id = 'smp-reopen';
+    reopen.textContent = '⚡ SMP';
+    reopen.onclick = () => { hudEl.style.display = 'block'; reopen.style.display = 'none'; };
+    document.body.appendChild(reopen);
   }
 
   function updateHUD() {
-    if (!hudEl) {
-      if (document.body) createHUD();
-      else { setTimeout(updateHUD, 500); return; }
-    }
-
+    if (!hudEl) return;
     const sig = STATE.lastSignal;
     const asset = STATE.currentAsset;
 
-    // Asset name
-    const assetEl = document.getElementById('smp-asset-name');
-    if (assetEl) assetEl.textContent = asset || '—';
+    const el = (id) => document.getElementById(id);
+
+    if (el('smp-asset')) el('smp-asset').textContent = asset || '—';
 
     if (!sig) return;
 
     // Direction
-    const dirEl = document.getElementById('smp-direction');
+    const dirEl = el('smp-dir');
     if (dirEl) {
       dirEl.textContent = sig.dir || 'AGUARD.';
       dirEl.className = sig.dir === 'CALL' ? 'call' : sig.dir === 'PUT' ? 'put' : 'wait';
     }
 
-    // Score
-    const scoreEl = document.getElementById('smp-score');
-    if (scoreEl) scoreEl.textContent = sig.dir ? sig.score + '%' : '—';
+    if (el('smp-score')) el('smp-score').textContent = sig.dir ? sig.score + '%' : '—';
 
-    // Quality badge
-    const qualEl = document.getElementById('smp-quality');
-    if (qualEl) {
-      qualEl.textContent = sig.quality || '—';
-      const qc = sig.quality?.toLowerCase();
-      qualEl.className = `q-${qc || 'wait'}`;
+    const qEl = el('smp-qual');
+    if (qEl) {
+      qEl.textContent = sig.quality || '—';
+      const qm = { ELITE:'qe', PREMIUM:'qp', FORTE:'qf', FRACO:'qw', AGUARDANDO:'qa' };
+      qEl.className = qm[sig.quality] || 'qa';
     }
 
-    // Indicators
     const ind = sig.indicators || {};
-    const emaEl = document.getElementById('smp-ema');
+
+    const emaEl = el('si-ema');
     if (emaEl) {
-      const e9  = parseFloat(ind.ema9)  || 0;
-      const e21 = parseFloat(ind.ema21) || 0;
-      const e50 = parseFloat(ind.ema50) || 0;
+      const e9 = parseFloat(ind.ema9), e21 = parseFloat(ind.ema21);
       if (e9 && e21) {
-        emaEl.textContent = e9 > e21 ? '▲ bullish' : '▼ bearish';
-        emaEl.className = 'smp-ind-value ' + (e9 > e21 ? 'bull' : 'bear');
-      } else {
-        emaEl.textContent = '—';
-        emaEl.className = 'smp-ind-value';
+        emaEl.textContent = e9 > e21 ? '▲ bull' : '▼ bear';
+        emaEl.className = 'sv ' + (e9 > e21 ? 'bull' : 'bear');
       }
     }
 
-    const rsiEl = document.getElementById('smp-rsi');
+    const rsiEl = el('si-rsi');
     if (rsiEl) {
       const r = parseFloat(ind.rsi);
       rsiEl.textContent = ind.rsi || '—';
-      rsiEl.className = 'smp-ind-value ' + (!isNaN(r) ? (r < 40 ? 'bull' : r > 60 ? 'bear' : '') : '');
+      rsiEl.className = 'sv' + (!isNaN(r) ? (r < 40 ? ' bull' : r > 60 ? ' bear' : '') : '');
     }
 
-    const macdEl = document.getElementById('smp-macd');
+    const macdEl = el('si-macd');
     if (macdEl) {
       macdEl.textContent = ind.macd || '—';
-      macdEl.className = 'smp-ind-value ' + (ind.macd === '▲' ? 'bull' : ind.macd === '▼' ? 'bear' : '');
+      macdEl.className = 'sv' + (ind.macd === '▲' ? ' bull' : ind.macd === '▼' ? ' bear' : '');
     }
 
-    const bbEl = document.getElementById('smp-bb');
+    const bbEl = el('si-bb');
     if (bbEl) {
       const b = parseFloat(ind.bb);
       bbEl.textContent = ind.bb || '—';
-      bbEl.className = 'smp-ind-value ' + (!isNaN(b) ? (b < 20 ? 'bull' : b > 80 ? 'bear' : '') : '');
+      bbEl.className = 'sv' + (!isNaN(b) ? (b < 20 ? ' bull' : b > 80 ? ' bear' : '') : '');
     }
 
-    const priceEl = document.getElementById('smp-price');
-    if (priceEl) priceEl.textContent = ind.price || '—';
+    if (el('si-price'))  el('si-price').textContent  = ind.price || '—';
+    if (el('si-can'))    el('si-can').textContent     = ind.candles || 0;
+    if (el('smp-reason')) el('smp-reason').textContent = sig.reason || '—';
 
-    const candlesEl = document.getElementById('smp-candles');
-    if (candlesEl) candlesEl.textContent = ind.candles || 0;
-
-    // Reason
-    const reasonEl = document.getElementById('smp-reason');
-    if (reasonEl) reasonEl.textContent = sig.reason || '—';
-
-    // WS status
-    const dot = document.getElementById('smp-ws-dot');
-    const label = document.getElementById('smp-ws-label');
-    if (dot && label) {
-      if (STATE.wsConnected && STATE.tickCount > 0) {
-        dot.className = 'connected';
-        label.textContent = STATE.dataSource;
-      } else {
-        dot.className = 'waiting';
-        label.textContent = 'aguardando dados...';
-      }
+    // Status
+    const dot = el('smp-dot');
+    const src = el('smp-src');
+    if (dot && src) {
+      const hasData = STATE.tickCount > 0 || (STATE.candles[asset || '']?.length || 0) > 0;
+      dot.className = hasData ? 'ok' : 'wait';
+      src.textContent = STATE.dataSource;
     }
 
-    // Timestamp
-    const tsEl = document.getElementById('smp-ts');
-    if (tsEl) {
-      const d = new Date(sig.ts);
-      tsEl.textContent = d.toLocaleTimeString('pt-BR');
+    if (el('smp-time') && sig.ts) {
+      el('smp-time').textContent = new Date(sig.ts).toLocaleTimeString('pt-BR');
     }
   }
 
   // ─────────────────────────────────────────────
-  // 8. DRAG & DROP DO HUD
+  // 10. DRAG & DROP
   // ─────────────────────────────────────────────
   function makeDraggable(el, handle) {
-    let ox = 0, oy = 0, x = 0, y = 0;
-
+    let ox = 0, oy = 0;
     handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       ox = e.clientX - el.offsetLeft;
       oy = e.clientY - el.offsetTop;
-
+      const onMove = (e) => {
+        el.style.left  = Math.max(0, Math.min(window.innerWidth  - el.offsetWidth,  e.clientX - ox)) + 'px';
+        el.style.top   = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, e.clientY - oy)) + 'px';
+        el.style.right = 'auto';
+      };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
       document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
+      document.addEventListener('mouseup',  onUp);
     });
-
-    function onMove(e) {
-      x = e.clientX - ox;
-      y = e.clientY - oy;
-      x = Math.max(0, Math.min(window.innerWidth - el.offsetWidth, x));
-      y = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, y));
-      el.style.left  = x + 'px';
-      el.style.top   = y + 'px';
-      el.style.right = 'auto';
-    }
-
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
   }
 
   // ─────────────────────────────────────────────
-  // 9. POLLING DOM — fallback quando sem WebSocket
-  // ─────────────────────────────────────────────
-  let lastDomPrice = null;
-  let domPollCount = 0;
-
-  function pollDOM() {
-    detectCurrentAsset();
-
-    // Tenta ler preço do DOM da Ebinex
-    const priceSelectors = [
-      '.chart-price', '.current-price', '.price-value', '[class*="price"]',
-      '[class*="rate"]', '[class*="quote"]', '[data-price]',
-      '.asset-rate', '.bid-price', '.ask-price',
-    ];
-
-    let found = null;
-    for (const sel of priceSelectors) {
-      try {
-        const els = document.querySelectorAll(sel);
-        for (const el of els) {
-          const text = el.textContent.replace(/[^0-9.]/g, '');
-          const val  = parseFloat(text);
-          if (val > 0.0001) { found = val; break; }
-        }
-      } catch {}
-      if (found) break;
-    }
-
-    if (found && found !== lastDomPrice) {
-      lastDomPrice = found;
-      const asset   = STATE.currentAsset || 'UNKNOWN';
-      feedTick(asset, found, Date.now());
-      STATE.dataSource = 'DOM (fallback)';
-      domPollCount++;
-    }
-  }
-
-  // ─────────────────────────────────────────────
-  // 10. INIT
+  // 11. INIT
   // ─────────────────────────────────────────────
   function init() {
-    // Cria HUD assim que o body existir
-    if (document.body) {
-      createHUD();
-    } else {
-      const observer = new MutationObserver(() => {
-        if (document.body) {
-          observer.disconnect();
-          createHUD();
-        }
-      });
-      observer.observe(document.documentElement, { childList: true });
-    }
+    const waitForBody = () => {
+      if (document.body) {
+        createHUD();
+      } else {
+        setTimeout(waitForBody, 100);
+      }
+    };
+    waitForBody();
 
-    // Polling DOM a cada 500ms como fallback
+    // Polling DOM a cada 500ms
     setInterval(pollDOM, 500);
 
-    // Recalcula sinal a cada 5s mesmo sem novos ticks
+    // Recalcula sinal a cada 10s
     setInterval(() => {
       detectCurrentAsset();
-      const asset = STATE.currentAsset;
-      if (asset && STATE.candles[asset]?.length >= MIN_CANDLES) {
-        recalcSignal(asset);
-      } else {
-        updateHUD();
-      }
+      const a = STATE.currentAsset;
+      if (a && (STATE.candles[a]?.length || 0) >= MIN_CANDLES) recalcSignal(a);
+      else updateHUD();
+    }, 10_000);
+
+    // Log de diagnóstico a cada 5s (apenas no início)
+    let diagnosticCount = 0;
+    const diagInterval = setInterval(() => {
+      diagnosticCount++;
+      console.log(`[SMP] Diagnóstico #${diagnosticCount}:`, {
+        currentAsset: STATE.currentAsset,
+        tickCount: STATE.tickCount,
+        wsMessages: STATE.wsMessageCount,
+        candles: Object.fromEntries(Object.entries(STATE.candles).map(([k,v]) => [k, v.length])),
+        ticks: Object.fromEntries(Object.entries(STATE.ticks).map(([k,v]) => [k, v.length])),
+        dataSource: STATE.dataSource,
+      });
+      if (diagnosticCount >= 6) clearInterval(diagInterval);
     }, 5000);
 
-    console.log('[SMP] SignalMaster Pro Extension iniciado ✓');
+    console.log('[SMP] SignalMaster Pro v1.1 iniciado ✓ (TradingView + Ebinex)');
   }
 
-  // Aguarda document_start
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
 
-  // Expõe estado para debug (remover em produção)
+  // Debug global
   window.__SMP__ = STATE;
 
 })();
