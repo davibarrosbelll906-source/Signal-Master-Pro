@@ -714,49 +714,66 @@ export function runEngine(m1: Candle[], asset: string, pairWR?: number, lunaMode
   const mins = new Date().getMinutes();
   let blockedBy: string | null = null;
 
-  if (mins === 59 || mins === 0)
+  // ── Gates calibrados para gerar sinais ──────────────────────────────────
+  // Princípio: poucos filtros duros, score reflete o risco adequadamente.
+  // Apenas situações de mercado genuinamente inoperante bloqueiam hard.
+
+  if (mins === 59 || mins === 0) {
     blockedBy = 'Horário morto (min :00 ou :59)';
-  else if (!srBounce.nearSupport && !srBounce.nearResistance)
-    blockedBy = 'Fora de zona S/R — aguardando toque';
-  // Sem padrão de vela → não bloqueia, já penaliza o score (candleScore=0 → -28% no raw)
-  // ── HTF gate (M5+M15 confirmação obrigatória) ────────────────────────────
-  else if (direction === 'PUT' && htfStrongBull && !htfException)
-    blockedBy = 'HTF Alta (M5+M15 bullish) — PUT bloqueado contra tendência superior';
-  else if (direction === 'CALL' && htfStrongBear && !htfException)
-    blockedBy = 'HTF Baixa (M5+M15 bearish) — CALL bloqueado contra tendência superior';
-  // ── EMA50 gate (verificado ANTES do stack perfeito) ──────────────────────
-  else if (direction === 'PUT' && ema50BullTrend && !htfException)
-    blockedBy = `EMA50 Trend Alta — PUT bloqueado (preço ${lastClose > lastEma50 ? 'acima' : ''} EMA50, EMA21>EMA50)`;
-  else if (direction === 'CALL' && ema50BearTrend && !htfException)
-    blockedBy = `EMA50 Trend Baixa — CALL bloqueado (preço ${lastClose < lastEma50 ? 'abaixo' : ''} EMA50, EMA21<EMA50)`;
-  // ── Stack perfeito (ema9/21/50 totalmente alinhadas) ─────────────────────
-  else if (direction === 'CALL' && emaBear)
-    blockedBy = 'EMA Bear Stack — contra tendência de baixa';
-  else if (direction === 'PUT' && emaBull)
-    blockedBy = 'EMA Bull Stack — contra tendência de alta';
-  else if (adx < 10)
-    blockedBy = `ADX ${Math.round(adx)} < 10 — mercado completamente sem força`;
-  else if (atrPct < 0.0001)
-    blockedBy = 'Mercado congelado — ATR < 1 bp';
-  else if (atrPct > 0.025)
-    blockedBy = `Mercado caótico — ATR ${Math.round(atrPct * 10000)} bps`;
-  else if (direction === 'CALL' && rsi > 75)
-    blockedBy = `RSI ${Math.round(rsi)} sobrecomprado — CALL bloqueado`;
-  else if (direction === 'PUT' && rsi < 25)
-    blockedBy = `RSI ${Math.round(rsi)} sobrevendido — PUT bloqueado`;
-  // FIX-3: Entropia — só bloqueia acima de 96% (crypto M1 tem 90%+ estruturalmente)
-  else if (entropy > 0.96)
-    blockedBy = `Entropia ${Math.round(entropy * 100)}% — mercado completamente aleatório`;
-  // CHOPPY: penalidade já embutida no score (sem TRENDING +4%, sem ADX bônus, MACD desalinhado)
-  // Hard block removido — score reflete o risco adequadamente
-  else if (quality === 'EVITAR')
-    blockedBy = `Score ${score}% — zona fraca (${zoneStrength} toques) ou candle fraco (${candle.pattern})`;
-  else if (lunaMode && zoneStrength < 3)
+  }
+  // ATR extremo (mercado congelado ou explosivo) — hard block
+  else if (atrPct < 0.00005) {
+    blockedBy = 'Mercado congelado — ATR < 0.5 bp';
+  }
+  else if (atrPct > 0.04) {
+    blockedBy = `Mercado explosivo — ATR ${Math.round(atrPct * 10000)} bps`;
+  }
+  // Entropia — só bloqueia se score também for fraco (score alto + entropia alta = sinal válido)
+  else if (entropy > 0.98 && score < 70) {
+    blockedBy = `Entropia ${Math.round(entropy * 100)}% + score fraco — mercado aleatório`;
+  }
+  // EMA50 gate suavizado: bloqueia apenas se score < 72% (sinal fraco contra tendência forte)
+  else if (direction === 'PUT' && ema50BullTrend && !htfException && score < 72) {
+    blockedBy = `EMA50 Alta + score ${score}% — aguardando pullback`;
+  }
+  else if (direction === 'CALL' && ema50BearTrend && !htfException && score < 72) {
+    blockedBy = `EMA50 Baixa + score ${score}% — aguardando pullback`;
+  }
+  // EMA stack perfeito contra a direção — só bloqueia score fraco
+  else if (direction === 'CALL' && emaBear && score < 68) {
+    blockedBy = 'EMA Bear Stack + score fraco — contra tendência de baixa';
+  }
+  else if (direction === 'PUT' && emaBull && score < 68) {
+    blockedBy = 'EMA Bull Stack + score fraco — contra tendência de alta';
+  }
+  // HTF gate: só bloqueia se AMBOS M5+M15 estão fortemente contra E score < 70%
+  else if (direction === 'PUT' && htfStrongBull && !htfException && score < 70) {
+    blockedBy = 'HTF Alta (M5+M15 bullish) + score fraco — aguardando reversão';
+  }
+  else if (direction === 'CALL' && htfStrongBear && !htfException && score < 70) {
+    blockedBy = 'HTF Baixa (M5+M15 bearish) + score fraco — aguardando reversão';
+  }
+  // RSI extremo só bloqueia quando vai totalmente contra
+  else if (direction === 'CALL' && rsi > 82) {
+    blockedBy = `RSI ${Math.round(rsi)} extremamente sobrecomprado — CALL bloqueado`;
+  }
+  else if (direction === 'PUT' && rsi < 18) {
+    blockedBy = `RSI ${Math.round(rsi)} extremamente sobrevendido — PUT bloqueado`;
+  }
+  // Score mínimo: EVITAR (< 50%) não passa nunca
+  else if (quality === 'EVITAR') {
+    blockedBy = `Score ${score}% insuficiente — aguardando convergência`;
+  }
+  // Luna Mode — exige zona forte + wick de rejeição
+  else if (lunaMode && zoneStrength < 3) {
     blockedBy = `Luna Mode: zona com ${zoneStrength} toques (mínimo 3)`;
-  else if (lunaMode && direction === 'CALL' && !srBounce.rejectionLong)
+  }
+  else if (lunaMode && direction === 'CALL' && !srBounce.rejectionLong) {
     blockedBy = 'Luna Mode: sem wick de rejeição bullish';
-  else if (lunaMode && direction === 'PUT' && !srBounce.rejectionShort)
+  }
+  else if (lunaMode && direction === 'PUT' && !srBounce.rejectionShort) {
     blockedBy = 'Luna Mode: sem wick de rejeição bearish';
+  }
 
   return {
     direction, score, quality, marketRegime,

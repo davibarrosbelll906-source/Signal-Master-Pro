@@ -56,7 +56,7 @@ export function getLatestSignals() {
 
 function shouldThrottle(asset: string): boolean {
   const last = lastSignalTime.get(asset) || 0;
-  return Date.now() - last < 240_000; // 4 minutes
+  return Date.now() - last < 120_000; // 2 minutos
 }
 
 /**
