@@ -1046,6 +1046,20 @@ a{color:inherit}
                   <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="flex:1;padding:6px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#aaa;font-size:11px;cursor:pointer;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center">🔗 Abrir Console</a>
                 </div>
               </div>
+              <!-- URLs needed in Google Console — shown dynamically -->
+              <div style="background:rgba(66,133,244,0.07);border:1px solid rgba(66,133,244,0.2);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:10px">
+                <div style="color:#4285f4;font-weight:600;margin-bottom:4px">⚙️ Adicione estas URLs no Google Cloud Console:</div>
+                <div style="color:#aaa;margin-bottom:3px">Origens JavaScript autorizadas:</div>
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+                  <code id="google-origin-url" style="flex:1;background:rgba(0,0,0,0.3);padding:3px 6px;border-radius:4px;color:#e0e0e0;word-break:break-all;font-size:10px"></code>
+                  <button onclick="copyGoogleUrl('google-origin-url')" style="background:rgba(66,133,244,0.2);border:none;border-radius:4px;color:#4285f4;cursor:pointer;padding:3px 6px;font-size:10px;white-space:nowrap">📋 Copiar</button>
+                </div>
+                <div style="color:#aaa;margin-bottom:3px">URIs de redirecionamento autorizados:</div>
+                <div style="display:flex;align-items:center;gap:4px">
+                  <code id="google-redirect-url" style="flex:1;background:rgba(0,0,0,0.3);padding:3px 6px;border-radius:4px;color:#e0e0e0;word-break:break-all;font-size:10px"></code>
+                  <button onclick="copyGoogleUrl('google-redirect-url')" style="background:rgba(66,133,244,0.2);border:none;border-radius:4px;color:#4285f4;cursor:pointer;padding:3px 6px;font-size:10px;white-space:nowrap">📋 Copiar</button>
+                </div>
+              </div>
               <button class="conn-oauth-btn" id="btn-google-oauth" onclick="connectGoogle()">
                 <img src="https://www.google.com/favicon.ico" width="14" height="14" alt=""/> Conectar com Google
               </button>
@@ -1604,7 +1618,7 @@ function showPage(page){
   if(page==='proj')renderProjects();
   if(page==='eco')updateEcoPage();
   if(page==='mgr')initMgr();
-  if(page==='conn'){loadConnKeys();checkAllConns();}
+  if(page==='conn'){loadConnKeys();checkAllConns();initGoogleUrls();}
 }
 function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('open');
@@ -2674,6 +2688,23 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
   'profile email',
 ].join(' ');
+
+function initGoogleUrls(){
+  const origin=window.location.origin;
+  const redirect=origin+window.location.pathname;
+  const oEl=document.getElementById('google-origin-url');
+  const rEl=document.getElementById('google-redirect-url');
+  if(oEl)oEl.textContent=origin;
+  if(rEl)rEl.textContent=redirect;
+}
+
+function copyGoogleUrl(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  navigator.clipboard.writeText(el.textContent).then(()=>toast('URL copiada!','ok')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=el.textContent;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('URL copiada!','ok');
+  });
+}
 
 function saveGoogleId(){
   const input=document.getElementById('k-google-client');
