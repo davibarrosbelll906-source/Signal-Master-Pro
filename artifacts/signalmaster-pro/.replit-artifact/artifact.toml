@@ -1,31 +1,28 @@
 kind = "web"
-previewPath = "/"
-title = "SignalMaster Pro v7"
-version = "1.0.0"
-id = "artifacts/signalmaster-pro"
-router = "path"
+  previewPath = "/"
+  title = "SignalMaster Pro v7"
+  version = "1.0.0"
+  id = "artifacts/signalmaster-pro"
+  router = "path"
 
-[[integratedSkills]]
-name = "react-vite"
-version = "1.0.0"
+  [[integratedSkills]]
+  name = "react-vite"
+  version = "1.0.0"
 
-[[services]]
-name = "web"
-paths = [ "/" ]
-localPort = 18264
+  [[services]]
+  name = "web"
+  paths = [ "/" ]
+  localPort = 18264
 
-[services.development]
-run = "pnpm --filter @workspace/signalmaster-pro run dev"
+  [services.development]
+  run = "pnpm --filter @workspace/signalmaster-pro run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/signalmaster-pro", "run", "build" ]
-publicDir = "artifacts/signalmaster-pro/dist/public"
-serve = "static"
+  [services.production]
+  build = [ "pnpm", "--filter", "@workspace/signalmaster-pro", "run", "build" ]
+  publicDir = "artifacts/signalmaster-pro/dist/public"
+  serve = "static"
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
-
-[services.env]
-PORT = "18264"
-BASE_PATH = "/"
+  [services.env]
+  PORT = "18264"
+  BASE_PATH = "/"
+  
