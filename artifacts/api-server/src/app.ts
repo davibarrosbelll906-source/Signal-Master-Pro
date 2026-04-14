@@ -127,6 +127,28 @@ if (existsSync(aiChatDist)) {
   });
 }
 
+// ── Servir AI Nexus Studio em /ai-nexus-studio/ ───────────────────────────
+// Needs permissive CSP: pure client-side app with inline scripts + CDN libs
+const aiNexusDist = path.resolve(process.cwd(), "../ai-nexus-studio/build");
+if (existsSync(aiNexusDist)) {
+  logger.info({ aiNexusDist }, "Servindo AI Nexus Studio em /ai-nexus-studio/");
+  // Remove Helmet's CSP for this path — AI Nexus uses inline scripts + CDN
+  app.use("/ai-nexus-studio", (_req: Request, res: Response, next: NextFunction) => {
+    res.removeHeader("Content-Security-Policy");
+    res.removeHeader("X-Content-Security-Policy");
+    next();
+  });
+  app.use("/ai-nexus-studio", express.static(aiNexusDist, { maxAge: "0" }));
+  app.get("/ai-nexus-studio", (_req: Request, res: Response) => {
+    res.removeHeader("Content-Security-Policy");
+    res.sendFile(path.join(aiNexusDist, "index.html"));
+  });
+  app.get("/ai-nexus-studio/{*path}", (_req: Request, res: Response) => {
+    res.removeHeader("Content-Security-Policy");
+    res.sendFile(path.join(aiNexusDist, "index.html"));
+  });
+}
+
 // ── Servir SignalMaster Pro na raiz ───────────────────────────────────────
 const frontendDist = process.env["FRONTEND_DIST"] ||
   path.resolve(process.cwd(), "../signalmaster-pro/dist/public");
