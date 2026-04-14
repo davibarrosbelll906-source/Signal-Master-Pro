@@ -1,0 +1,865 @@
+# 🤖 PROMPT COMPLETO — AI NEXUS STUDIO (para Replit / qualquer IA)
+
+---
+
+## INSTRUÇÃO PRINCIPAL
+
+Crie um aplicativo web completo chamado **AI Nexus Studio** em um único arquivo HTML autocontido (`index.html`). Não use frameworks, não use React, não use Node.js. Tudo em **HTML5 + CSS3 + JavaScript ES6 puro**, sem dependências externas além das listadas abaixo.
+
+---
+
+## DEPENDÊNCIAS EXTERNAS (via CDN)
+
+```html
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+```
+
+---
+
+## DESIGN SYSTEM
+
+### Tema Dark (padrão)
+```css
+--bg: #07090f
+--bg2: #0c0f1a
+--bg3: #111520
+--bg4: #181d2e
+--border: #1a2035
+--border2: #252f47
+--text: #e8edf5
+--muted: #4a5568
+--dim: #2a3348
+--purple: #7c3aed
+--blue: #3b82f6
+--green: #10b981
+--amber: #f59e0b
+--pink: #ec4899
+--teal: #14b8a6
+--red: #ef4444
+```
+
+### Tema Light (toggle)
+```css
+--bg: #f0f2f7
+--bg2: #ffffff
+--bg3: #f8f9fc
+--text: #1a1f36
+--muted: #7a849e
+```
+
+### Fontes
+- Interface: `Inter` (400, 500, 600, 700)
+- Código/monospace: `JetBrains Mono` (400, 500)
+- Tamanho base: `13px`
+
+### Estilo geral
+- Dark mode por padrão
+- Glassmorphism sutil nos cards
+- Gradientes roxo→azul nos elementos primários
+- Scrollbar personalizada (5px, arredondada)
+- Bordas arredondadas: `8px` botões, `10-12px` cards, `14px` modais
+- Transições: `0.15s` nos hovers
+- Box shadows em modais: `0 8px 32px rgba(0,0,0,.5)`
+
+---
+
+## LAYOUT GERAL
+
+```
+┌─────────────┬────────────────────────────────────┐
+│  SIDEBAR    │         MAIN CONTENT               │
+│  200px      │   (flex:1, overflow:hidden)        │
+│             │                                    │
+│  Logo       │  Page Header (pg-hdr)              │
+│  Nav Items  │  ─────────────────────────────     │
+│             │  Page Content (flex:1, scroll)     │
+│             │                                    │
+│  Footer     │                                    │
+└─────────────┴────────────────────────────────────┘
+```
+
+**No mobile (≤768px):** Sidebar vira drawer lateral, adiciona top bar fixo e bottom navigation.
+
+---
+
+## PÁGINAS (navegação por CSS show/hide)
+
+Cada página tem `id="page-[nome]"` e classe `page`. Apenas a ativa tem classe `active`.
+
+### 1. 💬 Chat IA (`page-chat`)
+### 2. 🖼️ Imagens (`page-img`)
+### 3. 🎬 Vídeos (`page-vid`)
+### 4. 🎙️ Narração (`page-voice`)
+### 5. 📈 Sinais (`page-sinais`)
+### 6. 🔧 Código (`page-cod`)
+### 7. 💰 Economia (`page-eco`)
+### 8. ⚙️ Config (`page-cfg`)
+### 9. 🧑‍💼 Gerente (`page-mgr`)
+### 10. 🤖 Agentes (`page-agentes`)
+### 11. 📚 Biblioteca (`page-lib`)
+### 12. 💾 Projetos (`page-proj`)
+
+---
+
+## PÁGINA 1: CHAT IA (principal)
+
+### Estrutura do Chat
+```
+[Chat Tabs — abas de conversa]
+[Page Header — título + botões de ação]
+[Persona Row — botões de personas]
+[Advanced Panel — temperatura, max tokens, system prompt, think mode]
+[Chat Messages — área scrollável]
+[Image Preview Strip — thumbnails de imagens]
+[Doc Preview — chips de documentos]
+[Search Indicator — "🔍 Pesquisando..."]
+[Eco Mode Bar — indicador de modelo]
+[Agent Panel — modo agente com passos]
+[Chat Input Area]
+  ├── [Tools Row: 📷 📄 🎤 🔊 🧠 ⭐ 🌐]
+  └── [Textarea + Botão Enviar]
+[Token Bar — tokens, custo, msgs]
+```
+
+### Modelos disponíveis no select
+```javascript
+// Claude (Anthropic) — SSE streaming
+"claude-opus-4-6"         // 🏆 mais poderoso
+"claude-sonnet-4-6"       // ⭐ recomendado  
+"claude-haiku-4-5-20251001" // 💰 mais barato
+
+// OpenAI — SSE streaming
+"gpt-4o"
+"gpt-4o-mini"
+"gpt-3.5-turbo"
+
+// OpenRouter — non-streaming (stream:false) + typing animation
+"meta-llama/llama-4-maverick:free"
+"google/gemma-3-27b-it:free"
+"deepseek/deepseek-r1:free"
+"microsoft/phi-4-reasoning:free"
+"mistralai/mistral-7b-instruct:free"
+
+// Groq — SSE streaming
+"groq:llama-3.3-70b-versatile"
+"groq:llama-3.1-8b-instant"
+"groq:mixtral-8x7b-32768"
+
+// Gemini (Google) — SSE streaming
+"gemini:gemini-2.0-flash"
+"gemini:gemini-1.5-pro"
+```
+
+### Implementação das APIs
+
+#### Claude (Anthropic) — SSE Streaming
+```javascript
+fetch('https://api.anthropic.com/v1/messages', {
+  method: 'POST',
+  headers: {
+    'x-api-key': KEY,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+    'content-type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: modelName,
+    max_tokens: maxTokens,
+    stream: true,
+    system: systemPrompt,
+    messages: history
+  })
+})
+// Parse SSE: event:content_block_delta → delta.text
+```
+
+#### OpenAI — SSE Streaming
+```javascript
+fetch('https://api.openai.com/v1/chat/completions', {
+  headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ model, stream: true, messages })
+})
+// Parse SSE: data: {"choices":[{"delta":{"content":"..."}}]}
+```
+
+#### OpenRouter — NON-STREAMING (modelos free não suportam SSE)
+```javascript
+fetch('https://openrouter.ai/api/v1/chat/completions', {
+  headers: {
+    'Authorization': `Bearer ${KEY}`,
+    'HTTP-Referer': 'https://ainexus.app',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ model, stream: false, messages })
+})
+// Simular digitação progressiva: 12 chars a cada 18ms
+```
+
+#### Groq — SSE Streaming
+```javascript
+fetch('https://api.groq.com/openai/v1/chat/completions', {
+  headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ model: modelSemPrefix, stream: true, messages })
+})
+```
+
+#### Gemini (Google) — SSE Streaming
+```javascript
+fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${KEY}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ contents: messages.map(m => ({ role: m.role==='assistant'?'model':m.role, parts:[{text:m.content}] })) })
+})
+// Parse SSE: candidates[0].content.parts[0].text
+```
+
+### Badges dos modelos (no chat)
+```javascript
+// Claude  → badge roxo "CLAUDE"
+// GPT     → badge verde "GPT"  
+// Llama/Gemma/DeepSeek/Phi/Mistral → badge âmbar com nome do modelo
+// Groq    → badge rosa "GROQ"
+// Gemini  → badge azul "GEMINI"
+```
+
+### Personas (barra horizontal acima do chat)
+```javascript
+const PERSONAS = {
+  default:   { emoji:'🤖', nome:'Assistente',    prompt:'' },
+  dev:       { emoji:'👨‍💻', nome:'Dev Expert',    prompt:'Você é um engenheiro de software sênior...' },
+  trader:    { emoji:'📈', nome:'Trader IA',      prompt:'Você é um analista de mercado financeiro...' },
+  copywrite: { emoji:'✍️', nome:'Copywriter',     prompt:'Você é um copywriter especialista...' },
+  coach:     { emoji:'🎯', nome:'Life Coach',     prompt:'Você é um coach motivacional...' },
+  creative:  { emoji:'🎨', nome:'Criativo',       prompt:'Você é um artista criativo...' },
+}
+```
+
+### Chat Tabs (múltiplas conversas)
+- Abas na parte superior do chat
+- Botão "+" para nova aba
+- Botão "×" para fechar aba
+- Cada aba tem `chatHistory` próprio
+- Máximo 8 abas
+
+### Painel Avançado (toggle)
+Campos: temperatura (slider 0-1), max tokens (select), system prompt (textarea), thinking mode (toggle on/off)
+
+### Funcionalidades do Chat
+1. **Upload de imagem** (📷) — vision, aceita múltiplas imagens, converte para base64
+2. **Upload de documento** (📄) — PDF (via PDF.js), TXT, MD, CSV — extrai texto e injeta no contexto
+3. **Microfone** (🎤) — Web Speech API, transcrição em tempo real
+4. **TTS** (🔊) — leitura automática das respostas (toggle). Prioridade: ElevenLabs → Web Speech API
+5. **Memória** (🧠) — modal para adicionar/remover fatos persistentes (localStorage)
+6. **Favoritos** (⭐) — salva prompts favoritos, dropdown com lista
+7. **Busca Web** (🌐) — toggle "sempre buscar" (azul = ativo), atalho Ctrl+W
+8. **Drag & Drop** — arrastar imagens direto na janela do chat
+
+### Busca Web em Tempo Real (v2.0)
+```javascript
+// Hierarquia de fontes (tenta na ordem):
+// 1. Serper.dev (Google real-time) — 2500/mês grátis
+// 2. Brave Search — 2000/mês grátis
+// 3. DuckDuckGo Instant Answers — sem key, sempre grátis
+// 4. Wikipedia — fallback final
+
+// Toggle "sempre buscar":
+let webSearchAlways = localStorage.getItem('web_search_always') === '1';
+// Botão 🌐 na toolbar → toggleWebSearch()
+
+// Auto-detecção por palavras-chave:
+const triggers = [
+  /\b(hoje|agora|atual|recente|últim[ao]|notícia|news|novidade|lançamento)\b/i,
+  /\b(202[4-9]|203\d)\b/,
+  /\b(preço|cotação|valor|quanto|bolsa|crypto|bitcoin|btc|dólar)\b/i,
+  /\b(clima|temperatura|previsão do tempo)\b/i,
+  /\b(gpt-[4-9]|claude [3-9]|gemini|llama|deepseek|openai|anthropic)\b/i,
+  // ... etc
+];
+
+// Serper.dev API:
+fetch('https://google.serper.dev/search', {
+  method: 'POST',
+  headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ q: query, num: 6, hl: 'pt', gl: 'br' })
+})
+// Retorna: answerBox, knowledgeGraph, news, organic results
+
+// DuckDuckGo (sem key):
+fetch(`https://api.duckduckgo.com/?q=${query}&format=json&no_html=1&skip_disambig=1`)
+```
+
+### Modo Agente (sequential tasks)
+```javascript
+// Parse: "1. Pesquise X\n2. Analise Y\n3. Escreva Z"
+// Cada passo:
+//   1. Faz busca web se necessário (doWebSearch)
+//   2. Injeta contexto do passo anterior
+//   3. Chama LLM com modelo mais barato (exceto último passo)
+//   4. Acumula contexto para próximo passo
+// Máximo 5 passos por execução
+```
+
+### Modo Econômico (Eco Mode)
+```javascript
+// classifyComplexity(text) → 'cheap' | 'mid' | 'heavy'
+// cheap → Groq 8B | Gemini Flash | Claude Haiku
+// mid   → Groq 70B | Gemini Flash | Claude Haiku  
+// heavy → modelo selecionado pelo usuário
+
+// Roteamento automático quando ecoModeActive === true
+```
+
+### Token Counter (barra inferior do chat)
+- Tokens usados na sessão (estimativa: chars/4)
+- Custo estimado em USD
+- Número de mensagens
+- Preview do custo da próxima mensagem
+
+---
+
+## PÁGINA 2: IMAGENS
+
+### Modelos
+```javascript
+// Pollinations AI (totalmente grátis, sem key)
+"pol:flux"          // Flux ⭐ recomendado
+"pol:flux-realism"  // Flux Realismo
+"pol:flux-anime"    // Flux Anime
+"pol:flux-3d"       // Flux 3D
+"pol:turbo"         // Turbo (mais rápido)
+
+// HuggingFace (key gratuita)
+"hf:black-forest-labs/FLUX.1-schnell"
+"hf:stabilityai/stable-diffusion-xl-base-1.0"
+
+// Pago
+"dalle3"  // DALL-E 3 via OpenAI
+"flux"    // Flux Pro via fal.ai
+```
+
+### APIs de imagem
+
+#### Pollinations (sem key)
+```javascript
+const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&model=flux&nologo=true&enhance=true`;
+// Retorna URL da imagem diretamente
+```
+
+#### HuggingFace Inference
+```javascript
+fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ inputs: prompt })
+})
+// Retorna Blob da imagem → URL.createObjectURL(blob)
+```
+
+#### DALL-E 3
+```javascript
+fetch('https://api.openai.com/v1/images/generations', {
+  headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
+  body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size, quality })
+})
+// Retorna: data[0].url
+```
+
+#### Flux Pro (fal.ai)
+```javascript
+// Submit job
+fetch('https://queue.fal.run/fal-ai/flux/dev', { method:'POST', ... })
+// Poll result
+fetch(`https://queue.fal.run/fal-ai/flux/dev/requests/${requestId}`)
+```
+
+### Grid de imagens
+- Layout grid responsivo (minmax 200px)
+- Cards com aspect-ratio: 1
+- Hover: botões de download e visualização
+- Spinner animado durante geração
+
+---
+
+## PÁGINA 3: VÍDEOS
+
+### API fal.ai — Kling AI
+```javascript
+// 1. Submeter job
+const submit = await fetch('https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video', {
+  method: 'POST',
+  headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ prompt, duration: '5', aspect_ratio: '16:9' })
+});
+const { request_id } = await submit.json();
+
+// 2. Polling a cada 5 segundos
+const poll = await fetch(`https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video/requests/${request_id}`, {
+  headers: { 'Authorization': `Key ${FAL_KEY}` }
+});
+// status: 'IN_PROGRESS' | 'COMPLETED'
+// quando COMPLETED: output.video.url
+```
+
+### UI
+- Sidebar com: textarea do prompt, duração (5s/10s), proporção (16:9, 9:16, 1:1)
+- Card de loading com barra animada (3-5 minutos de espera)
+- Player de vídeo quando pronto
+- Histórico de vídeos gerados
+
+---
+
+## PÁGINA 4: NARRAÇÃO (ElevenLabs)
+
+```javascript
+// Listar vozes
+fetch('https://api.elevenlabs.io/v1/voices', {
+  headers: { 'xi-api-key': ELEVEN_KEY }
+})
+
+// Sintetizar voz
+fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+  method: 'POST',
+  headers: { 'xi-api-key': ELEVEN_KEY, 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    text,
+    model_id: 'eleven_multilingual_v2',
+    voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+  })
+})
+// Retorna: ArrayBuffer → Blob → URL.createObjectURL → <audio>
+```
+
+### UI
+- Select de voz (carregado da API)
+- Select de modelo (multilingual v2, turbo v2.5, monolingual v1)
+- Textarea para o texto
+- Sliders: Estabilidade (0-100), Clareza (0-100)
+- Player de áudio após geração
+- Histórico de narrações
+
+---
+
+## PÁGINA 5: SINAIS DE TRADING
+
+```html
+<!-- Embed do painel de sinais via iframe -->
+<iframe id="sinais-frame" src="" allow="autoplay" allowfullscreen 
+        style="width:100%;height:100%;border:none;flex:1;"></iframe>
+```
+- URL do iframe configurável nas settings
+- Página inteira ocupada pelo iframe
+
+---
+
+## PÁGINA 6: ASSISTENTE DE CÓDIGO
+
+### Modelos disponíveis
+```
+Claude Sonnet 4.6 ⭐
+Claude Haiku 4.5 💰
+Claude Opus 4.6 🏆
+Groq Llama 3.3 70B 🆓
+Gemini 2.0 Flash 🆓
+```
+
+### Ações rápidas (botões na toolbar)
+🐛 Debug | 💡 Explicar | ⚡ Otimizar | 🔄 Converter | 🔍 Revisar | 🧪 Criar Testes | 📝 Comentar | 🧹 Refatorar
+
+### Linguagens
+JavaScript, Python, HTML/CSS, TypeScript, SQL, Bash, Outro
+
+### Sistema de prompts por ação
+```javascript
+const CODE_PROMPTS = {
+  debug:    'Analise o código e encontre todos os bugs...',
+  explain:  'Explique este código de forma clara...',
+  optimize: 'Otimize este código mantendo a funcionalidade...',
+  convert:  `Converta este código de ${lang} para...`,
+  review:   'Faça uma code review completa...',
+  tests:    'Escreva testes unitários completos...',
+  comment:  'Adicione comentários detalhados...',
+  refactor: 'Refatore mantendo funcionalidade...'
+};
+```
+
+---
+
+## PÁGINA 7: ECONOMIA DE CRÉDITOS
+
+### Cards de métricas
+- **Tokens usados** (na sessão atual)
+- **Custo estimado** (USD)
+- **Economizado** (comparando com modelo premium)
+- **Barra de uso** (safe/warn/danger com cores)
+
+### Tabela de custos por modelo
+```
+Modelo              Input/1K    Output/1K
+Claude Opus 4.6     $0.015      $0.075
+Claude Sonnet 4.6   $0.003      $0.015
+Claude Haiku 4.5    $0.00025    $0.00125
+GPT-4o              $0.005      $0.015
+GPT-4o mini         $0.00015    $0.0006
+Groq Llama 70B      $0.00059    $0.00079
+Gemini Flash        $0.000075   $0.0003
+OpenRouter Free     $0.000      $0.000
+```
+
+### Dicas de economia
+Lista de boas práticas para economizar créditos
+
+---
+
+## PÁGINA 8: CONFIGURAÇÕES
+
+### Cards por categoria
+
+#### 🤖 Modelos de Chat
+- **Claude (Anthropic)** — `key-claude` — link: console.anthropic.com
+- **OpenAI GPT** — `key-openai` — link: platform.openai.com
+- **OpenRouter** — `key-openrouter` — link: openrouter.ai/keys
+- **Groq** — `key-groq` — link: console.groq.com
+- **Gemini (Google)** — `key-gemini` — link: aistudio.google.com
+
+#### 🎨 Geração de Mídia
+- **fal.ai** — `key-fal` — vídeos + Flux Pro
+- **ElevenLabs** — `key-eleven` — narração de voz
+- **HuggingFace** — `key-hf` — imagens grátis
+
+#### 🔍 Busca Web
+- **Serper.dev** ⭐ — `key-serper` — Google real-time, 2500/mês grátis
+- **Brave Search** — `key-brave` — 2000/mês grátis
+
+#### 🧑‍💼 Conectores da Gerente IA
+- **Notion** — `key-notion` — integration token
+- **Slack** — `key-slack` + canal padrão
+- **Cloudinary** — cloud name + api key + secret
+
+#### ⚙️ Preferências Gerais
+- Toggle Dark/Light mode
+- URL do painel de sinais (iframe)
+- Botão "Salvar tudo" + "Limpar dados"
+
+### Sistema de status
+```javascript
+// Cada serviço tem badge:
+// "✓ Conectado" (verde)  → testado e funcional
+// "✗ Key inválida" (vermelho) → falhou no teste
+// "Não testado" (cinza) → ainda não testado
+// "Opcional" (cinza) → não obrigatório
+```
+
+### Armazenamento das chaves
+```javascript
+// TODAS as keys ficam no localStorage — NUNCA enviadas para servidor
+const K = {
+  claude:     () => localStorage.getItem('k_claude')      || '',
+  openai:     () => localStorage.getItem('k_openai')      || '',
+  fal:        () => localStorage.getItem('k_fal')         || '',
+  eleven:     () => localStorage.getItem('k_eleven')      || '',
+  openrouter: () => localStorage.getItem('k_openrouter')  || '',
+  gemini:     () => localStorage.getItem('k_gemini')      || '',
+  groq:       () => localStorage.getItem('k_groq')        || '',
+  hf:         () => localStorage.getItem('k_hf')          || '',
+  notion:     () => localStorage.getItem('k_notion')      || '',
+  slack:      () => localStorage.getItem('k_slack')       || '',
+  cloudname:  () => localStorage.getItem('k_cloud_name')  || '',
+  brave:      () => localStorage.getItem('k_brave')       || '',
+  serper:     () => localStorage.getItem('k_serper')      || '',
+};
+```
+
+---
+
+## PÁGINA 9: GERENTE IA
+
+### Mini-dashboard com atalhos rápidos (grid de cards)
+```
+📸 Legenda Post    🏷️ Hashtags       🎬 Roteiro Vídeo
+📅 Calendário      📧 Email Mkt       💬 Responder DM
+👤 Bio Perfil      📢 Anúncio         🐦 Thread Twitter
+📝 Notion          💬 Slack           📊 Análise
+```
+
+### Status dos conectores
+- Verifica keys do Notion, Cloudinary e Slack
+- Badges verde/cinza por serviço
+
+### Chat com a Gerente IA
+- Chat dedicado com histórico próprio
+- Usa Claude ou o modelo disponível
+- Contexto: assistente de marketing/social media/negócios
+
+### Calendário de conteúdo (semanal)
+- Grid 7 dias (Seg→Dom)
+- Eventos coloridos: roxo (geral), pink (social), verde (trading)
+
+---
+
+## PÁGINA 10: AGENTES VIRTUAIS
+
+### Banner do Aether (agente principal)
+- Destaque visual no topo
+- Avatar com gradient roxo
+- Botão CTA "Ativar Aether"
+- Clique abre chat no agente
+
+### Grid de agentes por categoria
+
+#### 💰 Financeiro
+- **FinBot** — Análise de investimentos
+- **TaxHelper** — Planejamento tributário
+- **BudgetBot** — Controle de gastos
+
+#### 🏥 Saúde
+- **FitCoach** — Treinos personalizados
+- **NutriBot** — Dieta e nutrição
+- **MedHelper** — Informações de saúde
+
+#### 💻 Tecnologia
+- **CodeBot** — Programação avançada
+- **SecBot** — Cibersegurança
+- **DataBot** — Análise de dados
+
+#### 💼 Carreira
+- **CareerBot** — Desenvolvimento profissional
+- **ResumeBot** — Currículo e entrevistas
+- **NetworkBot** — Networking
+
+#### 🌍 Mundo
+- **NewsBot** — Notícias em tempo real ← usa busca web!
+- **TravelBot** — Viagens e destinos
+- **CultureBot** — Arte e cultura
+
+#### 📈 Trading
+- **TradeBot** — Análise técnica
+- **CryptoBot** — Mercado crypto ← usa busca web!
+- **ForexBot** — Câmbio e forex
+
+### Cada card de agente tem:
+- Avatar emoji colorido
+- Nome e cargo/especialidade
+- Badge da categoria
+- Dot verde "online"
+- 3 botões de ação rápida (prompts pré-definidos)
+- Clique → abre chat no agente
+
+### Chat do time de agentes (Team Mode)
+- Chat no final da página
+- "Aether" orquestra respostas dos agentes relevantes
+- Cada agente responde com seu avatar e nome
+
+---
+
+## PÁGINA 11: BIBLIOTECA DE PROMPTS
+
+### Barra de busca + filtros por categoria
+
+### Categorias
+```
+Todos | Negócios | Marketing | Código | Criativo | Análise | Produtividade | Trading
+```
+
+### Cards de prompts (grid responsivo)
+Cada card tem:
+- Categoria (badge pequeno)
+- Título do prompt
+- Preview (2 linhas, truncado)
+- Badges: "Gratuito" / "Claude" / "GPT"
+- Clique → copia prompt para o chat e muda para página de chat
+
+### Prompts pré-carregados (pelo menos 20, cobrindo todas as categorias)
+Exemplos:
+```javascript
+{ cat:'Marketing', titulo:'Post Viral Instagram', prompt:'Crie um post viral para Instagram sobre [tema]...' },
+{ cat:'Código', titulo:'Code Review Completo', prompt:'Faça uma code review detalhada do código abaixo...' },
+{ cat:'Trading', titulo:'Análise Técnica BTC', prompt:'Analise o Bitcoin (BTC/USDT) considerando...' },
+// ... 17 mais
+```
+
+---
+
+## PÁGINA 12: PROJETOS / HISTÓRICO
+
+### Sidebar esquerda (260px)
+- Input de busca
+- Lista de conversas salvas (com data, preview da última msg, modelo usado)
+- Botões de rename/delete por item
+
+### Área principal
+- Visualiza mensagens da conversa selecionada
+- Estado vazio quando nenhuma selecionada
+- Barra inferior com stats (tokens, custo, msgs, modelo)
+
+### Auto-save
+```javascript
+// Salva automaticamente ao final de cada conversa
+function autoSaveSession() {
+  const sessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]');
+  const session = {
+    id: Date.now(),
+    title: chatHistory[0]?.content?.slice(0,50) || 'Nova conversa',
+    msgs: chatHistory,
+    date: new Date().toISOString(),
+    model: currentModel,
+    tokens: sessionTokens
+  };
+  sessions.unshift(session);
+  if (sessions.length > 50) sessions.pop(); // max 50 sessões
+  localStorage.setItem('chat_sessions', JSON.stringify(sessions));
+}
+```
+
+---
+
+## SISTEMA DE MEMÓRIA PERSISTENTE
+
+```javascript
+// Modal "🧠 Memória IA"
+// Fatos salvos: localStorage['ai_memory'] = JSON array
+// Injetados no system prompt de toda conversa:
+// "MEMÓRIA DO USUÁRIO:\n- [fato1]\n- [fato2]..."
+
+// Indicador na toolbar: badge roxo "🧠 N" mostrando count
+```
+
+---
+
+## MODAL DE HISTÓRICO
+
+```javascript
+// Botão "📚 Histórico" no header do chat
+// Lista conversas salvas com título, data, preview
+// Clique → carrega conversa no chat
+// Botão 🗑 por item → deleta conversa
+```
+
+---
+
+## SISTEMA DE TOAST NOTIFICATIONS
+
+```javascript
+function toast(msg, type='ok') {
+  // Aparece no canto inferior direito
+  // 'ok' → texto verde com borda verde
+  // 'err' → texto vermelho com borda vermelha
+  // Auto-remove após 3500ms
+  // Animação slideIn
+}
+```
+
+---
+
+## DRAG & DROP GLOBAL
+
+```javascript
+// Overlay roxa (dashed border) aparece ao arrastar arquivo
+// Aceita: imagens → vai para vision do chat
+// Arquivos PDF/TXT → vai para upload de documentos
+```
+
+---
+
+## MODO MOBILE
+
+### Top Bar (fixo, 50px)
+- Botão ☰ hamburger → abre sidebar
+- Logo "AI NEXUS"
+
+### Bottom Navigation (fixo, 58px)
+5 itens: 💬 Chat | 📈 Sinais | 💾 Projetos | 🤖 Agentes | ⚙️ Config
+
+### Sidebar como drawer lateral
+- `position: fixed; left: -230px` → slide para `left: 0`
+- Overlay escuro ao fundo (fecha ao clicar)
+- Botão ✕ dentro da sidebar
+
+---
+
+## ATALHOS DE TECLADO
+
+```javascript
+// Dentro do chat:
+Enter          → Enviar mensagem
+Shift+Enter    → Nova linha
+Ctrl+W         → Toggle busca web ativa (🌐)
+
+// Globais (document.addEventListener('keydown')):
+Ctrl+U         → Upload de imagem
+Ctrl+M         → Toggle microfone
+Ctrl+L         → Toggle TTS (auto-leitura)
+```
+
+---
+
+## FUNCIONALIDADES EXTRAS
+
+### PWA (Progressive Web App)
+```javascript
+// Meta tags para iOS:
+// apple-mobile-web-app-capable, theme-color, etc.
+// Adicionar ao home screen funcional
+```
+
+### Theme Toggle
+```javascript
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') document.body.classList.add('light');
+}
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  localStorage.setItem('theme', document.body.classList.contains('light') ? 'light' : 'dark');
+}
+// Botão na sidebar footer
+```
+
+### Badge de configuração pendente
+```javascript
+// Se nenhuma key configurada → badge "!" vermelho no ícone de Config da sidebar
+function checkCfgBadge() {
+  const hasKey = K.claude() || K.openai() || K.openrouter() || K.groq() || K.gemini();
+  document.getElementById('cfg-badge').style.display = hasKey ? 'none' : 'inline';
+}
+```
+
+---
+
+## ORDEM DE IMPLEMENTAÇÃO RECOMENDADA
+
+1. HTML estrutura completa (sidebar + 12 páginas)
+2. CSS completo (variáveis + dark mode + light mode + mobile)
+3. Sistema de navegação (`showPage()`)
+4. Página Config (keys, localStorage, testKey)
+5. Chat IA (sendChat, streamClaude, streamOpenAI, streamGroq, streamGemini, streamOpenRouter)
+6. Busca Web (doWebSearch, toggleWebSearch, needsWebSearch)
+7. Chat Tabs + Histórico + Memória
+8. Imagens (todas as fontes)
+9. Vídeos (fal.ai polling)
+10. Narração (ElevenLabs)
+11. Assistente de Código
+12. Agentes + Biblioteca + Projetos + Gerente + Economia + Sinais
+13. Mobile (top bar + bottom nav + drawer)
+14. Toast, Drag & Drop, PWA, temas, atalhos
+
+---
+
+## INSTRUÇÕES FINAIS
+
+- **Arquivo único**: tudo em um único `index.html`
+- **Sem build**: abre direto no browser com `file://`
+- **Sem servidor**: todas as APIs chamadas direto do browser com fetch
+- **Segurança CORS**: Claude precisa do header `anthropic-dangerous-direct-browser-access: true`
+- **localStorage only**: nenhum dado enviado para servidor próprio
+- **Responsivo**: funciona perfeitamente em desktop e mobile
+- **Código comentado**: comentários em português explicando cada seção
+- **Tratamento de erros**: todo fetch com try/catch e feedback via toast
+- **Loading states**: spinner/progress em todas as operações assíncronas
+- **Markdown**: usar `marked.js` para renderizar respostas das IAs
+- **Code blocks**: highlight via CSS (fundo escuro, fonte mono)
+
+---
+
+*Prompt gerado para AI Nexus Studio v2.0 — Julho/2025*

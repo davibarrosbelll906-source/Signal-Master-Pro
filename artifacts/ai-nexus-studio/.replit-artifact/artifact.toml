@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/ai-nexus-studio/"
+title = "AI Nexus Studio"
+version = "1.0.0"
+id = "artifacts/ai-nexus-studio"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/ai-nexus-studio/" ]
+localPort = 24597
+
+[services.development]
+run = "pnpm --filter @workspace/ai-nexus-studio run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ai-nexus-studio", "run", "build" ]
+publicDir = "artifacts/ai-nexus-studio/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24597"
+BASE_PATH = "/ai-nexus-studio/"

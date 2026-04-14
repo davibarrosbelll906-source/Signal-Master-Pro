@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#07090f"/>
+<title>AI Nexus Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.0/marked.min.js"></script>
+<style>
+/* ── CSS Variables ─────────────────────────────────────── */
+:root{
+  --bg:#07090f;--bg2:#0c0f1a;--bg3:#111520;--bg4:#181d2e;
+  --border:#1a2035;--border2:#252f47;
+  --text:#e8edf5;--muted:#4a5568;--dim:#2a3348;
+  --purple:#7c3aed;--blue:#3b82f6;--green:#10b981;
+  --amber:#f59e0b;--pink:#ec4899;--teal:#14b8a6;--red:#ef4444;
+  --grad:linear-gradient(135deg,#7c3aed,#3b82f6);
+  --sidebar-w:200px;
+}
+body.light{
+  --bg:#f0f2f7;--bg2:#ffffff;--bg3:#f8f9fc;--bg4:#eef0f6;
+  --border:#dde2ee;--border2:#c8cfe0;
+  --text:#1a1f36;--muted:#7a849e;--dim:#e4e7f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--text);overflow:hidden}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+/* ── Layout ─────────────────────────────────────────────── */
+#app{display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+#sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);
+  background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  transition:transform 0.25s;z-index:100;
+}
+.sidebar-logo{padding:16px 14px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.sidebar-logo .logo-icon{width:28px;height:28px;border-radius:8px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.sidebar-logo .logo-text{font-weight:700;font-size:13px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sidebar-logo .logo-sub{font-size:9px;color:var(--muted);margin-top:1px}
+.sidebar-nav{flex:1;overflow-y:auto;padding:8px 6px}
+.nav-section-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;padding:8px 8px 4px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:500;transition:background 0.15s,color 0.15s;position:relative;user-select:none}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:rgba(124,58,237,0.15);color:var(--purple)}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px}
+.sidebar-footer{padding:10px 6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px}
+.sidebar-footer-btn{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:500;transition:background 0.15s,color 0.15s;background:none;border:none;width:100%;text-align:left}
+.sidebar-footer-btn:hover{background:var(--bg3);color:var(--text)}
+
+/* ── Main ───────────────────────────────────────────────── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.page{display:none;flex:1;flex-direction:column;overflow:hidden;height:100%}
+.page.active{display:flex}
+.pg-hdr{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg2);flex-shrink:0}
+.pg-hdr h1{font-size:15px;font-weight:700;flex:1}
+.pg-hdr .pg-actions{display:flex;gap:6px;align-items:center}
+.pg-body{flex:1;overflow-y:auto;padding:16px 20px}
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;font-weight:500;transition:opacity 0.15s,transform 0.1s}
+.btn:active{transform:scale(0.97)}
+.btn-primary{background:var(--grad);color:#fff}
+.btn-secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--bg3);color:var(--text)}
+.btn-danger{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+.btn-sm{padding:4px 8px;font-size:11px}
+.btn-icon{padding:6px;min-width:30px;justify-content:center}
+
+/* ── Inputs ─────────────────────────────────────────────── */
+input,textarea,select{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;outline:none;transition:border-color 0.15s;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--purple)}
+textarea{resize:vertical;line-height:1.6}
+select option{background:var(--bg2)}
+input[type=range]{padding:0;height:4px;background:var(--border);border:none;border-radius:99px;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--purple);cursor:pointer}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px}
+.card-sm{padding:12px}
+.card h3{font-size:13px;font-weight:600;margin-bottom:10px}
+
+/* ── Badge ───────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.badge-purple{background:rgba(124,58,237,0.15);color:var(--purple)}
+.badge-blue{background:rgba(59,130,246,0.15);color:var(--blue)}
+.badge-green{background:rgba(16,185,129,0.15);color:var(--green)}
+.badge-amber{background:rgba(245,158,11,0.15);color:var(--amber)}
+.badge-pink{background:rgba(236,72,153,0.15);color:var(--pink)}
+.badge-red{background:rgba(239,68,68,0.15);color:var(--red)}
+.badge-gray{background:var(--bg3);color:var(--muted)}
+
+/* ══ PAGE 1: CHAT ══════════════════════════════════════════ */
+.chat-tabs{display:flex;align-items:center;gap:2px;padding:6px 10px 0;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.chat-tab{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px 6px 0 0;cursor:pointer;font-size:11px;font-weight:500;color:var(--muted);background:var(--bg3);border:1px solid var(--border);border-bottom:none;white-space:nowrap;min-width:80px;max-width:130px}
+.chat-tab.active{background:var(--bg);color:var(--text);border-bottom:1px solid var(--bg)}
+.chat-tab .tab-close{margin-left:auto;opacity:0;font-size:10px;padding:1px 2px;border-radius:3px;border:none;background:none;cursor:pointer;color:inherit}
+.chat-tab:hover .tab-close,.chat-tab.active .tab-close{opacity:0.5}
+.chat-tab .tab-close:hover{opacity:1;background:rgba(255,255,255,0.1)}
+.chat-tab-add{padding:4px 8px;border-radius:6px;cursor:pointer;font-size:14px;color:var(--muted);flex-shrink:0;border:none;background:none}
+.chat-tab-add:hover{color:var(--text);background:var(--bg3)}
+.chat-hdr{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;flex-wrap:wrap}
+.chat-hdr select{width:auto;flex:1;min-width:160px;max-width:260px;padding:5px 8px;font-size:12px}
+.persona-row{display:flex;gap:4px;padding:6px 12px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.persona-btn{display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-size:11px;white-space:nowrap;color:var(--muted);transition:all 0.15s;font-family:inherit}
+.persona-btn:hover,.persona-btn.active{background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.4);color:var(--purple)}
+.adv-panel{padding:10px 12px;border-bottom:1px solid var(--border);background:var(--bg2);display:none;flex-shrink:0}
+.adv-panel.open{display:block}
+.adv-row{display:flex;gap:12px;flex-wrap:wrap}
+.adv-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px}
+.adv-field label{font-size:10px;font-weight:600;color:var(--muted)}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px 12px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;flex-direction:column;gap:4px;max-width:100%}
+.msg.user{align-items:flex-end}
+.msg.assistant{align-items:flex-start}
+.msg-meta{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+.msg-bubble{max-width:85%;padding:10px 14px;border-radius:12px;line-height:1.65;font-size:13px;word-break:break-word}
+.msg.user .msg-bubble{background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.2);border-radius:12px 4px 12px 12px}
+.msg.assistant .msg-bubble{background:var(--bg2);border:1px solid var(--border);border-radius:4px 12px 12px 12px}
+.msg-bubble pre{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;margin:6px 0;overflow-x:auto}
+.msg-bubble code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--bg3);padding:1px 4px;border-radius:4px}
+.msg-bubble pre code{background:none;padding:0}
+.msg-bubble p{margin:4px 0}
+.msg-bubble ul,ol{padding-left:16px;margin:4px 0}
+.msg-bubble blockquote{border-left:3px solid var(--purple);padding-left:10px;color:var(--muted);margin:4px 0}
+.msg-bubble h1,.msg-bubble h2,.msg-bubble h3{margin:8px 0 4px;font-size:14px}
+.msg-bubble table{border-collapse:collapse;width:100%;margin:6px 0;font-size:12px}
+.msg-bubble th,.msg-bubble td{border:1px solid var(--border);padding:4px 8px;text-align:left}
+.msg-bubble th{background:var(--bg3)}
+.msg-model-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px}
+.badge-claude{background:rgba(124,58,237,0.2);color:var(--purple)}
+.badge-gpt{background:rgba(16,185,129,0.2);color:var(--green)}
+.badge-openrouter{background:rgba(245,158,11,0.2);color:var(--amber)}
+.badge-groq{background:rgba(236,72,153,0.2);color:var(--pink)}
+.badge-gemini{background:rgba(59,130,246,0.2);color:var(--blue)}
+.msg-actions{display:flex;gap:4px;margin-top:4px;opacity:0;transition:opacity 0.15s}
+.msg:hover .msg-actions{opacity:1}
+.msg-action-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:2px 6px;border-radius:4px;font-family:inherit}
+.msg-action-btn:hover{background:var(--bg3);color:var(--text)}
+.stream-cursor::after{content:'▋';animation:blink 0.8s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.img-strip{display:flex;gap:6px;padding:6px 12px;overflow-x:auto;flex-shrink:0}
+.img-chip{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
+.img-chip img{width:100%;height:100%;object-fit:cover}
+.img-chip-rm{position:absolute;top:1px;right:1px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:10px;padding:1px 3px}
+.doc-strip{display:flex;gap:6px;padding:0 12px 6px;flex-wrap:wrap;flex-shrink:0}
+.doc-chip{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--muted)}
+.doc-chip .doc-rm{background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:0 2px;font-family:inherit}
+.chat-indicator{padding:4px 12px;font-size:11px;flex-shrink:0;display:flex;align-items:center;gap:6px}
+.token-bar{display:flex;gap:12px;padding:5px 12px;border-top:1px solid var(--border);background:var(--bg2);font-size:10px;color:var(--muted);flex-shrink:0;flex-wrap:wrap}
+.token-bar span{display:flex;align-items:center;gap:3px}
+.chat-input-area{border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.chat-tools{display:flex;gap:4px;padding:6px 10px 0;align-items:center}
+.tool-btn{background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;padding:4px 7px;color:var(--muted);font-family:inherit;transition:all 0.15s;position:relative}
+.tool-btn:hover{background:var(--bg3);color:var(--text)}
+.tool-btn.active{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,0.1)}
+.tool-btn .tbadge{position:absolute;top:-4px;right:-4px;background:var(--purple);color:#fff;font-size:8px;padding:1px 4px;border-radius:99px;font-weight:700}
+.chat-input-row{display:flex;gap:8px;padding:8px 10px}
+.chat-input-row textarea{flex:1;max-height:160px;min-height:36px;resize:none;border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.5}
+.chat-send{background:var(--grad);border:none;border-radius:10px;padding:8px 14px;cursor:pointer;color:#fff;font-size:16px;flex-shrink:0;align-self:flex-end;transition:opacity 0.15s}
+.chat-send:hover{opacity:0.85}
+.chat-send:disabled{opacity:0.4;cursor:not-allowed}
+
+/* ══ PAGE 2: IMAGES ════════════════════════════════════════ */
+.img-gen-layout{display:flex;gap:16px;height:100%;overflow:hidden}
+.img-sidebar-panel{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:4px}
+.img-main{flex:1;overflow-y:auto}
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.img-card{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg2);border:1px solid var(--border);position:relative;cursor:pointer}
+.img-card img{width:100%;height:100%;object-fit:cover;display:block}
+.img-card-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;gap:8px;opacity:0;transition:opacity 0.2s}
+.img-card:hover .img-card-overlay{opacity:1}
+.img-spinner-card{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--purple);border-radius:50%;animation:spin 0.8s linear infinite}
+
+/* ══ PAGE 3: VIDEOS ════════════════════════════════════════ */
+.vid-layout{display:flex;gap:16px;height:100%;overflow:hidden}
+.vid-sidebar-panel{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.vid-main{flex:1;overflow-y:auto}
+.vid-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.vid-card video{width:100%;display:block;max-height:360px}
+.vid-card-info{padding:10px 12px;display:flex;align-items:center;gap:8px}
+.vid-progress{background:var(--bg3);border-radius:8px;padding:20px;text-align:center}
+.vid-progress-bar{height:4px;background:var(--border);border-radius:99px;margin:10px 0;overflow:hidden}
+.vid-progress-fill{height:100%;background:var(--grad);border-radius:99px;width:0;transition:width 0.5s}
+
+/* ══ PAGE 4: VOICE ════════════════════════════════════════ */
+.voice-layout{display:flex;gap:16px;height:100%;overflow:hidden}
+.voice-sidebar-panel{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.voice-main{flex:1;overflow-y:auto}
+.voice-hist-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+.voice-hist-item audio{flex:1;height:32px}
+
+/* ══ PAGE 5: SIGNALS ══════════════════════════════════════ */
+#page-sinais{padding:0}
+#sinais-frame{width:100%;height:100%;border:none;flex:1}
+
+/* ══ PAGE 6: CODE ══════════════════════════════════════════ */
+.code-layout{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.code-toolbar{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.code-body{flex:1;display:flex;gap:12px;overflow:hidden;padding:12px}
+.code-panel{flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.code-area{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;resize:none;border-radius:10px;padding:12px;min-height:0}
+.code-result{flex:1;overflow-y:auto;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;line-height:1.65}
+
+/* ══ PAGE 7: ECONOMY ══════════════════════════════════════ */
+.eco-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.eco-metric{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px}
+.eco-metric .eco-value{font-size:24px;font-weight:700;margin:4px 0}
+.eco-metric .eco-label{font-size:11px;color:var(--muted)}
+.eco-metric .eco-sub{font-size:11px;color:var(--green)}
+.eco-table{width:100%;border-collapse:collapse;font-size:12px}
+.eco-table th,.eco-table td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border)}
+.eco-table th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:0.05em}
+.eco-table tr:hover td{background:var(--bg3)}
+.usage-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin:6px 0}
+.usage-bar-fill{height:100%;border-radius:99px}
+
+/* ══ PAGE 8: CONFIG ════════════════════════════════════════ */
+.cfg-section{margin-bottom:20px}
+.cfg-section h3{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px}
+.cfg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cfg-card .cfg-info{flex:1;min-width:120px}
+.cfg-card .cfg-name{font-weight:600;font-size:13px;margin-bottom:2px}
+.cfg-card .cfg-desc{font-size:11px;color:var(--muted)}
+.cfg-card .cfg-input{flex:2;min-width:180px}
+.cfg-card .cfg-status{font-size:10px;padding:2px 8px;border-radius:99px;flex-shrink:0}
+.cfg-status-ok{background:rgba(16,185,129,0.15);color:var(--green)}
+.cfg-status-err{background:rgba(239,68,68,0.15);color:var(--red)}
+.cfg-status-none{background:var(--bg3);color:var(--muted)}
+
+/* ══ PAGE 9: MANAGER ══════════════════════════════════════ */
+.mgr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:16px}
+.mgr-quick{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 10px;text-align:center;cursor:pointer;transition:all 0.15s}
+.mgr-quick:hover{border-color:var(--purple);background:rgba(124,58,237,0.05);transform:translateY(-1px)}
+.mgr-quick .mgr-icon{font-size:22px;margin-bottom:6px}
+.mgr-quick .mgr-label{font-size:11px;font-weight:500}
+.mgr-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mgr-cal-hdr{text-align:center;font-size:10px;color:var(--muted);font-weight:600;padding:4px}
+.mgr-cal-day{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px;min-height:70px}
+.mgr-cal-day .day-num{font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.mgr-event{font-size:9px;padding:2px 4px;border-radius:3px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mgr-event.ev-purple{background:rgba(124,58,237,0.2);color:var(--purple)}
+.mgr-event.ev-pink{background:rgba(236,72,153,0.2);color:var(--pink)}
+.mgr-event.ev-green{background:rgba(16,185,129,0.2);color:var(--green)}
+
+/* ══ PAGE 10: AGENTS ══════════════════════════════════════ */
+.aether-banner{background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(59,130,246,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:14px;padding:20px;display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.aether-avatar{width:56px;height:56px;border-radius:50%;flex-shrink:0;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 20px rgba(124,58,237,0.3)}
+.aether-info h2{font-size:16px;font-weight:700;margin-bottom:4px}
+.aether-info p{font-size:12px;color:var(--muted)}
+.agents-section{margin-bottom:16px}
+.agents-section h3{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px}
+.agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.agent-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;transition:all 0.15s;cursor:pointer}
+.agent-card:hover{border-color:var(--purple);transform:translateY(-1px)}
+.agent-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.agent-avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.agent-name{font-weight:600;font-size:13px}
+.agent-role{font-size:11px;color:var(--muted)}
+.agent-status{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--green);margin-bottom:8px}
+.agent-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.agent-actions{display:flex;gap:4px;flex-wrap:wrap}
+.agent-action{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--muted);font-family:inherit;transition:all 0.15s}
+.agent-action:hover{border-color:var(--purple);color:var(--purple)}
+.team-chat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.team-chat-hdr{padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.team-msgs{height:220px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.team-msg{display:flex;gap:8px}
+.team-msg-avatar{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.team-msg-body{flex:1}
+.team-msg-name{font-size:10px;font-weight:600;color:var(--muted);margin-bottom:2px}
+.team-msg-text{font-size:12px;background:var(--bg3);padding:6px 10px;border-radius:8px;line-height:1.5}
+.team-input-row{display:flex;gap:8px;padding:8px}
+.team-input-row input{flex:1;font-size:12px}
+
+/* ══ PAGE 11: LIBRARY ══════════════════════════════════════ */
+.lib-filters{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.lib-filter{padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-size:11px;color:var(--muted);font-family:inherit;transition:all 0.15s}
+.lib-filter:hover,.lib-filter.active{background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.4);color:var(--purple)}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.lib-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all 0.15s}
+.lib-card:hover{border-color:var(--purple);transform:translateY(-1px)}
+.lib-card-title{font-weight:600;font-size:13px;margin-bottom:4px}
+.lib-card-preview{font-size:11px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:8px;line-height:1.5}
+.lib-card-footer{display:flex;align-items:center;gap:6px}
+
+/* ══ PAGE 12: PROJECTS ════════════════════════════════════ */
+.proj-layout{display:flex;height:100%;overflow:hidden}
+.proj-sidebar{width:260px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.proj-sidebar-hdr{padding:10px;border-bottom:1px solid var(--border)}
+.proj-list{flex:1;overflow-y:auto}
+.proj-item{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s}
+.proj-item:hover{background:var(--bg3)}
+.proj-item.active{background:rgba(124,58,237,0.1);border-left:2px solid var(--purple)}
+.proj-item-title{font-weight:500;font-size:12px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj-item-meta{font-size:10px;color:var(--muted)}
+.proj-item-actions{display:flex;gap:4px;margin-top:4px}
+.proj-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.proj-view{flex:1;overflow-y:auto;padding:12px}
+
+/* ══ MODALS ════════════════════════════════════════════════ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:500}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:90%;max-width:480px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.modal-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.modal-hdr h3{flex:1;font-size:14px;font-weight:600}
+.modal-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;font-family:inherit;padding:2px 6px;border-radius:4px}
+.modal-close:hover{background:var(--bg3);color:var(--text)}
+.modal-body{flex:1;overflow-y:auto;padding:14px 16px}
+.modal-footer{padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.mem-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.mem-item{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.mem-item span{flex:1;font-size:12px}
+.mem-item button{background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;font-family:inherit}
+
+/* ══ TOAST ════════════════════════════════════════════════ */
+#toast-container{position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{padding:10px 14px;border-radius:10px;font-size:12px;font-weight:500;pointer-events:all;animation:slide-in 0.2s ease;max-width:300px}
+.toast-ok{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:var(--green)}
+.toast-err{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:var(--red)}
+.toast-info{background:var(--bg2);border:1px solid var(--border);color:var(--text)}
+@keyframes slide-in{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
+
+/* ══ DRAG OVERLAY ════════════════════════════════════════ */
+#drag-overlay{position:fixed;inset:0;background:rgba(124,58,237,0.1);border:2px dashed var(--purple);z-index:400;display:none;align-items:center;justify-content:center;font-size:24px;color:var(--purple);pointer-events:none}
+#drag-overlay.show{display:flex}
+
+/* ══ MOBILE ══════════════════════════════════════════════ */
+#top-bar{display:none;height:50px;align-items:center;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--border);gap:10px;position:fixed;top:0;left:0;right:0;z-index:200}
+#top-bar .tbar-logo{font-weight:700;font-size:14px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;flex:1}
+#hamburger{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text)}
+#mob-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:98;display:none}
+#mob-overlay.show{display:block}
+#bot-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:58px;background:var(--bg2);border-top:1px solid var(--border);z-index:200;align-items:center;justify-content:space-around;padding:0 8px}
+.bot-nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:10px;color:var(--muted);background:none;border:none;font-family:inherit;flex:1;transition:color 0.15s}
+.bot-nav-item.active{color:var(--purple)}
+.bot-nav-item .bn-icon{font-size:18px}
+
+@media(max-width:768px){
+  #top-bar{display:flex}
+  #bot-nav{display:flex}
+  #sidebar{position:fixed;left:-230px;top:0;height:100vh;z-index:99;transition:left 0.25s;width:230px;min-width:230px}
+  #sidebar.open{left:0}
+  #main{padding-top:50px;padding-bottom:58px}
+  .img-gen-layout,.vid-layout,.voice-layout{flex-direction:column}
+  .img-sidebar-panel,.vid-sidebar-panel,.voice-sidebar-panel{width:100%}
+  .code-body{flex-direction:column}
+  .proj-layout{flex-direction:column}
+  .proj-sidebar{width:100%;height:200px;border-right:none;border-bottom:1px solid var(--border)}
+  .chat-hdr{flex-direction:column;align-items:flex-start}
+  .adv-row{flex-direction:column}
+}
+
+/* ══ MISC ════════════════════════════════════════════════ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted);text-align:center;padding:40px}
+.empty-icon{font-size:48px;opacity:0.3;margin-bottom:8px}
+.text-muted{color:var(--muted)}.text-sm{font-size:12px}.fw-600{font-weight:600}
+.mt-8{margin-top:8px}.mb-8{margin-bottom:8px}.mt-12{margin-top:12px}
+.w-full{width:100%}
+a{color:inherit}
+</style>
+</head>
+<body>
+
+<!-- Top Bar (mobile) -->
+<div id="top-bar">
+  <button id="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="tbar-logo">AI NEXUS</span>
+</div>
+<div id="mob-overlay" onclick="closeSidebar()"></div>
+<div id="drag-overlay">📂 Solte aqui</div>
+<div id="toast-container"></div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-memory">
+  <div class="modal">
+    <div class="modal-hdr"><span>🧠</span><h3>Memória IA</h3><button class="modal-close" onclick="closeModal('modal-memory')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-muted text-sm mb-8" style="margin-bottom:8px">Fatos que a IA lembrará em todas as conversas.</p>
+      <div class="mem-list" id="mem-list"></div>
+      <div style="display:flex;gap:8px">
+        <input id="mem-input" type="text" placeholder="ex: Sou desenvolvedor Python" onkeydown="if(event.key==='Enter')addMemory()"/>
+        <button class="btn btn-primary btn-sm" onclick="addMemory()">+</button>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="closeModal('modal-memory')">Fechar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-favs">
+  <div class="modal">
+    <div class="modal-hdr"><span>⭐</span><h3>Prompts Favoritos</h3><button class="modal-close" onclick="closeModal('modal-favs')">✕</button></div>
+    <div class="modal-body">
+      <div id="favs-list" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input id="fav-input" type="text" placeholder="Adicionar prompt favorito…" onkeydown="if(event.key==='Enter')addFav()"/>
+        <button class="btn btn-primary btn-sm" onclick="addFav()">+</button>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="closeModal('modal-favs')">Fechar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-hist">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-hdr"><span>📚</span><h3>Histórico de Conversas</h3><button class="modal-close" onclick="closeModal('modal-hist')">✕</button></div>
+    <div class="modal-body" id="hist-modal-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-lightbox" onclick="closeModal('modal-lightbox')">
+  <div style="max-width:90vw;max-height:90vh">
+    <img id="lightbox-img" src="" alt="" style="max-width:90vw;max-height:90vh;border-radius:10px"/>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🤖</div>
+      <div>
+        <div class="logo-text">AI NEXUS</div>
+        <div class="logo-sub">Studio v2.0</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Principal</div>
+      <div class="nav-item active" id="nav-chat" onclick="showPage('chat')"><span class="nav-icon">💬</span>Chat IA</div>
+      <div class="nav-item" id="nav-img" onclick="showPage('img')"><span class="nav-icon">🖼️</span>Imagens</div>
+      <div class="nav-item" id="nav-vid" onclick="showPage('vid')"><span class="nav-icon">🎬</span>Vídeos</div>
+      <div class="nav-item" id="nav-voice" onclick="showPage('voice')"><span class="nav-icon">🎙️</span>Narração</div>
+      <div class="nav-item" id="nav-sinais" onclick="showPage('sinais')"><span class="nav-icon">📈</span>Sinais</div>
+      <div class="nav-section-label">Ferramentas</div>
+      <div class="nav-item" id="nav-cod" onclick="showPage('cod')"><span class="nav-icon">🔧</span>Código</div>
+      <div class="nav-item" id="nav-eco" onclick="showPage('eco')"><span class="nav-icon">💰</span>Economia</div>
+      <div class="nav-item" id="nav-mgr" onclick="showPage('mgr')"><span class="nav-icon">🧑‍💼</span>Gerente IA</div>
+      <div class="nav-section-label">Avançado</div>
+      <div class="nav-item" id="nav-agentes" onclick="showPage('agentes')"><span class="nav-icon">🤖</span>Agentes</div>
+      <div class="nav-item" id="nav-lib" onclick="showPage('lib')"><span class="nav-icon">📚</span>Biblioteca</div>
+      <div class="nav-item" id="nav-proj" onclick="showPage('proj')"><span class="nav-icon">💾</span>Projetos</div>
+      <div class="nav-item" id="nav-cfg" onclick="showPage('cfg')">
+        <span class="nav-icon">⚙️</span>Config
+        <span class="nav-badge" id="cfg-badge" style="display:none">!</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn" onclick="toggleTheme()"><span id="theme-icon">🌙</span><span id="theme-label">Modo claro</span></button>
+      <button class="sidebar-footer-btn" onclick="openModal('modal-memory')">🧠 Memória <span id="sidebar-mem-count" class="badge badge-purple" style="display:none">0</span></button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main id="main">
+
+    <!-- PAGE 1: CHAT -->
+    <div class="page active" id="page-chat">
+      <div class="chat-tabs" id="chat-tabs"></div>
+      <div class="chat-hdr">
+        <select id="model-select" onchange="onModelChange()">
+          <optgroup label="Claude (Anthropic)">
+            <option value="claude:claude-opus-4-6">🏆 Claude Opus 4.6</option>
+            <option value="claude:claude-sonnet-4-6" selected>⭐ Claude Sonnet 4.6</option>
+            <option value="claude:claude-haiku-4-5-20251001">💰 Claude Haiku 4.5</option>
+          </optgroup>
+          <optgroup label="OpenAI">
+            <option value="openai:gpt-4o">GPT-4o</option>
+            <option value="openai:gpt-4o-mini">GPT-4o mini</option>
+            <option value="openai:gpt-3.5-turbo">GPT-3.5 Turbo</option>
+          </optgroup>
+          <optgroup label="OpenRouter (grátis)">
+            <option value="openrouter:meta-llama/llama-4-maverick:free">Llama 4 Maverick 🆓</option>
+            <option value="openrouter:google/gemma-3-27b-it:free">Gemma 3 27B 🆓</option>
+            <option value="openrouter:deepseek/deepseek-r1:free">DeepSeek R1 🆓</option>
+            <option value="openrouter:microsoft/phi-4-reasoning:free">Phi-4 Reasoning 🆓</option>
+            <option value="openrouter:mistralai/mistral-7b-instruct:free">Mistral 7B 🆓</option>
+          </optgroup>
+          <optgroup label="Groq">
+            <option value="groq:llama-3.3-70b-versatile">⚡ Llama 3.3 70B</option>
+            <option value="groq:llama-3.1-8b-instant">⚡ Llama 3.1 8B</option>
+            <option value="groq:mixtral-8x7b-32768">⚡ Mixtral 8x7B</option>
+          </optgroup>
+          <optgroup label="Gemini (Google)">
+            <option value="gemini:gemini-2.0-flash">✨ Gemini 2.0 Flash</option>
+            <option value="gemini:gemini-1.5-pro">Gemini 1.5 Pro</option>
+          </optgroup>
+        </select>
+        <div class="pg-actions">
+          <button class="btn btn-ghost btn-sm" onclick="toggleAdvPanel()">⚙️ Avançado</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('modal-hist')">📚 Histórico</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑 Limpar</button>
+        </div>
+      </div>
+      <div class="persona-row">
+        <button class="persona-btn active" id="persona-default" onclick="setPersona('default')">🤖 Assistente</button>
+        <button class="persona-btn" id="persona-dev" onclick="setPersona('dev')">👨‍💻 Dev</button>
+        <button class="persona-btn" id="persona-trader" onclick="setPersona('trader')">📈 Trader</button>
+        <button class="persona-btn" id="persona-copywrite" onclick="setPersona('copywrite')">✍️ Copy</button>
+        <button class="persona-btn" id="persona-coach" onclick="setPersona('coach')">🎯 Coach</button>
+        <button class="persona-btn" id="persona-creative" onclick="setPersona('creative')">🎨 Criativo</button>
+      </div>
+      <div class="adv-panel" id="adv-panel">
+        <div class="adv-row">
+          <div class="adv-field">
+            <label>Temperatura: <span id="temp-val">0.7</span></label>
+            <input type="range" min="0" max="1" step="0.05" value="0.7" id="temp-slider" oninput="document.getElementById('temp-val').textContent=this.value"/>
+          </div>
+          <div class="adv-field">
+            <label>Max Tokens</label>
+            <select id="max-tokens-sel"><option value="1024">1K</option><option value="2048">2K</option><option value="4096" selected>4K</option><option value="8192">8K</option></select>
+          </div>
+          <div class="adv-field" style="flex:2;min-width:200px">
+            <label>System Prompt</label>
+            <textarea id="sys-prompt" rows="2" placeholder="Instrução de sistema…"></textarea>
+          </div>
+          <div class="adv-field" style="flex:0;min-width:130px">
+            <label>Opções</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px"><input type="checkbox" id="think-mode"> Think Mode</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px"><input type="checkbox" id="eco-mode"> Eco Mode</label>
+          </div>
+        </div>
+      </div>
+      <div class="chat-msgs" id="chat-msgs">
+        <div class="empty-state" id="chat-empty">
+          <div class="empty-icon">🤖</div>
+          <div style="font-weight:600;font-size:14px">AI Nexus Studio</div>
+          <div class="text-muted text-sm">Selecione um modelo e comece a conversar</div>
+        </div>
+      </div>
+      <div class="img-strip" id="img-strip" style="display:none"></div>
+      <div class="doc-strip" id="doc-strip" style="display:none"></div>
+      <div class="chat-indicator" id="search-indicator" style="display:none;color:var(--blue)">🔍 Pesquisando na web…</div>
+      <div class="token-bar">
+        <span>🎯 <b id="tok-count">0</b> tokens</span>
+        <span>💵 $<b id="tok-cost">0.0000</b></span>
+        <span>💬 <b id="msg-count">0</b> msgs</span>
+        <span id="tok-model-info" class="text-muted"></span>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-tools">
+          <button class="tool-btn" onclick="triggerImgUpload()" title="Enviar imagem (Ctrl+U)">📷</button>
+          <button class="tool-btn" onclick="triggerDocUpload()" title="Enviar documento">📄</button>
+          <button class="tool-btn" id="mic-btn" onclick="toggleMic()" title="Microfone (Ctrl+M)">🎤</button>
+          <button class="tool-btn" id="tts-btn" onclick="toggleTTS()" title="Auto-leitura (Ctrl+L)">🔊</button>
+          <button class="tool-btn" id="mem-btn" onclick="openModal('modal-memory')" title="Memória">🧠<span class="tbadge" id="mem-badge" style="display:none">0</span></button>
+          <button class="tool-btn" id="fav-btn" onclick="openModal('modal-favs')" title="Favoritos">⭐</button>
+          <button class="tool-btn" id="web-btn" onclick="toggleWebSearch()" title="Busca web (Ctrl+W)">🌐</button>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted)" id="ws-status"></span>
+        </div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" placeholder="Mensagem… (Enter envia, Shift+Enter nova linha)" rows="1" onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+          <button class="chat-send" id="send-btn" onclick="sendChat()">➤</button>
+        </div>
+      </div>
+      <input type="file" id="img-upload" accept="image/*" multiple style="display:none" onchange="handleImgUpload(event)"/>
+      <input type="file" id="doc-upload" accept=".pdf,.txt,.md,.csv" style="display:none" onchange="handleDocUpload(event)"/>
+    </div>
+
+    <!-- PAGE 2: IMAGES -->
+    <div class="page" id="page-img">
+      <div class="pg-hdr"><h1>🖼️ Geração de Imagens</h1></div>
+      <div class="pg-body" style="overflow:hidden;padding:12px">
+        <div class="img-gen-layout">
+          <div class="img-sidebar-panel">
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Modelo</div>
+              <select id="img-model">
+                <option value="pol:flux">✨ Flux (grátis)</option>
+                <option value="pol:flux-realism">Flux Realismo (grátis)</option>
+                <option value="pol:flux-anime">Flux Anime (grátis)</option>
+                <option value="pol:flux-3d">Flux 3D (grátis)</option>
+                <option value="pol:turbo">Turbo (grátis)</option>
+                <option value="hf:black-forest-labs/FLUX.1-schnell">HF Flux Schnell</option>
+                <option value="hf:stabilityai/stable-diffusion-xl-base-1.0">HF SDXL</option>
+                <option value="dalle3">DALL-E 3 (OpenAI)</option>
+              </select>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Tamanho</div>
+              <select id="img-size">
+                <option value="1024x1024">1024×1024</option>
+                <option value="512x512">512×512</option>
+                <option value="1792x1024">1792×1024 (DALL-E)</option>
+                <option value="1024x1792">1024×1792 (DALL-E)</option>
+              </select>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Prompt</div>
+              <textarea id="img-prompt" rows="5" placeholder="Descreva a imagem…&#10;ex: A futuristic city at night, neon lights, cinematic, 8k"></textarea>
+              <button class="btn btn-primary w-full mt-8" onclick="generateImage()" id="img-gen-btn" style="margin-top:8px">✨ Gerar Imagem</button>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Prompts rápidos</div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <button class="btn btn-ghost btn-sm" onclick="setImgPrompt('futuristic city at night, neon lights, cinematic 8k')">🌆 Cidade futurista</button>
+                <button class="btn btn-ghost btn-sm" onclick="setImgPrompt('portrait of a beautiful woman, photorealistic, studio lighting')">👤 Retrato</button>
+                <button class="btn btn-ghost btn-sm" onclick="setImgPrompt('abstract digital art, colorful, fractals, 4k')">🎨 Arte abstrata</button>
+                <button class="btn btn-ghost btn-sm" onclick="setImgPrompt('epic fantasy landscape, mountains, dragons, 8k')">🐉 Fantasia</button>
+                <button class="btn btn-ghost btn-sm" onclick="setImgPrompt('cyberpunk street scene, rain, neon signs, 8k')">🌧️ Cyberpunk</button>
+              </div>
+            </div>
+          </div>
+          <div class="img-main">
+            <div class="img-grid" id="img-grid">
+              <div class="empty-state" style="grid-column:1/-1">
+                <div class="empty-icon">🖼️</div>
+                <div class="text-muted text-sm">Suas imagens aparecerão aqui</div>
+                <div class="text-muted" style="font-size:10px">Pollinations.ai é grátis — sem API key!</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 3: VIDEOS -->
+    <div class="page" id="page-vid">
+      <div class="pg-hdr"><h1>🎬 Geração de Vídeos</h1></div>
+      <div class="pg-body" style="overflow:hidden;padding:12px">
+        <div class="vid-layout">
+          <div class="vid-sidebar-panel">
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Modelo</div>
+              <select id="vid-model"><option value="kling">Kling AI (fal.ai)</option></select>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Duração</div>
+              <select id="vid-dur"><option value="5">5 segundos</option><option value="10">10 segundos</option></select>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Proporção</div>
+              <select id="vid-ratio"><option value="16:9">16:9 Paisagem</option><option value="9:16">9:16 Retrato</option><option value="1:1">1:1 Quadrado</option></select>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Prompt</div>
+              <textarea id="vid-prompt" rows="5" placeholder="Descreva o vídeo…"></textarea>
+              <button class="btn btn-primary w-full" style="margin-top:8px" id="vid-gen-btn" onclick="generateVideo()">🎬 Gerar Vídeo</button>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted)">⚠️ Requer chave fal.ai</div>
+              <div class="text-muted" style="font-size:10px;margin-top:4px">Configure em ⚙️ Config</div>
+            </div>
+          </div>
+          <div class="vid-main" id="vid-main">
+            <div class="empty-state">
+              <div class="empty-icon">🎬</div>
+              <div class="text-muted text-sm">Vídeos aparecerão aqui (~3-5 min)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 4: VOICE -->
+    <div class="page" id="page-voice">
+      <div class="pg-hdr"><h1>🎙️ Narração de Voz</h1></div>
+      <div class="pg-body" style="overflow:hidden;padding:12px">
+        <div class="voice-layout">
+          <div class="voice-sidebar-panel">
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Voz</div>
+              <select id="voice-select"><option value="">Configure ElevenLabs primeiro</option></select>
+              <button class="btn btn-ghost btn-sm w-full" style="margin-top:8px" onclick="loadVoices()">🔄 Carregar vozes</button>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Modelo</div>
+              <select id="voice-model">
+                <option value="eleven_multilingual_v2">Multilingual v2</option>
+                <option value="eleven_turbo_v2_5">Turbo v2.5</option>
+                <option value="eleven_monolingual_v1">Monolingual v1</option>
+              </select>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Estabilidade: <span id="stab-val">50</span>%</div>
+              <input type="range" min="0" max="100" value="50" id="stab-slider" oninput="document.getElementById('stab-val').textContent=this.value"/>
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-top:10px;margin-bottom:6px">Clareza: <span id="sim-val">75</span>%</div>
+              <input type="range" min="0" max="100" value="75" id="sim-slider" oninput="document.getElementById('sim-val').textContent=this.value"/>
+            </div>
+            <div class="card card-sm">
+              <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px">Texto</div>
+              <textarea id="voice-text" rows="6" placeholder="Digite o texto para narrar…"></textarea>
+              <button class="btn btn-primary w-full" style="margin-top:8px" id="voice-gen-btn" onclick="generateVoice()">🎙️ Sintetizar</button>
+            </div>
+          </div>
+          <div class="voice-main">
+            <h3 class="fw-600 mb-8" style="margin-bottom:8px">🎧 Narrações geradas</h3>
+            <div id="voice-hist"></div>
+            <div class="empty-state" id="voice-empty">
+              <div class="empty-icon">🎙️</div>
+              <div class="text-muted text-sm">Narrações aparecerão aqui</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 5: SIGNALS -->
+    <div class="page" id="page-sinais" style="padding:0">
+      <iframe id="sinais-frame" src="" allow="autoplay" allowfullscreen></iframe>
+    </div>
+
+    <!-- PAGE 6: CODE -->
+    <div class="page" id="page-cod">
+      <div class="pg-hdr">
+        <h1>🔧 Assistente de Código</h1>
+        <div class="pg-actions">
+          <select id="code-model" style="width:auto;padding:5px 8px;font-size:12px">
+            <option value="claude:claude-sonnet-4-6">Claude Sonnet 4.6 ⭐</option>
+            <option value="claude:claude-haiku-4-5-20251001">Claude Haiku 4.5 💰</option>
+            <option value="claude:claude-opus-4-6">Claude Opus 4.6 🏆</option>
+            <option value="groq:llama-3.3-70b-versatile">Groq Llama 70B 🆓</option>
+            <option value="gemini:gemini-2.0-flash">Gemini 2.0 Flash 🆓</option>
+          </select>
+          <select id="code-lang" style="width:auto;padding:5px 8px;font-size:12px">
+            <option value="JavaScript">JavaScript</option>
+            <option value="Python">Python</option>
+            <option value="HTML/CSS">HTML/CSS</option>
+            <option value="TypeScript">TypeScript</option>
+            <option value="SQL">SQL</option>
+            <option value="Bash">Bash</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div class="code-layout">
+        <div class="code-toolbar">
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('debug')">🐛 Debug</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('explain')">💡 Explicar</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('optimize')">⚡ Otimizar</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('convert')">🔄 Converter</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('review')">🔍 Revisar</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('tests')">🧪 Testes</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('comment')">📝 Comentar</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCodeAction('refactor')">🧹 Refatorar</button>
+          <button class="btn btn-primary btn-sm" onclick="runCodeAction('custom')" id="code-run-btn">▶ Enviar</button>
+        </div>
+        <div class="code-body">
+          <div class="code-panel">
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Seu Código</label>
+            <textarea class="code-area" id="code-input" placeholder="Cole seu código aqui…"></textarea>
+            <input id="code-custom" type="text" placeholder="Instrução personalizada… (opcional)" style="margin-top:4px"/>
+          </div>
+          <div class="code-panel">
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Resultado</label>
+            <div class="code-result" id="code-result"><span class="text-muted text-sm">O resultado aparecerá aqui…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 7: ECONOMY -->
+    <div class="page" id="page-eco">
+      <div class="pg-hdr">
+        <h1>💰 Economia de Créditos</h1>
+        <div class="pg-actions"><button class="btn btn-ghost btn-sm" onclick="resetEcoStats()">🔄 Resetar</button></div>
+      </div>
+      <div class="pg-body">
+        <div class="eco-metrics">
+          <div class="eco-metric"><div class="eco-label">Tokens usados</div><div class="eco-value" id="eco-tokens">0</div><div class="eco-sub">nesta sessão</div></div>
+          <div class="eco-metric"><div class="eco-label">Custo estimado</div><div class="eco-value" id="eco-cost">$0.0000</div><div class="eco-sub">USD</div></div>
+          <div class="eco-metric"><div class="eco-label">Economizado</div><div class="eco-value" id="eco-saved" style="color:var(--green)">$0.0000</div><div class="eco-sub">vs modelo premium</div></div>
+          <div class="eco-metric"><div class="eco-label">Uso da cota</div><div class="usage-bar"><div class="usage-bar-fill" id="eco-bar" style="background:var(--green);width:0%"></div></div><div class="eco-sub" id="eco-bar-label">0%</div></div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <h3>📊 Custo por modelo</h3>
+          <table class="eco-table">
+            <thead><tr><th>Modelo</th><th>Input/1K</th><th>Output/1K</th><th>Tipo</th></tr></thead>
+            <tbody>
+              <tr><td>Claude Opus 4.6</td><td>$0.015</td><td>$0.075</td><td><span class="badge badge-purple">Premium</span></td></tr>
+              <tr><td>Claude Sonnet 4.6</td><td>$0.003</td><td>$0.015</td><td><span class="badge badge-purple">Padrão</span></td></tr>
+              <tr><td>Claude Haiku 4.5</td><td>$0.00025</td><td>$0.00125</td><td><span class="badge badge-green">Econômico</span></td></tr>
+              <tr><td>GPT-4o</td><td>$0.005</td><td>$0.015</td><td><span class="badge badge-green">Padrão</span></td></tr>
+              <tr><td>GPT-4o mini</td><td>$0.00015</td><td>$0.0006</td><td><span class="badge badge-green">Econômico</span></td></tr>
+              <tr><td>Groq Llama 70B</td><td>$0.00059</td><td>$0.00079</td><td><span class="badge badge-amber">Rápido</span></td></tr>
+              <tr><td>Gemini 2.0 Flash</td><td>$0.000075</td><td>$0.0003</td><td><span class="badge badge-blue">Econômico</span></td></tr>
+              <tr><td>OpenRouter Free</td><td>$0.000</td><td>$0.000</td><td><span class="badge badge-gray">Grátis</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>💡 Dicas para economizar</h3>
+          <ul style="font-size:12px;color:var(--muted);line-height:2.2;padding-left:16px">
+            <li>Use <b style="color:var(--text)">Eco Mode</b> para roteamento automático ao modelo mais barato</li>
+            <li>Para tarefas simples, prefira <b style="color:var(--text)">Groq Llama 8B</b> ou <b style="color:var(--text)">Gemini Flash</b></li>
+            <li>Mantenha o <b style="color:var(--text)">System Prompt</b> curto — cada token conta</li>
+            <li>Use <b style="color:var(--text)">Claude Haiku</b> para resumos e tarefas simples</li>
+            <li>OpenRouter tem modelos <b style="color:var(--text)">completamente gratuitos</b></li>
+            <li>Pollinations.ai gera imagens <b style="color:var(--text)">sem custo</b></li>
+            <li>Limite o <b style="color:var(--text)">Max Tokens</b> ao necessário para reduzir custo</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 8: CONFIG -->
+    <div class="page" id="page-cfg">
+      <div class="pg-hdr">
+        <h1>⚙️ Configurações</h1>
+        <div class="pg-actions">
+          <button class="btn btn-primary btn-sm" onclick="saveAllKeys()">💾 Salvar tudo</button>
+          <button class="btn btn-danger btn-sm" onclick="clearAllData()">🗑 Limpar dados</button>
+        </div>
+      </div>
+      <div class="pg-body">
+        <div class="cfg-section">
+          <h3>🤖 Modelos de Chat</h3>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Claude (Anthropic)</div><div class="cfg-desc"><a href="https://console.anthropic.com" target="_blank" style="color:var(--purple)">console.anthropic.com</a></div></div>
+            <div class="cfg-input"><input type="password" id="k-claude" placeholder="sk-ant-…"/></div>
+            <span class="cfg-status cfg-status-none" id="st-claude">Não testado</span>
+            <button class="btn btn-ghost btn-sm" onclick="testKey('claude')">Testar</button>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">OpenAI GPT</div><div class="cfg-desc"><a href="https://platform.openai.com" target="_blank" style="color:var(--purple)">platform.openai.com</a></div></div>
+            <div class="cfg-input"><input type="password" id="k-openai" placeholder="sk-…"/></div>
+            <span class="cfg-status cfg-status-none" id="st-openai">Não testado</span>
+            <button class="btn btn-ghost btn-sm" onclick="testKey('openai')">Testar</button>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">OpenRouter</div><div class="cfg-desc"><a href="https://openrouter.ai/keys" target="_blank" style="color:var(--purple)">openrouter.ai/keys</a></div></div>
+            <div class="cfg-input"><input type="password" id="k-openrouter" placeholder="sk-or-…"/></div>
+            <span class="cfg-status cfg-status-none" id="st-openrouter">Não testado</span>
+            <button class="btn btn-ghost btn-sm" onclick="testKey('openrouter')">Testar</button>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Groq</div><div class="cfg-desc"><a href="https://console.groq.com" target="_blank" style="color:var(--purple)">console.groq.com</a></div></div>
+            <div class="cfg-input"><input type="password" id="k-groq" placeholder="gsk_…"/></div>
+            <span class="cfg-status cfg-status-none" id="st-groq">Não testado</span>
+            <button class="btn btn-ghost btn-sm" onclick="testKey('groq')">Testar</button>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Gemini (Google)</div><div class="cfg-desc"><a href="https://aistudio.google.com" target="_blank" style="color:var(--purple)">aistudio.google.com</a></div></div>
+            <div class="cfg-input"><input type="password" id="k-gemini" placeholder="AIza…"/></div>
+            <span class="cfg-status cfg-status-none" id="st-gemini">Não testado</span>
+            <button class="btn btn-ghost btn-sm" onclick="testKey('gemini')">Testar</button>
+          </div>
+        </div>
+        <div class="cfg-section">
+          <h3>🎨 Geração de Mídia</h3>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">fal.ai</div><div class="cfg-desc">Vídeos + Flux Pro</div></div>
+            <div class="cfg-input"><input type="password" id="k-fal" placeholder="Key fal.ai…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">ElevenLabs</div><div class="cfg-desc">Narração de voz</div></div>
+            <div class="cfg-input"><input type="password" id="k-eleven" placeholder="Key ElevenLabs…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">HuggingFace</div><div class="cfg-desc">Imagens grátis</div></div>
+            <div class="cfg-input"><input type="password" id="k-hf" placeholder="hf_…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+        </div>
+        <div class="cfg-section">
+          <h3>🔍 Busca Web</h3>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Serper.dev ⭐</div><div class="cfg-desc">Google real-time, 2500/mês grátis</div></div>
+            <div class="cfg-input"><input type="password" id="k-serper" placeholder="Key Serper…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Brave Search</div><div class="cfg-desc">2000/mês grátis</div></div>
+            <div class="cfg-input"><input type="password" id="k-brave" placeholder="Key Brave…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+        </div>
+        <div class="cfg-section">
+          <h3>🧑‍💼 Conectores Gerente IA</h3>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Notion</div><div class="cfg-desc">Integration token</div></div>
+            <div class="cfg-input"><input type="password" id="k-notion" placeholder="secret_…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-info"><div class="cfg-name">Slack</div><div class="cfg-desc">Bot token</div></div>
+            <div class="cfg-input"><input type="password" id="k-slack" placeholder="xoxb-…"/></div>
+            <span class="cfg-status cfg-status-none">Opcional</span>
+          </div>
+        </div>
+        <div class="cfg-section">
+          <h3>⚙️ Preferências</h3>
+          <div class="cfg-card" style="flex-direction:column;align-items:flex-start;gap:10px">
+            <div style="width:100%">
+              <label style="font-size:11px;font-weight:600;color:var(--muted)">URL do Painel de Sinais (iframe)</label>
+              <input type="url" id="signals-url" placeholder="https://…" style="margin-top:6px"/>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 9: MANAGER -->
+    <div class="page" id="page-mgr">
+      <div class="pg-hdr"><h1>🧑‍💼 Gerente IA</h1></div>
+      <div class="pg-body">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <span class="badge badge-gray" id="mgr-notion-status">📝 Notion: —</span>
+          <span class="badge badge-gray" id="mgr-slack-status">💬 Slack: —</span>
+          <span class="badge badge-gray" id="mgr-ai-status">🤖 IA: —</span>
+        </div>
+        <div class="mgr-grid">
+          <div class="mgr-quick" onclick="mgrAction('legenda')"><div class="mgr-icon">📸</div><div class="mgr-label">Legenda Post</div></div>
+          <div class="mgr-quick" onclick="mgrAction('hashtags')"><div class="mgr-icon">🏷️</div><div class="mgr-label">Hashtags</div></div>
+          <div class="mgr-quick" onclick="mgrAction('roteiro')"><div class="mgr-icon">🎬</div><div class="mgr-label">Roteiro Vídeo</div></div>
+          <div class="mgr-quick" onclick="mgrAction('calendario')"><div class="mgr-icon">📅</div><div class="mgr-label">Calendário</div></div>
+          <div class="mgr-quick" onclick="mgrAction('email')"><div class="mgr-icon">📧</div><div class="mgr-label">Email Mkt</div></div>
+          <div class="mgr-quick" onclick="mgrAction('dm')"><div class="mgr-icon">💬</div><div class="mgr-label">Responder DM</div></div>
+          <div class="mgr-quick" onclick="mgrAction('bio')"><div class="mgr-icon">👤</div><div class="mgr-label">Bio Perfil</div></div>
+          <div class="mgr-quick" onclick="mgrAction('anuncio')"><div class="mgr-icon">📢</div><div class="mgr-label">Anúncio</div></div>
+          <div class="mgr-quick" onclick="mgrAction('thread')"><div class="mgr-icon">🐦</div><div class="mgr-label">Thread Twitter</div></div>
+          <div class="mgr-quick" onclick="mgrAction('notion')"><div class="mgr-icon">📝</div><div class="mgr-label">Notion</div></div>
+          <div class="mgr-quick" onclick="mgrAction('slack')"><div class="mgr-icon">💬</div><div class="mgr-label">Slack</div></div>
+          <div class="mgr-quick" onclick="mgrAction('analise')"><div class="mgr-icon">📊</div><div class="mgr-label">Análise</div></div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <h3>📅 Calendário da Semana</h3>
+          <div class="mgr-cal" id="mgr-cal"></div>
+        </div>
+        <div class="card">
+          <h3>💼 Chat com a Gerente IA</h3>
+          <div style="height:200px;background:var(--bg3);border-radius:8px;padding:10px;overflow-y:auto;margin-bottom:8px" id="mgr-msgs"></div>
+          <div style="display:flex;gap:8px">
+            <input id="mgr-input" type="text" placeholder="Pergunte sobre marketing, redes sociais…" onkeydown="if(event.key==='Enter')sendMgrChat()"/>
+            <button class="btn btn-primary btn-sm" onclick="sendMgrChat()">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 10: AGENTS -->
+    <div class="page" id="page-agentes">
+      <div class="pg-hdr"><h1>🤖 Agentes Virtuais</h1></div>
+      <div class="pg-body">
+        <div class="aether-banner">
+          <div class="aether-avatar">🌌</div>
+          <div class="aether-info" style="flex:1">
+            <h2>Aether — Agente Principal</h2>
+            <p>Orquestra todos os agentes especializados. Capaz de pesquisar, analisar e executar tarefas complexas de forma autônoma.</p>
+          </div>
+          <button class="btn btn-primary" onclick="activateAether()">⚡ Ativar Aether</button>
+        </div>
+        <div id="agents-container"></div>
+        <div class="team-chat" style="margin-top:16px">
+          <div class="team-chat-hdr">🤝 Chat do Time <span class="badge badge-purple">Multi-Agente</span></div>
+          <div class="team-msgs" id="team-msgs">
+            <div class="team-msg">
+              <div class="team-msg-avatar" style="background:var(--grad)">🌌</div>
+              <div class="team-msg-body">
+                <div class="team-msg-name">Aether</div>
+                <div class="team-msg-text">Olá! Sou o Aether. Pergunte qualquer coisa e direcionarei ao especialista ideal!</div>
+              </div>
+            </div>
+          </div>
+          <div class="team-input-row">
+            <input id="team-input" type="text" placeholder="Fale com o time de agentes…" onkeydown="if(event.key==='Enter')sendTeamChat()"/>
+            <button class="btn btn-primary btn-sm" onclick="sendTeamChat()">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 11: LIBRARY -->
+    <div class="page" id="page-lib">
+      <div class="pg-hdr"><h1>📚 Biblioteca de Prompts</h1></div>
+      <div class="pg-body">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="search" id="lib-search" placeholder="🔍 Buscar prompts…" oninput="renderLib()" style="flex:1"/>
+        </div>
+        <div class="lib-filters" id="lib-filters"></div>
+        <div class="lib-grid" id="lib-grid"></div>
+      </div>
+    </div>
+
+    <!-- PAGE 12: PROJECTS -->
+    <div class="page" id="page-proj">
+      <div class="pg-hdr"><h1>💾 Projetos / Histórico</h1></div>
+      <div class="proj-layout">
+        <div class="proj-sidebar">
+          <div class="proj-sidebar-hdr">
+            <input type="search" id="proj-search" placeholder="🔍 Buscar…" oninput="renderProjects()"/>
+          </div>
+          <div class="proj-list" id="proj-list">
+            <div class="empty-state" style="height:120px"><div class="text-muted text-sm">Nenhuma conversa salva</div></div>
+          </div>
+        </div>
+        <div class="proj-main">
+          <div class="proj-view" id="proj-view">
+            <div class="empty-state">
+              <div class="empty-icon">💾</div>
+              <div style="font-size:13px;font-weight:500">Selecione uma conversa</div>
+              <div class="text-muted text-sm">Suas conversas salvas aparecem à esquerda</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /app -->
+
+<!-- Bottom Nav (mobile) -->
+<div id="bot-nav">
+  <button class="bot-nav-item active" onclick="showPage('chat')"><span class="bn-icon">💬</span>Chat</button>
+  <button class="bot-nav-item" onclick="showPage('sinais')"><span class="bn-icon">📈</span>Sinais</button>
+  <button class="bot-nav-item" onclick="showPage('proj')"><span class="bn-icon">💾</span>Projetos</button>
+  <button class="bot-nav-item" onclick="showPage('agentes')"><span class="bn-icon">🤖</span>Agentes</button>
+  <button class="bot-nav-item" onclick="showPage('cfg')"><span class="bn-icon">⚙️</span>Config</button>
+</div>
+
+<script>
+'use strict';
+// ─── KEYS ─────────────────────────────────────────────────
+const K={
+  claude:()=>localStorage.getItem('k_claude')||'',
+  openai:()=>localStorage.getItem('k_openai')||'',
+  fal:()=>localStorage.getItem('k_fal')||'',
+  eleven:()=>localStorage.getItem('k_eleven')||'',
+  openrouter:()=>localStorage.getItem('k_openrouter')||'',
+  gemini:()=>localStorage.getItem('k_gemini')||'',
+  groq:()=>localStorage.getItem('k_groq')||'',
+  hf:()=>localStorage.getItem('k_hf')||'',
+  notion:()=>localStorage.getItem('k_notion')||'',
+  slack:()=>localStorage.getItem('k_slack')||'',
+  brave:()=>localStorage.getItem('k_brave')||'',
+  serper:()=>localStorage.getItem('k_serper')||'',
+};
+
+// ─── STATE ────────────────────────────────────────────────
+let currentPage='chat';
+let sessionTokens=0,sessionCost=0;
+let webSearchAlways=localStorage.getItem('web_search_always')==='1';
+let ttsActive=false,micActive=false,isStreaming=false;
+let currentPersona='default';
+let uploadedImages=[],uploadedDocs=[];
+let recognition=null;
+let tabs=[{id:0,title:'Chat 1',history:[]}];
+let activeTab=0,tabCounter=1;
+let mgrHistory=[],teamHistory=[];
+let selectedSession=null;
+let libFilter='Todos';
+
+// ─── PERSONAS ─────────────────────────────────────────────
+const PERSONAS={
+  default:{nome:'Assistente',prompt:''},
+  dev:{nome:'Dev Expert',prompt:'Você é um engenheiro de software sênior com 15 anos de experiência. Dê respostas técnicas precisas, inclua exemplos de código quando relevante. Prefira TypeScript/Python.'},
+  trader:{nome:'Trader IA',prompt:'Você é um analista de mercado financeiro especialista. Analise ativos, identifique tendências, use terminologia de análise técnica. Sempre mencione que não é conselho financeiro.'},
+  copywrite:{nome:'Copywriter',prompt:'Você é um copywriter especialista em marketing digital com foco em conversão. Escreva copies persuasivos, use gatilhos mentais, estruture com AIDA, PAS.'},
+  coach:{nome:'Life Coach',prompt:'Você é um coach motivacional certificado. Use técnicas de PNL, estabeleça metas SMART, ajude a identificar bloqueios e criar planos de ação.'},
+  creative:{nome:'Criativo',prompt:'Você é um artista criativo multidisciplinar. Pense fora da caixa, use metáforas ricas, proponha ideias ousadas e inovadoras.'},
+};
+
+// ─── NAVIGATION ───────────────────────────────────────────
+function showPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.bot-nav-item').forEach(n=>n.classList.remove('active'));
+  const pg=document.getElementById('page-'+page);
+  if(pg)pg.classList.add('active');
+  const nav=document.getElementById('nav-'+page);
+  if(nav)nav.classList.add('active');
+  currentPage=page;
+  closeSidebar();
+  if(page==='proj')renderProjects();
+  if(page==='eco')updateEcoPage();
+  if(page==='mgr')initMgr();
+}
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('mob-overlay').classList.toggle('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mob-overlay').classList.remove('show');
+}
+
+// ─── THEME ────────────────────────────────────────────────
+function initTheme(){
+  if(localStorage.getItem('theme')==='light'){document.body.classList.add('light');updateThemeUI(true);}
+}
+function toggleTheme(){
+  const isLight=document.body.classList.toggle('light');
+  localStorage.setItem('theme',isLight?'light':'dark');
+  updateThemeUI(isLight);
+}
+function updateThemeUI(isLight){
+  document.getElementById('theme-icon').textContent=isLight?'☀️':'🌙';
+  document.getElementById('theme-label').textContent=isLight?'Modo escuro':'Modo claro';
+}
+
+// ─── TOAST ────────────────────────────────────────────────
+function toast(msg,type='ok'){
+  const t=document.createElement('div');
+  t.className=`toast toast-${type}`;
+  t.textContent=msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
+
+// ─── MODALS ───────────────────────────────────────────────
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  if(id==='modal-memory')renderMemory();
+  if(id==='modal-favs')renderFavs();
+  if(id==='modal-hist')renderHistModal();
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));});
+
+// ─── CONFIG ───────────────────────────────────────────────
+function loadKeys(){
+  const m={'k-claude':'k_claude','k-openai':'k_openai','k-openrouter':'k_openrouter','k-groq':'k_groq','k-gemini':'k_gemini','k-fal':'k_fal','k-eleven':'k_eleven','k-hf':'k_hf','k-notion':'k_notion','k-slack':'k_slack','k-serper':'k_serper','k-brave':'k_brave'};
+  for(const[id,key]of Object.entries(m)){const el=document.getElementById(id);if(el)el.value=localStorage.getItem(key)||'';}
+  const su=localStorage.getItem('signals_url');
+  if(su){document.getElementById('signals-url').value=su;document.getElementById('sinais-frame').src=su;}
+}
+function saveAllKeys(){
+  const m={'k-claude':'k_claude','k-openai':'k_openai','k-openrouter':'k_openrouter','k-groq':'k_groq','k-gemini':'k_gemini','k-fal':'k_fal','k-eleven':'k_eleven','k-hf':'k_hf','k-notion':'k_notion','k-slack':'k_slack','k-serper':'k_serper','k-brave':'k_brave'};
+  for(const[id,key]of Object.entries(m)){const el=document.getElementById(id);if(el)localStorage.setItem(key,el.value.trim());}
+  const su=document.getElementById('signals-url').value.trim();
+  if(su){localStorage.setItem('signals_url',su);document.getElementById('sinais-frame').src=su;}
+  checkCfgBadge();
+  toast('Configurações salvas!','ok');
+}
+function clearAllData(){
+  if(!confirm('Limpar TODOS os dados? Esta ação não pode ser desfeita.'))return;
+  localStorage.clear();
+  tabs=[{id:0,title:'Chat 1',history:[]}];activeTab=0;uploadedImages=[];uploadedDocs=[];sessionTokens=0;sessionCost=0;
+  renderTabs();renderMessages();toast('Dados limpos!','ok');
+}
+async function testKey(provider){
+  const stEl=document.getElementById('st-'+provider);
+  stEl.textContent='⏳ Testando…';stEl.className='cfg-status cfg-status-none';
+  try{
+    let ok=false;
+    if(provider==='claude'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':K.claude(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:10,messages:[{role:'user',content:'hi'}]})});ok=r.ok;}
+    else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:`Bearer ${K.openai()}`}});ok=r.ok;}
+    else if(provider==='openrouter'){const r=await fetch('https://openrouter.ai/api/v1/models',{headers:{Authorization:`Bearer ${K.openrouter()}`}});ok=r.ok;}
+    else if(provider==='groq'){const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:`Bearer ${K.groq()}`}});ok=r.ok;}
+    else if(provider==='gemini'){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${K.gemini()}`);ok=r.ok;}
+    stEl.textContent=ok?'✓ Conectado':'✗ Key inválida';
+    stEl.className=`cfg-status ${ok?'cfg-status-ok':'cfg-status-err'}`;
+  }catch(e){stEl.textContent='✗ Erro';stEl.className='cfg-status cfg-status-err';}
+}
+function checkCfgBadge(){
+  const has=K.claude()||K.openai()||K.openrouter()||K.groq()||K.gemini();
+  document.getElementById('cfg-badge').style.display=has?'none':'inline';
+}
+
+// ─── TABS ─────────────────────────────────────────────────
+function renderTabs(){
+  const c=document.getElementById('chat-tabs');c.innerHTML='';
+  tabs.forEach((tab,i)=>{
+    const el=document.createElement('div');
+    el.className=`chat-tab${i===activeTab?' active':''}`;
+    el.onclick=()=>switchTab(i);
+    el.innerHTML=`<span>💬 ${tab.title}</span><button class="tab-close" onclick="closeTab(${i},event)">✕</button>`;
+    c.appendChild(el);
+  });
+  const add=document.createElement('button');
+  add.className='chat-tab-add';add.textContent='+';add.onclick=newTab;
+  c.appendChild(add);
+}
+function switchTab(i){activeTab=i;renderTabs();renderMessages();updateTokenBar();}
+function newTab(){
+  if(tabs.length>=8){toast('Máximo 8 abas','err');return;}
+  tabCounter++;tabs.push({id:tabCounter,title:`Chat ${tabCounter}`,history:[]});
+  activeTab=tabs.length-1;renderTabs();renderMessages();
+}
+function closeTab(i,e){
+  e.stopPropagation();
+  if(tabs.length===1){toast('Não pode fechar a última aba','err');return;}
+  tabs.splice(i,1);if(activeTab>=tabs.length)activeTab=tabs.length-1;
+  renderTabs();renderMessages();
+}
+function getCurrentHistory(){return tabs[activeTab].history;}
+function addToHistory(msg){
+  tabs[activeTab].history.push(msg);
+  const title=tabs[activeTab].history.find(m=>m.role==='user')?.content;
+  if(title)tabs[activeTab].title=(typeof title==='string'?title:title.find?.(c=>c.type==='text')?.text||'Chat').slice(0,28);
+}
+
+// ─── PERSONA ──────────────────────────────────────────────
+function setPersona(name){
+  currentPersona=name;
+  document.querySelectorAll('.persona-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('persona-'+name)?.classList.add('active');
+}
+function getPersonaPrompt(){return PERSONAS[currentPersona]?.prompt||'';}
+function toggleAdvPanel(){document.getElementById('adv-panel').classList.toggle('open');}
+
+// ─── MEMORY ───────────────────────────────────────────────
+function getMemory(){return JSON.parse(localStorage.getItem('ai_memory')||'[]');}
+function saveMemory(list){localStorage.setItem('ai_memory',JSON.stringify(list));}
+function addMemory(){
+  const inp=document.getElementById('mem-input');
+  const val=inp.value.trim();if(!val)return;
+  const list=getMemory();list.push(val);saveMemory(list);inp.value='';
+  renderMemory();updateMemBadge();
+}
+function removeMemory(i){const list=getMemory();list.splice(i,1);saveMemory(list);renderMemory();updateMemBadge();}
+function renderMemory(){
+  const list=getMemory();
+  document.getElementById('mem-list').innerHTML=list.length===0
+    ?'<p class="text-muted text-sm">Nenhum fato salvo ainda.</p>'
+    :list.map((f,i)=>`<div class="mem-item"><span>${f}</span><button onclick="removeMemory(${i})">🗑</button></div>`).join('');
+}
+function updateMemBadge(){
+  const count=getMemory().length;
+  const b=document.getElementById('mem-badge');const sb=document.getElementById('sidebar-mem-count');
+  b.style.display=count>0?'inline':'none';b.textContent=count;
+  sb.style.display=count>0?'inline':'none';sb.textContent=count;
+}
+function getMemoryContext(){
+  const list=getMemory();
+  return list.length?'\n\nMEMÓRIA DO USUÁRIO:\n'+list.map(f=>`- ${f}`).join('\n'):'';
+}
+
+// ─── FAVORITES ────────────────────────────────────────────
+function getFavs(){return JSON.parse(localStorage.getItem('ai_favs')||'[]');}
+function saveFavs(list){localStorage.setItem('ai_favs',JSON.stringify(list));}
+function addFav(){
+  const inp=document.getElementById('fav-input');const val=inp.value.trim();if(!val)return;
+  const list=getFavs();list.push(val);saveFavs(list);inp.value='';renderFavs();
+}
+function renderFavs(){
+  const list=getFavs();
+  const el=document.getElementById('favs-list');
+  if(!list.length){el.innerHTML='<p class="text-muted text-sm">Nenhum favorito salvo.</p>';return;}
+  el.innerHTML=list.map((f,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg3);border-radius:8px;margin-bottom:4px">
+      <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f}</span>
+      <button class="btn btn-primary btn-sm" onclick="useFav(${i})">Usar</button>
+      <button class="btn btn-danger btn-sm" onclick="rmFav(${i})">🗑</button>
+    </div>`).join('');
+}
+function useFav(i){document.getElementById('chat-input').value=getFavs()[i];closeModal('modal-favs');showPage('chat');}
+function rmFav(i){const list=getFavs();list.splice(i,1);saveFavs(list);renderFavs();}
+
+// ─── HISTORY ──────────────────────────────────────────────
+function getSessions(){return JSON.parse(localStorage.getItem('chat_sessions')||'[]');}
+function autoSaveSession(){
+  const hist=getCurrentHistory();if(!hist.length)return;
+  const sessions=getSessions();
+  const model=document.getElementById('model-select').value;
+  const title=(()=>{const m=hist.find(x=>x.role==='user');const c=m?.content;return typeof c==='string'?c.slice(0,50):c?.find?.(x=>x.type==='text')?.text?.slice(0,50)||'Conversa';})();
+  sessions.unshift({id:Date.now(),title,msgs:[...hist],date:new Date().toISOString(),model,tokens:Math.round(sessionTokens)});
+  if(sessions.length>50)sessions.pop();
+  localStorage.setItem('chat_sessions',JSON.stringify(sessions));
+}
+function renderHistModal(){
+  const sessions=getSessions();
+  const el=document.getElementById('hist-modal-body');
+  if(!sessions.length){el.innerHTML='<p class="text-muted text-sm">Nenhuma conversa salva ainda.</p>';return;}
+  el.innerHTML=sessions.map(s=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+      <div style="flex:1;overflow:hidden">
+        <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.title}</div>
+        <div class="text-muted" style="font-size:10px">${new Date(s.date).toLocaleString('pt-BR')} · ${s.msgs.length} msgs</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="loadSession(${s.id})">Carregar</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSession(${s.id})">🗑</button>
+    </div>`).join('');
+}
+function loadSession(id){
+  const s=getSessions().find(x=>x.id===id);if(!s)return;
+  tabs[activeTab].history=s.msgs;renderMessages();closeModal('modal-hist');toast('Conversa carregada!','ok');
+}
+function deleteSession(id){
+  localStorage.setItem('chat_sessions',JSON.stringify(getSessions().filter(s=>s.id!==id)));
+  renderHistModal();
+}
+
+// ─── WEB SEARCH ───────────────────────────────────────────
+const SEARCH_TRIGGERS=[
+  /\b(hoje|agora|atual|recente|últim[ao]|notícia|news|lançamento)\b/i,
+  /\b(202[4-9]|203\d)\b/,
+  /\b(preço|cotação|bolsa|crypto|bitcoin|btc|dólar)\b/i,
+  /\b(clima|temperatura|previsão)\b/i,
+  /\b(gpt-[4-9]|claude [3-9]|gemini|llama|deepseek)\b/i,
+];
+function needsWebSearch(text){return webSearchAlways||SEARCH_TRIGGERS.some(r=>r.test(text));}
+function toggleWebSearch(){
+  webSearchAlways=!webSearchAlways;
+  localStorage.setItem('web_search_always',webSearchAlways?'1':'0');
+  document.getElementById('web-btn').classList.toggle('active',webSearchAlways);
+  document.getElementById('ws-status').textContent=webSearchAlways?'🌐 Busca ativa':'';
+  toast(webSearchAlways?'Busca web sempre ativa':'Busca web automática','info');
+}
+async function doWebSearch(query){
+  if(K.serper()){
+    try{
+      const r=await fetch('https://google.serper.dev/search',{method:'POST',headers:{'X-API-KEY':K.serper(),'Content-Type':'application/json'},body:JSON.stringify({q:query,num:6,hl:'pt',gl:'br'})});
+      const d=await r.json();const parts=[];
+      if(d.answerBox?.answer)parts.push(`Resposta: ${d.answerBox.answer}`);
+      if(d.knowledgeGraph?.description)parts.push(d.knowledgeGraph.description);
+      (d.organic||[]).slice(0,4).forEach(o=>parts.push(`• ${o.title}: ${o.snippet}`));
+      if(parts.length)return '🔍 Resultados da web:\n'+parts.join('\n');
+    }catch(_){}
+  }
+  if(K.brave()){
+    try{
+      const r=await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`,{headers:{'Accept':'application/json','X-Subscription-Token':K.brave()}});
+      const d=await r.json();
+      const results=(d.web?.results||[]).slice(0,4).map(r=>`• ${r.title}: ${r.description}`).join('\n');
+      if(results)return '🔍 Brave Search:\n'+results;
+    }catch(_){}
+  }
+  try{
+    const r=await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+    const d=await r.json();const parts=[];
+    if(d.Abstract)parts.push(d.Abstract);
+    (d.RelatedTopics||[]).slice(0,3).forEach(t=>t.Text&&parts.push(`• ${t.Text}`));
+    if(parts.length)return '🔍 DuckDuckGo:\n'+parts.join('\n');
+  }catch(_){}
+  return '';
+}
+
+// ─── STREAMING ────────────────────────────────────────────
+async function parseSSE(resp,onChunk,extractFn){
+  const reader=resp.body.getReader();const decoder=new TextDecoder();let buf='';
+  while(true){
+    const{done,value}=await reader.read();if(done)break;
+    buf+=decoder.decode(value,{stream:true});
+    const lines=buf.split('\n');buf=lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data:'))continue;
+      const data=line.slice(5).trim();if(data==='[DONE]')break;
+      try{const chunk=extractFn(JSON.parse(data));if(chunk)onChunk(chunk);}catch(_){}
+    }
+  }
+}
+async function streamClaude(messages,sysPrompt,model,maxTokens,temp,onChunk,onDone){
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':K.claude(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model,max_tokens:parseInt(maxTokens),stream:true,system:sysPrompt||undefined,messages})});
+  if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.statusText);}
+  await parseSSE(resp,onChunk,d=>d.type==='content_block_delta'&&d.delta?.type==='text_delta'?d.delta.text:null);
+  onDone();
+}
+async function streamOpenAI(messages,model,maxTokens,temp,onChunk,onDone){
+  const resp=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${K.openai()}`,'Content-Type':'application/json'},body:JSON.stringify({model,stream:true,max_tokens:parseInt(maxTokens),temperature:parseFloat(temp),messages})});
+  if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.statusText);}
+  await parseSSE(resp,onChunk,d=>d.choices?.[0]?.delta?.content);
+  onDone();
+}
+async function streamGroq(messages,model,maxTokens,temp,onChunk,onDone){
+  const resp=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${K.groq()}`,'Content-Type':'application/json'},body:JSON.stringify({model,stream:true,max_tokens:parseInt(maxTokens),temperature:parseFloat(temp),messages})});
+  if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.statusText);}
+  await parseSSE(resp,onChunk,d=>d.choices?.[0]?.delta?.content);
+  onDone();
+}
+async function streamGemini(messages,model,maxTokens,temp,onChunk,onDone){
+  const gemModel=model.replace('gemini:','');
+  const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(c=>c.type==='text'?{text:c.text}:c):[{text:m.content}]}));
+  const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:streamGenerateContent?alt=sse&key=${K.gemini()}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{maxOutputTokens:parseInt(maxTokens),temperature:parseFloat(temp)}})});
+  if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.statusText);}
+  await parseSSE(resp,onChunk,d=>d.candidates?.[0]?.content?.parts?.[0]?.text);
+  onDone();
+}
+async function fetchOpenRouter(messages,model,maxTokens,temp,onChunk,onDone){
+  const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${K.openrouter()}`,'HTTP-Referer':'https://ainexus.app','Content-Type':'application/json'},body:JSON.stringify({model,stream:false,max_tokens:parseInt(maxTokens),temperature:parseFloat(temp),messages})});
+  if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.statusText);}
+  const d=await resp.json();const full=d.choices?.[0]?.message?.content||'';
+  let i=0;
+  const interval=setInterval(()=>{const chunk=full.slice(i,i+12);if(chunk){onChunk(chunk);i+=12;}else{clearInterval(interval);onDone();}},18);
+}
+
+// ─── SEND CHAT ────────────────────────────────────────────
+async function sendChat(){
+  if(isStreaming)return;
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim();
+  if(!text&&!uploadedImages.length)return;
+  input.value='';autoResize(input);
+  const modelFull=document.getElementById('model-select').value;
+  const[provider,modelName]=modelFull.split(':',2);
+  const maxTokens=document.getElementById('max-tokens-sel').value;
+  const temp=document.getElementById('temp-slider').value;
+  const keyMap={claude:K.claude,openai:K.openai,openrouter:K.openrouter,groq:K.groq,gemini:K.gemini};
+  if(!keyMap[provider]?.()){toast(`Configure a chave ${provider.toUpperCase()} em ⚙️ Config`,'err');showPage('cfg');return;}
+  document.getElementById('chat-empty').style.display='none';
+  // Build user content (with images for vision models)
+  let userContent=text;
+  if(uploadedImages.length&&(provider==='claude'||provider==='openai')){
+    const arr=[];
+    for(const img of uploadedImages){
+      if(provider==='claude')arr.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:img.b64}});
+      else arr.push({type:'image_url',image_url:{url:`data:image/jpeg;base64,${img.b64}`}});
+    }
+    if(text)arr.push({type:'text',text});
+    userContent=arr;
+  }
+  // Add doc context
+  if(uploadedDocs.length){
+    const ctx=uploadedDocs.map(d=>`\n\n[Documento: ${d.name}]\n${d.content}`).join('');
+    userContent=typeof userContent==='string'?userContent+ctx:[...userContent,{type:'text',text:ctx}];
+  }
+  addToHistory({role:'user',content:userContent});
+  // Web search
+  let searchCtx='';
+  if(text&&needsWebSearch(text)){
+    document.getElementById('search-indicator').style.display='flex';
+    searchCtx=await doWebSearch(text);
+    document.getElementById('search-indicator').style.display='none';
+  }
+  // System prompt
+  const sysPrompt=[document.getElementById('sys-prompt').value.trim(),getPersonaPrompt(),getMemoryContext(),searchCtx].filter(Boolean).join('\n\n');
+  // Clear uploads
+  uploadedImages=[];uploadedDocs=[];renderImgStrip();renderDocStrip();
+  renderMessages();
+  document.getElementById('chat-msgs').scrollTop=9999;
+  // Start streaming
+  isStreaming=true;
+  document.getElementById('send-btn').disabled=true;
+  let assistantText='';
+  const msgId='m'+Date.now();
+  addToHistory({role:'assistant',content:'',modelVal:modelFull,_id:msgId});
+  renderMessages();
+  const getBubble=()=>document.querySelector(`[data-id="${msgId}"] .msg-text-inner`);
+  const onChunk=chunk=>{
+    assistantText+=chunk;
+    const b=getBubble();
+    if(b)b.innerHTML=renderMarkdown(assistantText)+'<span class="stream-cursor"></span>';
+    document.getElementById('chat-msgs').scrollTop=9999;
+    sessionTokens+=chunk.length/4;updateTokenBar();
+  };
+  const onDone=()=>{
+    isStreaming=false;
+    document.getElementById('send-btn').disabled=false;
+    const hist=getCurrentHistory();const last=hist[hist.length-1];
+    if(last.role==='assistant')last.content=assistantText;
+    renderMessages();autoSaveSession();updateTokenBar();
+    if(ttsActive&&assistantText)speakText(assistantText);
+  };
+  try{
+    const hist=getCurrentHistory().slice(0,-1).map(m=>({role:m.role,content:m.content}));
+    if(provider==='claude')await streamClaude(hist,sysPrompt,modelName,maxTokens,temp,onChunk,onDone);
+    else if(provider==='openai')await streamOpenAI(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
+    else if(provider==='groq')await streamGroq(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
+    else if(provider==='gemini')await streamGemini(hist,modelFull,maxTokens,temp,onChunk,onDone);
+    else if(provider==='openrouter')await fetchOpenRouter(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
+  }catch(err){
+    isStreaming=false;document.getElementById('send-btn').disabled=false;
+    const hist=getCurrentHistory();const last=hist[hist.length-1];
+    if(last.role==='assistant')last.content=`❌ Erro: ${err.message}`;
+    renderMessages();toast('Erro: '+err.message,'err');
+  }
+}
+
+// ─── RENDER MESSAGES ──────────────────────────────────────
+function renderMarkdown(text){
+  if(typeof marked!=='undefined'){try{return marked.parse(text||'');}catch(_){}}
+  return(text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+function getModelBadge(modelVal){
+  if(!modelVal)return'';
+  if(modelVal.startsWith('claude'))return`<span class="msg-model-badge badge-claude">CLAUDE</span>`;
+  if(modelVal.startsWith('openai'))return`<span class="msg-model-badge badge-gpt">GPT</span>`;
+  if(modelVal.startsWith('groq'))return`<span class="msg-model-badge badge-groq">GROQ</span>`;
+  if(modelVal.startsWith('gemini'))return`<span class="msg-model-badge badge-gemini">GEMINI</span>`;
+  if(modelVal.startsWith('openrouter')){const n=modelVal.split(':')[1]?.split('/').pop()?.split(':')[0]||'FREE';return`<span class="msg-model-badge badge-openrouter">${n.toUpperCase().slice(0,8)}</span>`;}
+  return'';
+}
+function renderMessages(){
+  const container=document.getElementById('chat-msgs');
+  const history=getCurrentHistory();
+  if(!history.length){
+    container.innerHTML='<div class="empty-state" id="chat-empty"><div class="empty-icon">🤖</div><div style="font-weight:600;font-size:14px">AI Nexus Studio</div><div class="text-muted text-sm">Selecione um modelo e comece a conversar</div></div>';
+    return;
+  }
+  container.innerHTML=history.map((msg,i)=>{
+    const isUser=msg.role==='user';
+    const badge=!isUser&&msg.modelVal?getModelBadge(msg.modelVal):'';
+    const content=Array.isArray(msg.content)?renderMarkdown(msg.content.find(c=>c.type==='text')?.text||''):renderMarkdown(msg.content);
+    return`<div class="msg ${isUser?'user':'assistant'}" data-id="${msg._id||''}">
+      <div class="msg-meta">${badge}<span>${isUser?'👤 Você':'🤖 IA'}</span></div>
+      <div class="msg-bubble"><div class="msg-text-inner">${content}</div></div>
+      <div class="msg-actions">
+        <button class="msg-action-btn" onclick="copyMsg(${i})">📋 Copiar</button>
+        ${!isUser?`<button class="msg-action-btn" onclick="speakMsg(${i})">🔊</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  updateMsgCount();
+}
+function copyMsg(i){
+  const msg=getCurrentHistory()[i];
+  const text=Array.isArray(msg.content)?msg.content.find(c=>c.type==='text')?.text||'':msg.content;
+  navigator.clipboard.writeText(text).then(()=>toast('Copiado!','ok'));
+}
+function speakMsg(i){
+  const msg=getCurrentHistory()[i];
+  const text=typeof msg.content==='string'?msg.content:msg.content.find?.(c=>c.type==='text')?.text||'';
+  speakText(text);
+}
+function clearChat(){
+  if(!confirm('Limpar esta conversa?'))return;
+  autoSaveSession();tabs[activeTab].history=[];renderMessages();updateTokenBar();
+}
+
+// ─── TOKEN BAR ────────────────────────────────────────────
+function updateTokenBar(){
+  document.getElementById('tok-count').textContent=Math.round(sessionTokens);
+  document.getElementById('tok-cost').textContent=sessionCost.toFixed(4);
+  document.getElementById('msg-count').textContent=getCurrentHistory().length;
+}
+function updateMsgCount(){document.getElementById('msg-count').textContent=getCurrentHistory().length;}
+
+// ─── UPLOADS ──────────────────────────────────────────────
+function triggerImgUpload(){document.getElementById('img-upload').click();}
+async function handleImgUpload(e){
+  for(const file of e.target.files){const b64=await fileToB64(file);uploadedImages.push({file,b64,name:file.name});}
+  renderImgStrip();e.target.value='';
+}
+function fileToB64(file){
+  return new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(file);});
+}
+function renderImgStrip(){
+  const strip=document.getElementById('img-strip');
+  if(!uploadedImages.length){strip.style.display='none';return;}
+  strip.style.display='flex';
+  strip.innerHTML=uploadedImages.map((img,i)=>`<div class="img-chip"><img src="data:image/jpeg;base64,${img.b64}" alt="${img.name}"/><button class="img-chip-rm" onclick="removeImg(${i})">✕</button></div>`).join('');
+}
+function removeImg(i){uploadedImages.splice(i,1);renderImgStrip();}
+function triggerDocUpload(){document.getElementById('doc-upload').click();}
+async function handleDocUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  try{
+    let text=file.name.endsWith('.pdf')?await extractPDF(file):await file.text();
+    uploadedDocs.push({name:file.name,content:text.slice(0,8000)});
+    renderDocStrip();toast(`Documento: ${file.name}`,'ok');
+  }catch(err){toast('Erro ao ler documento: '+err.message,'err');}
+  e.target.value='';
+}
+async function extractPDF(file){
+  return new Promise((res,rej)=>{
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      if(typeof pdfjsLib==='undefined'){res('');return;}
+      try{
+        const pdf=await pdfjsLib.getDocument({data:e.target.result}).promise;
+        let text='';
+        for(let i=1;i<=Math.min(pdf.numPages,10);i++){const page=await pdf.getPage(i);const c=await page.getTextContent();text+=c.items.map(s=>s.str).join(' ')+'\n';}
+        res(text);
+      }catch(err){rej(err);}
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function renderDocStrip(){
+  const strip=document.getElementById('doc-strip');
+  if(!uploadedDocs.length){strip.style.display='none';return;}
+  strip.style.display='flex';
+  strip.innerHTML=uploadedDocs.map((d,i)=>`<div class="doc-chip">📄 ${d.name} <button class="doc-rm" onclick="removeDoc(${i})">✕</button></div>`).join('');
+}
+function removeDoc(i){uploadedDocs.splice(i,1);renderDocStrip();}
+
+// ─── MIC & TTS ────────────────────────────────────────────
+function toggleMic(){
+  if(!('webkitSpeechRecognition'in window||'SpeechRecognition'in window)){toast('Microfone não suportado','err');return;}
+  if(micActive){recognition?.stop();micActive=false;document.getElementById('mic-btn').classList.remove('active');return;}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SR();recognition.lang='pt-BR';recognition.continuous=true;recognition.interimResults=true;
+  recognition.onresult=e=>{document.getElementById('chat-input').value=Array.from(e.results).map(r=>r[0].transcript).join('');};
+  recognition.onerror=()=>{micActive=false;document.getElementById('mic-btn').classList.remove('active');};
+  recognition.onend=()=>{micActive=false;document.getElementById('mic-btn').classList.remove('active');};
+  recognition.start();micActive=true;document.getElementById('mic-btn').classList.add('active');
+}
+function toggleTTS(){ttsActive=!ttsActive;document.getElementById('tts-btn').classList.toggle('active',ttsActive);toast(ttsActive?'Leitura automática ativa':'Desativada','info');}
+function speakText(text){
+  if(K.eleven()){speakElevenLabs(text);return;}
+  const u=new SpeechSynthesisUtterance(text.slice(0,500));u.lang='pt-BR';speechSynthesis.speak(u);
+}
+async function speakElevenLabs(text){
+  const vid=document.getElementById('voice-select')?.value||'21m00Tcm4TlvDq8ikWAM';
+  try{const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}`,{method:'POST',headers:{'xi-api-key':K.eleven(),'Content-Type':'application/json'},body:JSON.stringify({text:text.slice(0,2000),model_id:'eleven_multilingual_v2',voice_settings:{stability:0.5,similarity_boost:0.75}})});const buf=await r.arrayBuffer();new Audio(URL.createObjectURL(new Blob([buf],{type:'audio/mpeg'}))).play();}
+  catch(e){speakText(text);}
+}
+
+// ─── CHAT HELPERS ─────────────────────────────────────────
+function chatKeydown(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}
+  if(e.ctrlKey&&e.key==='w'){e.preventDefault();toggleWebSearch();}
+}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,160)+'px';}
+function onModelChange(){document.getElementById('tok-model-info').textContent=document.getElementById('model-select').value.split(':')[1]||'';}
+
+// ─── DRAG & DROP ──────────────────────────────────────────
+let dragCounter=0;
+document.addEventListener('dragenter',()=>{dragCounter++;document.getElementById('drag-overlay').classList.add('show');});
+document.addEventListener('dragleave',()=>{dragCounter--;if(!dragCounter)document.getElementById('drag-overlay').classList.remove('show');});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',async e=>{
+  e.preventDefault();dragCounter=0;document.getElementById('drag-overlay').classList.remove('show');showPage('chat');
+  for(const f of e.dataTransfer.files){
+    if(f.type.startsWith('image/')){const b64=await fileToB64(f);uploadedImages.push({file:f,b64,name:f.name});}
+    else if(['.pdf','.txt','.md','.csv'].some(ext=>f.name.endsWith(ext))){
+      try{const text=f.name.endsWith('.pdf')?await extractPDF(f):await f.text();uploadedDocs.push({name:f.name,content:text.slice(0,8000)});renderDocStrip();}catch(_){}
+    }
+  }
+  renderImgStrip();
+});
+
+// ─── KEYBOARD SHORTCUTS ───────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey&&e.key==='u'){e.preventDefault();triggerImgUpload();}
+  if(e.ctrlKey&&e.key==='m'){e.preventDefault();toggleMic();}
+  if(e.ctrlKey&&e.key==='l'){e.preventDefault();toggleTTS();}
+});
+
+// ══ PAGE 2: IMAGES ══════════════════════════════════════
+function setImgPrompt(p){document.getElementById('img-prompt').value=p;}
+async function generateImage(){
+  const prompt=document.getElementById('img-prompt').value.trim();
+  if(!prompt){toast('Digite um prompt','err');return;}
+  const model=document.getElementById('img-model').value;
+  const size=document.getElementById('img-size').value;
+  const btn=document.getElementById('img-gen-btn');
+  btn.disabled=true;btn.textContent='⏳ Gerando…';
+  const grid=document.getElementById('img-grid');
+  if(grid.querySelector('.empty-state'))grid.innerHTML='';
+  const spinner=document.createElement('div');spinner.className='img-card';
+  spinner.innerHTML='<div class="img-spinner-card"><div class="spinner"></div></div>';grid.prepend(spinner);
+  try{
+    let imgUrl='';
+    if(model.startsWith('pol:')){
+      const polModel=model.replace('pol:','');const[w,h]=size.split('x');
+      imgUrl=`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&model=${polModel}&nologo=true&enhance=true&seed=${Date.now()}`;
+      await new Promise((res,rej)=>{const img=new Image();img.onload=res;img.onerror=rej;img.src=imgUrl;});
+    }else if(model.startsWith('hf:')){
+      if(!K.hf()){toast('Configure HuggingFace em ⚙️ Config','err');throw new Error('No HF key');}
+      const modelId=model.replace('hf:','');
+      const r=await fetch(`https://api-inference.huggingface.co/models/${modelId}`,{method:'POST',headers:{Authorization:`Bearer ${K.hf()}`,'Content-Type':'application/json'},body:JSON.stringify({inputs:prompt})});
+      if(!r.ok)throw new Error(await r.text());
+      imgUrl=URL.createObjectURL(await r.blob());
+    }else if(model==='dalle3'){
+      if(!K.openai()){toast('Configure OpenAI em ⚙️ Config','err');throw new Error('No OpenAI key');}
+      const r=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:`Bearer ${K.openai()}`,'Content-Type':'application/json'},body:JSON.stringify({model:'dall-e-3',prompt,n:1,size:'1024x1024',quality:'standard'})});
+      const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Erro DALL-E');
+      imgUrl=d.data[0].url;
+    }
+    spinner.remove();addImgCard(imgUrl,prompt);toast('Imagem gerada!','ok');
+  }catch(err){spinner.remove();toast('Erro: '+err.message,'err');}
+  btn.disabled=false;btn.textContent='✨ Gerar Imagem';
+}
+function addImgCard(url,prompt){
+  const grid=document.getElementById('img-grid');
+  const card=document.createElement('div');card.className='img-card';
+  card.innerHTML=`<img src="${url}" alt="${prompt}" loading="lazy"/><div class="img-card-overlay"><button class="btn btn-secondary btn-sm" onclick="openLightbox('${url}')">🔍</button><a href="${url}" download="ai-image.jpg" class="btn btn-primary btn-sm" target="_blank">⬇</a></div>`;
+  grid.prepend(card);
+}
+function openLightbox(url){document.getElementById('lightbox-img').src=url;openModal('modal-lightbox');}
+
+// ══ PAGE 3: VIDEOS ══════════════════════════════════════
+async function generateVideo(){
+  const prompt=document.getElementById('vid-prompt').value.trim();
+  if(!prompt){toast('Digite um prompt','err');return;}
+  if(!K.fal()){toast('Configure fal.ai em ⚙️ Config','err');showPage('cfg');return;}
+  const duration=document.getElementById('vid-dur').value;
+  const ratio=document.getElementById('vid-ratio').value;
+  const btn=document.getElementById('vid-gen-btn');btn.disabled=true;btn.textContent='⏳ Enviando…';
+  const main=document.getElementById('vid-main');
+  const prog=document.createElement('div');prog.className='vid-progress';
+  prog.innerHTML=`<div>🎬 Gerando vídeo… (~3-5 min)</div><div class="vid-progress-bar"><div class="vid-progress-fill" id="vid-fill"></div></div><div class="text-muted text-sm" id="vid-status">Enviando job…</div>`;
+  main.innerHTML='';main.appendChild(prog);
+  try{
+    const sub=await fetch('https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video',{method:'POST',headers:{Authorization:`Key ${K.fal()}`,'Content-Type':'application/json'},body:JSON.stringify({prompt,duration,aspect_ratio:ratio})});
+    if(!sub.ok)throw new Error(await sub.text());
+    const{request_id}=await sub.json();let progress=10;
+    const fill=()=>{const f=document.getElementById('vid-fill');if(f)f.style.width=progress+'%';};fill();
+    const poll=setInterval(async()=>{
+      progress=Math.min(progress+2,90);fill();
+      const r=await fetch(`https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video/requests/${request_id}`,{headers:{Authorization:`Key ${K.fal()}`}});
+      const d=await r.json();
+      const st=document.getElementById('vid-status');if(st)st.textContent=`Status: ${d.status||'processando'}…`;
+      if(d.status==='COMPLETED'&&d.output?.video?.url){
+        clearInterval(poll);const url=d.output.video.url;prog.remove();
+        const card=document.createElement('div');card.className='vid-card';
+        card.innerHTML=`<video controls autoplay loop><source src="${url}" type="video/mp4"/></video><div class="vid-card-info"><span style="flex:1;font-size:12px">${prompt.slice(0,60)}</span><a href="${url}" download="ai-video.mp4" class="btn btn-primary btn-sm" target="_blank">⬇ Baixar</a></div>`;
+        main.prepend(card);toast('Vídeo pronto!','ok');btn.disabled=false;btn.textContent='🎬 Gerar Vídeo';
+      }
+    },5000);
+  }catch(err){const s=document.getElementById('vid-status');if(s)s.textContent='❌ Erro: '+err.message;toast('Erro: '+err.message,'err');btn.disabled=false;btn.textContent='🎬 Gerar Vídeo';}
+}
+
+// ══ PAGE 4: VOICE ══════════════════════════════════════
+async function loadVoices(){
+  if(!K.eleven()){toast('Configure ElevenLabs em ⚙️ Config','err');return;}
+  const sel=document.getElementById('voice-select');sel.innerHTML='<option>Carregando…</option>';
+  try{
+    const r=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':K.eleven()}});
+    const d=await r.json();
+    sel.innerHTML=(d.voices||[]).map(v=>`<option value="${v.voice_id}">${v.name}</option>`).join('');
+    toast(`${d.voices?.length||0} vozes carregadas`,'ok');
+  }catch(e){sel.innerHTML='<option>Erro</option>';toast('Erro: '+e.message,'err');}
+}
+async function generateVoice(){
+  if(!K.eleven()){toast('Configure ElevenLabs em ⚙️ Config','err');return;}
+  const text=document.getElementById('voice-text').value.trim();if(!text){toast('Digite o texto','err');return;}
+  const voiceId=document.getElementById('voice-select').value;
+  const model=document.getElementById('voice-model').value;
+  const stab=parseInt(document.getElementById('stab-slider').value)/100;
+  const sim=parseInt(document.getElementById('sim-slider').value)/100;
+  const btn=document.getElementById('voice-gen-btn');btn.disabled=true;btn.textContent='⏳ Sintetizando…';
+  try{
+    const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,{method:'POST',headers:{'xi-api-key':K.eleven(),'Content-Type':'application/json'},body:JSON.stringify({text,model_id:model,voice_settings:{stability:stab,similarity_boost:sim}})});
+    if(!r.ok)throw new Error(await r.text());
+    const url=URL.createObjectURL(new Blob([await r.arrayBuffer()],{type:'audio/mpeg'}));
+    document.getElementById('voice-empty').style.display='none';
+    const item=document.createElement('div');item.className='voice-hist-item';
+    item.innerHTML=`<span style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${text.slice(0,25)}…</span><audio controls src="${url}" style="flex:1;height:32px"></audio><a href="${url}" download="narration.mp3" class="btn btn-ghost btn-sm">⬇</a>`;
+    document.getElementById('voice-hist').prepend(item);toast('Narração gerada!','ok');
+  }catch(err){toast('Erro: '+err.message,'err');}
+  btn.disabled=false;btn.textContent='🎙️ Sintetizar';
+}
+
+// ══ PAGE 6: CODE ════════════════════════════════════════
+const CODE_PROMPTS={
+  debug:'Analise o código e encontre TODOS os bugs, erros e problemas. Explique cada um e forneça o código corrigido.',
+  explain:'Explique este código de forma clara e didática. Inclua o propósito, lógica principal e casos de uso.',
+  optimize:'Otimize este código para melhor performance e legibilidade. Mantenha a funcionalidade original.',
+  convert:'Converta este código para outra linguagem equivalente, mantendo a mesma lógica.',
+  review:'Faça uma code review completa: qualidade, padrões, segurança, performance. Use lista priorizada.',
+  tests:'Escreva testes unitários completos e abrangentes para este código.',
+  comment:'Adicione comentários detalhados e docstrings ao código.',
+  refactor:'Refatore aplicando princípios SOLID, DRY e clean code. Mantenha a funcionalidade.',
+  custom:''
+};
+async function runCodeAction(action){
+  const code=document.getElementById('code-input').value.trim();
+  if(!code&&action!=='custom'){toast('Cole seu código primeiro','err');return;}
+  const custom=document.getElementById('code-custom').value.trim();
+  const lang=document.getElementById('code-lang').value;
+  const modelFull=document.getElementById('code-model').value;
+  const[provider,modelName]=modelFull.split(':',2);
+  const keyMap={claude:K.claude,groq:K.groq,gemini:K.gemini,openai:K.openai};
+  if(!keyMap[provider]?.()){toast(`Configure a chave ${provider} em ⚙️ Config`,'err');return;}
+  const prompt=action==='custom'?(custom||'Analise este código'):CODE_PROMPTS[action];
+  const messages=[{role:'user',content:`${prompt}\n\nLinguagem: ${lang}\n\nCódigo:\n\`\`\`${lang.toLowerCase()}\n${code}\n\`\`\``}];
+  const result=document.getElementById('code-result');
+  result.innerHTML='<div class="text-muted text-sm">⏳ Processando…</div>';
+  document.getElementById('code-run-btn').disabled=true;
+  let text='';
+  const onChunk=c=>{text+=c;result.innerHTML=renderMarkdown(text);};
+  const onDone=()=>{document.getElementById('code-run-btn').disabled=false;toast('Pronto!','ok');};
+  const sys='Você é um engenheiro de software sênior especialista. Seja direto, preciso e forneça exemplos concretos.';
+  try{
+    if(provider==='claude')await streamClaude(messages,sys,modelName,'4096','0.3',onChunk,onDone);
+    else if(provider==='groq')await streamGroq([{role:'system',content:sys},...messages],modelName,'4096','0.3',onChunk,onDone);
+    else if(provider==='gemini')await streamGemini(messages,modelFull,'4096','0.3',onChunk,onDone);
+    else if(provider==='openai')await streamOpenAI([{role:'system',content:sys},...messages],modelName,'4096','0.3',onChunk,onDone);
+  }catch(err){result.innerHTML=`<span class="text-muted">❌ Erro: ${err.message}</span>`;document.getElementById('code-run-btn').disabled=false;toast('Erro: '+err.message,'err');}
+}
+
+// ══ PAGE 7: ECONOMY ══════════════════════════════════════
+function updateEcoPage(){
+  document.getElementById('eco-tokens').textContent=Math.round(sessionTokens).toLocaleString();
+  document.getElementById('eco-cost').textContent='$'+sessionCost.toFixed(4);
+  const saved=sessionTokens*(0.075-0.00125)/1000;
+  document.getElementById('eco-saved').textContent='$'+Math.max(0,saved).toFixed(4);
+  const pct=Math.min(100,(sessionTokens/100000)*100);
+  const bar=document.getElementById('eco-bar');
+  bar.style.width=pct+'%';bar.style.background=pct>80?'var(--red)':pct>50?'var(--amber)':'var(--green)';
+  document.getElementById('eco-bar-label').textContent=pct.toFixed(1)+'%';
+}
+function resetEcoStats(){sessionTokens=0;sessionCost=0;updateTokenBar();updateEcoPage();toast('Resetado!','ok');}
+
+// ══ PAGE 9: MANAGER ══════════════════════════════════════
+const MGR_PROMPTS={
+  legenda:'Crie 3 opções de legenda para Instagram sobre [tema]. Use emojis, storytelling e CTA.',
+  hashtags:'Gere 30 hashtags estratégicas para [tema]: populares (1M+), médias (100K-1M) e nicho.',
+  roteiro:'Crie roteiro de vídeo YouTube sobre [tema]: hook, 3 pontos principais, conclusão e CTA. 5 min.',
+  calendario:'Calendário de conteúdo para 1 semana sobre [tema]. Cada dia: hora ideal, tipo e objetivo.',
+  email:'Email de marketing sobre [tema] usando estrutura AIDA. Assunto, corpo persuasivo e CTA.',
+  dm:'3 modelos de resposta para DM sobre [assunto]. Tom amigável e profissional.',
+  bio:'3 opções de bio para [plataforma/tema]. Identidade, proposta de valor, CTA. Máx 150 chars.',
+  anuncio:'Copy para anúncio sobre [produto/serviço]. Headline, descrição e CTA para Facebook/Instagram.',
+  thread:'Thread no Twitter/X sobre [tema] com 10 tweets. Comece com hook forte.',
+  notion:'Estrutura de banco de dados Notion para [projeto]. Propriedades, views e automações.',
+  slack:'Mensagem Slack sobre [assunto]. Tom profissional com próximos passos.',
+  analise:'Análise estratégica de [tema]. Use SWOT com recomendações práticas.',
+};
+function mgrAction(type){const inp=document.getElementById('mgr-input');inp.value=MGR_PROMPTS[type]||'Ajude com '+type;inp.focus();}
+async function sendMgrChat(){
+  const inp=document.getElementById('mgr-input');const text=inp.value.trim();if(!text)return;inp.value='';
+  const msgs=document.getElementById('mgr-msgs');
+  mgrHistory.push({role:'user',content:text});
+  const userDiv=document.createElement('div');userDiv.style.cssText='text-align:right;margin-bottom:6px';
+  userDiv.innerHTML=`<span style="background:rgba(124,58,237,0.15);padding:6px 10px;border-radius:8px;font-size:12px">${text}</span>`;
+  msgs.appendChild(userDiv);msgs.scrollTop=9999;
+  const modelFull=K.claude()?'claude:claude-sonnet-4-6':K.openai()?'openai:gpt-4o-mini':K.groq()?'groq:llama-3.3-70b-versatile':null;
+  if(!modelFull){toast('Configure uma API em ⚙️ Config','err');return;}
+  const[provider,modelName]=modelFull.split(':');
+  const respDiv=document.createElement('div');respDiv.style.cssText='margin-bottom:6px';
+  respDiv.innerHTML='<span style="background:var(--bg3);padding:6px 10px;border-radius:8px;font-size:12px">⏳</span>';
+  msgs.appendChild(respDiv);msgs.scrollTop=9999;
+  const sys='Você é uma Gerente de Marketing IA especialista em redes sociais e estratégia digital. Responda em português, seja prática e estratégica.';
+  let t2='';
+  const onChunk=c=>{t2+=c;respDiv.innerHTML=`<span style="background:var(--bg3);padding:6px 10px;border-radius:8px;font-size:12px;display:block;line-height:1.5">${renderMarkdown(t2)}</span>`;msgs.scrollTop=9999;};
+  const onDone=()=>mgrHistory.push({role:'assistant',content:t2});
+  try{
+    if(provider==='claude')await streamClaude(mgrHistory,sys,modelName,'2048','0.7',onChunk,onDone);
+    else if(provider==='openai')await streamOpenAI([{role:'system',content:sys},...mgrHistory],modelName,'2048','0.7',onChunk,onDone);
+    else if(provider==='groq')await streamGroq([{role:'system',content:sys},...mgrHistory],modelName,'2048','0.7',onChunk,onDone);
+  }catch(err){toast('Erro: '+err.message,'err');}
+}
+function initMgr(){
+  const cal=document.getElementById('mgr-cal');
+  const days=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const events={0:[{t:'Post IG',c:'ev-pink'},{t:'Análise',c:'ev-purple'}],2:[{t:'YouTube',c:'ev-purple'},{t:'Trading',c:'ev-green'}],4:[{t:'Email Mkt',c:'ev-purple'}],5:[{t:'Stories',c:'ev-pink'},{t:'Thread',c:'ev-purple'}]};
+  cal.innerHTML=days.map(d=>`<div class="mgr-cal-hdr">${d}</div>`).join('');
+  for(let i=0;i<7;i++){
+    const div=document.createElement('div');div.className='mgr-cal-day';
+    div.innerHTML=`<div class="day-num">${i+1}</div>`;
+    (events[i]||[]).forEach(ev=>{const sp=document.createElement('div');sp.className=`mgr-event ${ev.c}`;sp.textContent=ev.t;div.appendChild(sp);});
+    cal.appendChild(div);
+  }
+  document.getElementById('mgr-notion-status').textContent=`📝 Notion: ${K.notion()?'✓':'—'}`;
+  document.getElementById('mgr-slack-status').textContent=`💬 Slack: ${K.slack()?'✓':'—'}`;
+  document.getElementById('mgr-ai-status').textContent=`🤖 IA: ${K.claude()||K.openai()||K.groq()||K.gemini()?'✓':'—'}`;
+}
+
+// ══ PAGE 10: AGENTS ══════════════════════════════════════
+const AGENTS={
+  '💰 Financeiro':[
+    {emoji:'📊',name:'FinBot',role:'Análise de Investimentos',bg:'rgba(16,185,129,0.15)',actions:['Analisar portfólio','Risco/retorno','Diversificação']},
+    {emoji:'📋',name:'TaxHelper',role:'Planejamento Tributário',bg:'rgba(245,158,11,0.15)',actions:['Calcular IR','Deduções','IRPF']},
+    {emoji:'💳',name:'BudgetBot',role:'Controle de Gastos',bg:'rgba(59,130,246,0.15)',actions:['Orçamento mensal','Gastos fixos','Economias']},
+  ],
+  '🏥 Saúde':[
+    {emoji:'💪',name:'FitCoach',role:'Treinos Personalizados',bg:'rgba(16,185,129,0.15)',actions:['Treino hoje','Plano semanal','Evolução']},
+    {emoji:'🥗',name:'NutriBot',role:'Dieta e Nutrição',bg:'rgba(245,158,11,0.15)',actions:['Cardápio','Calorias','Suplementos']},
+    {emoji:'🏥',name:'MedHelper',role:'Informações de Saúde',bg:'rgba(239,68,68,0.15)',actions:['Sintomas','Medicamentos','Prevenção']},
+  ],
+  '💻 Tecnologia':[
+    {emoji:'👨‍💻',name:'CodeBot',role:'Programação Avançada',bg:'rgba(124,58,237,0.15)',actions:['Debug código','Arquitetura','Best practices']},
+    {emoji:'🛡️',name:'SecBot',role:'Cibersegurança',bg:'rgba(239,68,68,0.15)',actions:['Análise segurança','Vulnerabilidades','OWASP']},
+    {emoji:'📈',name:'DataBot',role:'Análise de Dados',bg:'rgba(59,130,246,0.15)',actions:['SQL query','Visualização','Insights']},
+  ],
+  '💼 Carreira':[
+    {emoji:'🚀',name:'CareerBot',role:'Desenvolvimento Profissional',bg:'rgba(124,58,237,0.15)',actions:['Plano carreira','Habilidades','Salário']},
+    {emoji:'📄',name:'ResumeBot',role:'Currículo e Entrevistas',bg:'rgba(16,185,129,0.15)',actions:['Revisar CV','Entrevista','LinkedIn']},
+    {emoji:'🤝',name:'NetworkBot',role:'Networking',bg:'rgba(245,158,11,0.15)',actions:['Conexão','Eventos','Pitch']},
+  ],
+  '🌍 Mundo':[
+    {emoji:'📰',name:'NewsBot',role:'Notícias em Tempo Real',bg:'rgba(59,130,246,0.15)',actions:['Notícias hoje','Resumo dia','Tendências']},
+    {emoji:'✈️',name:'TravelBot',role:'Viagens e Destinos',bg:'rgba(16,185,129,0.15)',actions:['Roteiro','Hospedagem','Dicas']},
+    {emoji:'🎭',name:'CultureBot',role:'Arte e Cultura',bg:'rgba(236,72,153,0.15)',actions:['Recomendação','História','Análise']},
+  ],
+  '📈 Trading':[
+    {emoji:'📊',name:'TradeBot',role:'Análise Técnica',bg:'rgba(16,185,129,0.15)',actions:['Setup hoje','Suporte/Resist','Indicadores']},
+    {emoji:'₿',name:'CryptoBot',role:'Mercado Crypto',bg:'rgba(245,158,11,0.15)',actions:['BTC análise','Altcoins','DeFi']},
+    {emoji:'💱',name:'ForexBot',role:'Câmbio e Forex',bg:'rgba(59,130,246,0.15)',actions:['EUR/USD','Dólar BRL','Análise']},
+  ],
+};
+function renderAgents(){
+  document.getElementById('agents-container').innerHTML=Object.entries(AGENTS).map(([cat,agents])=>`
+    <div class="agents-section"><h3>${cat}</h3>
+    <div class="agents-grid">${agents.map(a=>`
+      <div class="agent-card" onclick="useAgent('${a.name}','${a.role}')">
+        <div class="agent-card-top">
+          <div class="agent-avatar" style="background:${a.bg}">${a.emoji}</div>
+          <div><div class="agent-name">${a.name}</div><div class="agent-role">${a.role}</div></div>
+        </div>
+        <div class="agent-status"><div class="agent-dot"></div>Online</div>
+        <div class="agent-actions">${a.actions.map(act=>`<button class="agent-action" onclick="event.stopPropagation();agentQ('${a.name}','${act}')">${act}</button>`).join('')}</div>
+      </div>`).join('')}</div></div>`).join('');
+}
+function useAgent(name,role){
+  document.getElementById('sys-prompt').value=`Você é ${name}, especialista em ${role}.`;
+  document.getElementById('adv-panel').classList.add('open');
+  document.getElementById('chat-input').value=`[${name}] `;
+  showPage('chat');toast(`Agente ${name} ativado!`,'ok');
+}
+function agentQ(name,action){document.getElementById('chat-input').value=`[${name}]: ${action}`;showPage('chat');}
+function activateAether(){
+  document.getElementById('sys-prompt').value='Você é Aether, uma IA avançada que orquestra múltiplas especialidades. Identifique-se como o especialista mais adequado em cada resposta: "[Aether como X]".';
+  document.getElementById('adv-panel').classList.add('open');toast('Aether ativado!','ok');showPage('chat');
+}
+async function sendTeamChat(){
+  const inp=document.getElementById('team-input');const text=inp.value.trim();if(!text)return;inp.value='';
+  const msgs=document.getElementById('team-msgs');
+  const userMsg=document.createElement('div');userMsg.className='team-msg';
+  userMsg.innerHTML=`<div class="team-msg-avatar" style="background:rgba(255,255,255,0.1)">👤</div><div class="team-msg-body"><div class="team-msg-name">Você</div><div class="team-msg-text">${text}</div></div>`;
+  msgs.appendChild(userMsg);teamHistory.push({role:'user',content:text});msgs.scrollTop=9999;
+  const agent=pickAgent(text);
+  const respMsg=document.createElement('div');respMsg.className='team-msg';
+  respMsg.innerHTML=`<div class="team-msg-avatar" style="background:var(--grad)">${agent.emoji}</div><div class="team-msg-body"><div class="team-msg-name">${agent.name}</div><div class="team-msg-text">⏳</div></div>`;
+  msgs.appendChild(respMsg);const bubble=respMsg.querySelector('.team-msg-text');
+  const modelFull=K.claude()?'claude:claude-haiku-4-5-20251001':K.groq()?'groq:llama-3.3-70b-versatile':null;
+  if(!modelFull){bubble.textContent='⚙️ Configure uma API';return;}
+  const[provider,modelName]=modelFull.split(':');
+  let reply='';
+  const onChunk=c=>{reply+=c;bubble.innerHTML=renderMarkdown(reply);msgs.scrollTop=9999;};
+  const onDone=()=>teamHistory.push({role:'assistant',content:reply});
+  const sys=`Você é ${agent.name}, especialista em ${agent.role}. Responda de forma especializada.`;
+  try{
+    if(provider==='claude')await streamClaude(teamHistory.slice(-6),sys,modelName,'1024','0.7',onChunk,onDone);
+    else if(provider==='groq')await streamGroq([{role:'system',content:sys},...teamHistory.slice(-6)],modelName,'1024','0.7',onChunk,onDone);
+  }catch(err){bubble.textContent='❌ '+err.message;}
+}
+function pickAgent(text){
+  const t=text.toLowerCase();
+  if(t.match(/código|bug|programa|função|api/))return{emoji:'👨‍💻',name:'CodeBot',role:'Programação'};
+  if(t.match(/invest|ação|bolsa|portfólio/))return{emoji:'📊',name:'FinBot',role:'Finanças'};
+  if(t.match(/bitcoin|crypto|btc|eth/))return{emoji:'₿',name:'CryptoBot',role:'Crypto'};
+  if(t.match(/treino|musculação|academia/))return{emoji:'💪',name:'FitCoach',role:'Fitness'};
+  if(t.match(/notícia|news|hoje|atual/))return{emoji:'📰',name:'NewsBot',role:'Notícias'};
+  if(t.match(/marketing|post|instagram/))return{emoji:'🧑‍💼',name:'MktBot',role:'Marketing'};
+  return{emoji:'🌌',name:'Aether',role:'Assistente Geral'};
+}
+
+// ══ PAGE 11: LIBRARY ══════════════════════════════════════
+const PROMPTS_DB=[
+  {cat:'Marketing',titulo:'Post Viral Instagram',prompt:'Crie um post viral para Instagram sobre [tema]. Use storytelling, emojis estratégicos, CTA poderoso e hashtags. Objetivo: máximo engajamento.'},
+  {cat:'Marketing',titulo:'Email de Vendas',prompt:'Escreva um email de vendas persuasivo para [produto/serviço] usando estrutura AIDA. Inclua: assunto irresistível, história, proposta de valor e CTA urgente.'},
+  {cat:'Marketing',titulo:'Thread Twitter Viral',prompt:'Crie uma thread de 10 tweets sobre [tema] que vai viralizar. Comece com um hook chocante, desenvolva com dados, termine com CTA.'},
+  {cat:'Marketing',titulo:'Campanha Google Ads',prompt:'Crie campanha Google Ads para [produto/serviço]: 5 headlines, 4 descriptions, extensões de anúncio e palavras-chave negativas.'},
+  {cat:'Código',titulo:'Code Review Completo',prompt:'Faça uma code review detalhada do código abaixo. Avalie: qualidade, performance, segurança, padrões e sugestões:\n\n```\n[CÓDIGO AQUI]\n```'},
+  {cat:'Código',titulo:'Arquitetura de Sistema',prompt:'Projete a arquitetura de um sistema para [descrição]. Inclua: componentes, banco de dados, APIs, escalabilidade e trade-offs.'},
+  {cat:'Código',titulo:'Debug Avançado',prompt:'Analise este código e encontre todos os bugs, race conditions e vulnerabilidades:\n\n```\n[CÓDIGO AQUI]\n```'},
+  {cat:'Código',titulo:'Criar API REST',prompt:'Crie uma API REST completa para [recurso] usando [framework]. Inclua: endpoints CRUD, validação, autenticação JWT e documentação.'},
+  {cat:'Trading',titulo:'Análise Técnica BTC',prompt:'Analise o Bitcoin (BTC/USDT): tendência principal, suporte/resistência, RSI, MACD, volume e próximos alvos. Cenário bull e bear.'},
+  {cat:'Trading',titulo:'Estratégia Swing Trade',prompt:'Crie estratégia de swing trade para [ativo]: entrada, stop loss, take profit, gestão de risco (2%) e prazo.'},
+  {cat:'Trading',titulo:'Análise Fundamentalista',prompt:'Análise fundamentalista de [empresa]: balanço, DRE, fluxo de caixa, P/L, P/VPA, EV/EBITDA e fair value.'},
+  {cat:'Negócios',titulo:'Plano de Negócios',prompt:'Crie plano de negócios para [ideia]: sumário executivo, mercado, modelo de negócio, projeções financeiras e marketing.'},
+  {cat:'Negócios',titulo:'Análise SWOT',prompt:'Faça análise SWOT de [empresa/produto]: 5 pontos por quadrante e estratégias derivadas dos cruzamentos.'},
+  {cat:'Negócios',titulo:'Pitch para Investidores',prompt:'Crie pitch deck de 10 slides para [startup]: problema, solução, mercado, produto, tração, time, financeiro e pedido.'},
+  {cat:'Criativo',titulo:'Roteiro YouTube',prompt:'Roteiro completo para YouTube sobre [tema]: hook (30s), estrutura de 3 atos, ganchos de retenção e CTA. 10 min.'},
+  {cat:'Criativo',titulo:'Conto Criativo',prompt:'Escreva um conto de 1000 palavras sobre [tema] com narrativa em 3 atos, personagens tridimensionais e final surpreendente.'},
+  {cat:'Análise',titulo:'Análise de Dados',prompt:'Analise os dados e extraia insights:\n\n[DADOS]\n\nForneça: tendências, anomalias, correlações e recomendações.'},
+  {cat:'Análise',titulo:'Pesquisa de Mercado',prompt:'Pesquisa de mercado sobre [setor]: tamanho, players, tendências, gaps e análise competitiva.'},
+  {cat:'Produtividade',titulo:'Sistema GTD',prompt:'Implemente GTD para [contexto]: lista de projetos, próximas ações, revisão semanal e contextos de trabalho.'},
+  {cat:'Produtividade',titulo:'OKRs Trimestrais',prompt:'Crie OKRs para [empresa/time]: 3 objetivos, 3 KRs por objetivo, métricas e check-ins sugeridos.'},
+  {cat:'Produtividade',titulo:'Brainstorming SCAMPER',prompt:'Brainstorming com SCAMPER sobre [desafio]: 20 ideias criativas, filtre as 5 melhores e crie plano de ação.'},
+];
+function initLib(){
+  const cats=['Todos',...new Set(PROMPTS_DB.map(p=>p.cat))];
+  document.getElementById('lib-filters').innerHTML=cats.map(c=>`<button class="lib-filter${c===libFilter?' active':''}" onclick="setLibFilter('${c}')">${c}</button>`).join('');
+  renderLib();
+}
+function setLibFilter(cat){
+  libFilter=cat;
+  document.querySelectorAll('.lib-filter').forEach(b=>b.classList.toggle('active',b.textContent===cat));
+  renderLib();
+}
+function renderLib(){
+  const q=document.getElementById('lib-search')?.value.toLowerCase()||'';
+  const filtered=PROMPTS_DB.filter(p=>(libFilter==='Todos'||p.cat===libFilter)&&(p.titulo.toLowerCase().includes(q)||p.prompt.toLowerCase().includes(q)));
+  document.getElementById('lib-grid').innerHTML=filtered.map((p,i)=>`
+    <div class="lib-card" onclick="usePrompt(${i})">
+      <div style="margin-bottom:6px"><span class="badge badge-purple" style="font-size:9px">${p.cat}</span></div>
+      <div class="lib-card-title">${p.titulo}</div>
+      <div class="lib-card-preview">${p.prompt}</div>
+      <div class="lib-card-footer">
+        <span class="badge badge-gray">✦ Gratuito</span>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="event.stopPropagation();usePrompt(${i})">Usar</button>
+      </div>
+    </div>`).join('')||'<div class="text-muted text-sm">Nenhum prompt encontrado</div>';
+}
+function usePrompt(i){
+  const filtered=PROMPTS_DB.filter(p=>(libFilter==='Todos'||p.cat===libFilter));
+  document.getElementById('chat-input').value=filtered[i]?.prompt||PROMPTS_DB[i]?.prompt||'';
+  showPage('chat');document.getElementById('chat-input').focus();
+}
+
+// ══ PAGE 12: PROJECTS ══════════════════════════════════════
+function renderProjects(){
+  const sessions=getSessions();
+  const q=document.getElementById('proj-search')?.value.toLowerCase()||'';
+  const filtered=sessions.filter(s=>s.title.toLowerCase().includes(q));
+  const list=document.getElementById('proj-list');
+  if(!filtered.length){list.innerHTML='<div class="empty-state" style="height:120px"><div class="text-muted text-sm">Nenhuma conversa salva</div></div>';return;}
+  list.innerHTML=filtered.map(s=>`
+    <div class="proj-item${selectedSession===s.id?' active':''}" onclick="selectSession(${s.id})">
+      <div class="proj-item-title">${s.title}</div>
+      <div class="proj-item-meta">${new Date(s.date).toLocaleDateString('pt-BR')} · ${s.msgs.length} msgs</div>
+      <div class="proj-item-actions">
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();loadSession(${s.id});showPage('chat')">Carregar</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();delProjSession(${s.id})">🗑</button>
+      </div>
+    </div>`).join('');
+}
+function selectSession(id){
+  selectedSession=id;renderProjects();
+  const s=getSessions().find(x=>x.id===id);const view=document.getElementById('proj-view');if(!s)return;
+  view.innerHTML=`
+    <div style="margin-bottom:12px"><div style="font-weight:700;font-size:15px">${s.title}</div><div class="text-muted text-sm">${new Date(s.date).toLocaleString('pt-BR')} · ${s.msgs.length} msgs · ${s.model?.split(':')[1]||''}</div></div>
+    ${s.msgs.map(m=>`<div class="msg ${m.role==='user'?'user':'assistant'}" style="margin-bottom:10px"><div class="msg-meta"><span>${m.role==='user'?'👤 Você':'🤖 IA'}</span></div><div class="msg-bubble"><div>${renderMarkdown(Array.isArray(m.content)?m.content.find(c=>c.type==='text')?.text||'':m.content)}</div></div></div>`).join('')}
+    <div style="margin-top:12px;padding:10px;background:var(--bg2);border-radius:8px;display:flex;gap:12px;font-size:11px;color:var(--muted)"><span>💬 ${s.msgs.length} msgs</span><span>🎯 ${s.tokens||0} tokens</span><span>🤖 ${s.model?.split(':')[1]||'—'}</span></div>`;
+}
+function delProjSession(id){
+  if(!confirm('Deletar esta conversa?'))return;
+  deleteSession(id);if(selectedSession===id){selectedSession=null;document.getElementById('proj-view').innerHTML='<div class="empty-state"><div class="empty-icon">💾</div><div>Selecione uma conversa</div></div>';}
+  renderProjects();
+}
+
+// ══ INIT ══════════════════════════════════════════════════
+function init(){
+  initTheme();loadKeys();checkCfgBadge();updateMemBadge();
+  renderTabs();renderMessages();renderAgents();initLib();
+  onModelChange();updateTokenBar();
+  document.getElementById('web-btn').classList.toggle('active',webSearchAlways);
+  if(webSearchAlways)document.getElementById('ws-status').textContent='🌐 Busca ativa';
+  const su=localStorage.getItem('signals_url');
+  if(su)document.getElementById('sinais-frame').src=su;
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
