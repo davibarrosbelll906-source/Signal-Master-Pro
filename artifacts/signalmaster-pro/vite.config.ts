@@ -37,7 +37,12 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Exclude html — let navigateFallback handle SPA routes explicitly
+        globPatterns: ["**/*.{js,css,ico,png,svg,woff2}"],
+        // SPA fallback only for SignalMaster Pro's own routes
+        navigateFallback: "/index.html",
+        // Do NOT intercept other apps' paths
+        navigateFallbackDenylist: [/^\/ai-nexus-studio/, /^\/ai-chat/, /^\/api/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.binance\.com\/.*/i,
