@@ -5,9 +5,16 @@ import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import { existsSync } from "fs";
+import { fileURLToPath } from "url";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { onSignalReady, getPipelineStats, getWarmAssets } from "./lib/signalOrchestrator.js";
+
+// Reliable base dir: works regardless of process.cwd()
+// In dev:  src/app.ts  → __appDir = artifacts/api-server/src/   → ../../ = artifacts/
+// In prod: dist/app.mjs → __appDir = artifacts/api-server/dist/  → ../../ = artifacts/
+const __appDir = path.dirname(fileURLToPath(import.meta.url));
+const artifactsDir = path.resolve(__appDir, "../../");
 
 const app: Express = express();
 
@@ -115,7 +122,8 @@ onSignalReady((signal) => {
 });
 
 // ── Servir OmniChat em /ai-chat/ ─────────────────────────────────────────
-const aiChatDist = path.resolve(process.cwd(), "../ai-chat/dist/public");
+const aiChatDist = path.resolve(artifactsDir, "ai-chat/dist/public");
+logger.info({ aiChatDist, exists: existsSync(aiChatDist) }, "OmniChat dist path");
 if (existsSync(aiChatDist)) {
   logger.info({ aiChatDist }, "Servindo OmniChat em /ai-chat/");
   app.use("/ai-chat", express.static(aiChatDist, { maxAge: "1d" }));
@@ -129,29 +137,34 @@ if (existsSync(aiChatDist)) {
 
 // ── Servir AI Nexus Studio em /ai-nexus-studio/ ───────────────────────────
 // Needs permissive CSP: pure client-side app with inline scripts + CDN libs
-const aiNexusDist = path.resolve(process.cwd(), "../ai-nexus-studio/build");
+const aiNexusDist = path.resolve(artifactsDir, "ai-nexus-studio/build");
+logger.info({ aiNexusDist, exists: existsSync(aiNexusDist) }, "AI Nexus dist path");
+// Remove Helmet's CSP for this path — AI Nexus uses inline scripts + CDN
+app.use("/ai-nexus-studio", (_req: Request, res: Response, next: NextFunction) => {
+  res.removeHeader("Content-Security-Policy");
+  res.removeHeader("X-Content-Security-Policy");
+  next();
+});
 if (existsSync(aiNexusDist)) {
   logger.info({ aiNexusDist }, "Servindo AI Nexus Studio em /ai-nexus-studio/");
-  // Remove Helmet's CSP for this path — AI Nexus uses inline scripts + CDN
-  app.use("/ai-nexus-studio", (_req: Request, res: Response, next: NextFunction) => {
-    res.removeHeader("Content-Security-Policy");
-    res.removeHeader("X-Content-Security-Policy");
-    next();
-  });
   app.use("/ai-nexus-studio", express.static(aiNexusDist, { maxAge: "0" }));
-  app.get("/ai-nexus-studio", (_req: Request, res: Response) => {
-    res.removeHeader("Content-Security-Policy");
-    res.sendFile(path.join(aiNexusDist, "index.html"));
-  });
-  app.get("/ai-nexus-studio/{*path}", (_req: Request, res: Response) => {
-    res.removeHeader("Content-Security-Policy");
-    res.sendFile(path.join(aiNexusDist, "index.html"));
-  });
 }
+app.get("/ai-nexus-studio", (_req: Request, res: Response) => {
+  res.removeHeader("Content-Security-Policy");
+  const f = path.join(aiNexusDist, "index.html");
+  if (existsSync(f)) return res.sendFile(f);
+  res.status(503).send("AI Nexus Studio building… please try again in a moment.");
+});
+app.get("/ai-nexus-studio/{*path}", (_req: Request, res: Response) => {
+  res.removeHeader("Content-Security-Policy");
+  const f = path.join(aiNexusDist, "index.html");
+  if (existsSync(f)) return res.sendFile(f);
+  res.status(503).send("AI Nexus Studio building… please try again in a moment.");
+});
 
 // ── Servir SignalMaster Pro na raiz ───────────────────────────────────────
 const frontendDist = process.env["FRONTEND_DIST"] ||
-  path.resolve(process.cwd(), "../signalmaster-pro/dist/public");
+  path.resolve(artifactsDir, "signalmaster-pro/dist/public");
 
 if (existsSync(frontendDist)) {
   logger.info({ frontendDist }, "Servindo frontend estático");
