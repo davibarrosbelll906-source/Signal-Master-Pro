@@ -667,9 +667,11 @@ a{color:inherit}
       <div class="chat-hdr">
         <select id="model-select" onchange="onModelChange()">
           <optgroup label="Claude (Anthropic)">
-            <option value="claude:claude-opus-4-6">🏆 Claude Opus 4.6</option>
-            <option value="claude:claude-sonnet-4-6" selected>⭐ Claude Sonnet 4.6</option>
-            <option value="claude:claude-haiku-4-5-20251001">💰 Claude Haiku 4.5</option>
+            <option value="claude:claude-opus-4-5">🏆 Claude Opus 4.5</option>
+            <option value="claude:claude-sonnet-4-5" selected>⭐ Claude Sonnet 4.5</option>
+            <option value="claude:claude-3-7-sonnet-20250219">🚀 Claude 3.7 Sonnet</option>
+            <option value="claude:claude-3-5-sonnet-20241022">✨ Claude 3.5 Sonnet</option>
+            <option value="claude:claude-3-5-haiku-20241022">💰 Claude 3.5 Haiku</option>
           </optgroup>
           <optgroup label="OpenAI">
             <option value="openai:gpt-4o">GPT-4o</option>
@@ -913,9 +915,11 @@ a{color:inherit}
         <h1>🔧 Assistente de Código</h1>
         <div class="pg-actions">
           <select id="code-model" style="width:auto;padding:5px 8px;font-size:12px">
-            <option value="claude:claude-sonnet-4-6">Claude Sonnet 4.6 ⭐</option>
-            <option value="claude:claude-haiku-4-5-20251001">Claude Haiku 4.5 💰</option>
-            <option value="claude:claude-opus-4-6">Claude Opus 4.6 🏆</option>
+            <option value="claude:claude-sonnet-4-5">Claude Sonnet 4.5 ⭐</option>
+            <option value="claude:claude-3-7-sonnet-20250219">Claude 3.7 Sonnet 🚀</option>
+            <option value="claude:claude-3-5-sonnet-20241022">Claude 3.5 Sonnet ✨</option>
+            <option value="claude:claude-3-5-haiku-20241022">Claude 3.5 Haiku 💰</option>
+            <option value="claude:claude-opus-4-5">Claude Opus 4.5 🏆</option>
             <option value="groq:llama-3.3-70b-versatile">Groq Llama 70B 🆓</option>
             <option value="gemini:gemini-2.0-flash">Gemini 2.0 Flash 🆓</option>
           </select>
@@ -1688,7 +1692,11 @@ async function testKey(provider){
   stEl.textContent='⏳ Testando…';stEl.className='cfg-status cfg-status-none';
   try{
     let ok=false;
-    if(provider==='claude'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':K.claude(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:10,messages:[{role:'user',content:'hi'}]})});ok=r.ok;}
+    if(provider==='claude'){
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':K.claude(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:10,messages:[{role:'user',content:'hi'}]})});
+      if(!r.ok){const j=await r.json().catch(()=>({}));const msg=j?.error?.message||r.status;stEl.textContent=`✗ ${r.status===401?'Chave inválida':r.status===403?'Sem permissão':r.status===400?'Erro na requisição':msg}`;stEl.className='cfg-status cfg-status-err';return;}
+      ok=r.ok;
+    }
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:`Bearer ${K.openai()}`}});ok=r.ok;}
     else if(provider==='openrouter'){const r=await fetch('https://openrouter.ai/api/v1/models',{headers:{Authorization:`Bearer ${K.openrouter()}`}});ok=r.ok;}
     else if(provider==='groq'){const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:`Bearer ${K.groq()}`}});ok=r.ok;}
@@ -2348,7 +2356,7 @@ async function sendMgrChat(){
   const userDiv=document.createElement('div');userDiv.style.cssText='text-align:right;margin-bottom:6px';
   userDiv.innerHTML=`<span style="background:rgba(124,58,237,0.15);padding:6px 10px;border-radius:8px;font-size:12px">${text}</span>`;
   msgs.appendChild(userDiv);msgs.scrollTop=9999;
-  const modelFull=K.claude()?'claude:claude-sonnet-4-6':K.openai()?'openai:gpt-4o-mini':K.groq()?'groq:llama-3.3-70b-versatile':null;
+  const modelFull=K.claude()?'claude:claude-3-5-haiku-20241022':K.openai()?'openai:gpt-4o-mini':K.groq()?'groq:llama-3.3-70b-versatile':null;
   if(!modelFull){toast('Configure uma API em ⚙️ Config','err');return;}
   const[provider,modelName]=modelFull.split(':');
   const respDiv=document.createElement('div');respDiv.style.cssText='margin-bottom:6px';
@@ -2447,7 +2455,7 @@ async function sendTeamChat(){
   const respMsg=document.createElement('div');respMsg.className='team-msg';
   respMsg.innerHTML=`<div class="team-msg-avatar" style="background:var(--grad)">${agent.emoji}</div><div class="team-msg-body"><div class="team-msg-name">${agent.name}</div><div class="team-msg-text">⏳</div></div>`;
   msgs.appendChild(respMsg);const bubble=respMsg.querySelector('.team-msg-text');
-  const modelFull=K.claude()?'claude:claude-haiku-4-5-20251001':K.groq()?'groq:llama-3.3-70b-versatile':null;
+  const modelFull=K.claude()?'claude:claude-3-5-haiku-20241022':K.groq()?'groq:llama-3.3-70b-versatile':null;
   if(!modelFull){bubble.textContent='⚙️ Configure uma API';return;}
   const[provider,modelName]=modelFull.split(':');
   let reply='';
