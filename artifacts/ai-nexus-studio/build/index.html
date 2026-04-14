@@ -1363,7 +1363,13 @@ a{color:inherit}
           <h3>🤖 Modelos de Chat</h3>
           <div class="cfg-card">
             <div class="cfg-info"><div class="cfg-name">Claude (Anthropic)</div><div class="cfg-desc"><a href="https://console.anthropic.com" target="_blank" style="color:var(--purple)">console.anthropic.com</a></div></div>
-            <div class="cfg-input"><input type="password" id="k-claude" placeholder="sk-ant-…"/></div>
+            <div class="cfg-input" style="flex-direction:column;gap:4px;align-items:stretch">
+              <div style="display:flex;gap:4px;align-items:center">
+                <input type="password" id="k-claude" placeholder="sk-ant-api03-…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="flex:1;font-family:monospace;font-size:11px" oninput="validateKeyFmt('claude',this.value)"/>
+                <button onclick="toggleKeyVis('k-claude',this)" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;padding:4px 7px;font-size:12px" title="Mostrar/ocultar">👁</button>
+              </div>
+              <div id="fmt-claude" style="font-size:10px;display:none"></div>
+            </div>
             <span class="cfg-status cfg-status-none" id="st-claude">Não testado</span>
             <button class="btn btn-ghost btn-sm" onclick="testKey('claude')">Testar</button>
           </div>
@@ -1693,8 +1699,18 @@ async function testKey(provider){
   try{
     let ok=false;
     if(provider==='claude'){
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':K.claude(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:10,messages:[{role:'user',content:'hi'}]})});
-      if(!r.ok){const j=await r.json().catch(()=>({}));const msg=j?.error?.message||r.status;stEl.textContent=`✗ ${r.status===401?'Chave inválida':r.status===403?'Sem permissão':r.status===400?'Erro na requisição':msg}`;stEl.className='cfg-status cfg-status-err';return;}
+      // Try input first (in case user hasn't saved yet), then localStorage
+      const inputEl=document.getElementById('k-claude');
+      const keyToTest=(inputEl?.value.trim())||K.claude();
+      if(keyToTest&&inputEl&&inputEl.value.trim())localStorage.setItem('k_claude',inputEl.value.trim());
+      if(!keyToTest){stEl.textContent='✗ Cole a chave no campo e tente novamente';stEl.className='cfg-status cfg-status-err';return;}
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':keyToTest,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:10,messages:[{role:'user',content:'hi'}]})});
+      if(!r.ok){
+        const j=await r.json().catch(()=>({}));
+        const apiMsg=j?.error?.message||'';
+        const label=r.status===401?`Chave inválida${apiMsg?' — '+apiMsg.slice(0,60):''}`:r.status===403?'Sem permissão (verifique billing)':r.status===400?`Erro 400: ${apiMsg.slice(0,60)||'bad request'}`:r.status===529?'Anthropic sobrecarregado — tente de novo':`Erro ${r.status}: ${apiMsg.slice(0,60)||'desconhecido'}`;
+        stEl.textContent=`✗ ${label}`;stEl.className='cfg-status cfg-status-err';return;
+      }
       ok=r.ok;
     }
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:`Bearer ${K.openai()}`}});ok=r.ok;}
@@ -2696,6 +2712,34 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
   'profile email',
 ].join(' ');
+
+function toggleKeyVis(id,btn){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const show=el.type==='password';
+  el.type=show?'text':'password';
+  btn.textContent=show?'🔒':'👁';
+}
+
+function validateKeyFmt(provider,val){
+  const el=document.getElementById('fmt-'+provider);
+  if(!el)return;
+  const v=val.trim();
+  if(!v){el.style.display='none';return;}
+  const fmt={
+    claude:{prefix:'sk-ant-',len:90,name:'Começa com sk-ant-api03-'},
+    openai:{prefix:'sk-',len:50,name:'Começa com sk-'},
+    openrouter:{prefix:'sk-or-',len:40,name:'Começa com sk-or-v1-'},
+    groq:{prefix:'gsk_',len:50,name:'Começa com gsk_'},
+    gemini:{prefix:'AIza',len:35,name:'Começa com AIza'},
+  };
+  const f=fmt[provider];
+  if(!f){el.style.display='none';return;}
+  const ok=v.startsWith(f.prefix)&&v.length>=f.len*0.7;
+  el.style.display='block';
+  el.style.color=ok?'var(--green)':'var(--amber)';
+  el.textContent=ok?`✔ Formato correto (${v.length} chars)`:`⚠ ${f.name} — ${v.length} chars (esperado ~${f.len}+)`;
+}
 
 function initGoogleUrls(){
   const origin=window.location.origin;
