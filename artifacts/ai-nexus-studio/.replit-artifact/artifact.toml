@@ -19,7 +19,7 @@ run = "pnpm --filter @workspace/ai-nexus-studio run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/ai-nexus-studio", "run", "build" ]
-publicDir = "artifacts/ai-nexus-studio/dist/public"
+publicDir = "artifacts/ai-nexus-studio/build"
 serve = "static"
 
 [[services.production.rewrites]]
