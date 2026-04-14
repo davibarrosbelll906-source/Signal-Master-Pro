@@ -2,6 +2,9 @@
 
 # compiled output
 dist
+# Exception: ai-nexus-studio built files must be in git (pure static app)
+!artifacts/ai-nexus-studio/dist/
+!artifacts/ai-nexus-studio/dist/**
 tmp
 out-tsc
 *.tsbuildinfo
