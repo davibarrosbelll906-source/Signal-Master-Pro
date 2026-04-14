@@ -372,6 +372,43 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
   .adv-row{flex-direction:column}
 }
 
+/* ══ CONNECTORS ══════════════════════════════════════════ */
+.conn-hero{background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(59,130,246,0.08));border:1px solid rgba(124,58,237,0.25);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.conn-hero-icon{width:48px;height:48px;background:var(--grad);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.conn-hero p{font-size:12px;color:var(--muted);margin-top:3px}
+.conn-section{margin-bottom:18px}
+.conn-section-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.conn-section-hdr h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);flex:1}
+.conn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.conn-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;transition:border-color 0.2s,box-shadow 0.2s;position:relative}
+.conn-card.connected{border-color:rgba(16,185,129,0.4);box-shadow:0 0 0 1px rgba(16,185,129,0.1)}
+.conn-card.partial{border-color:rgba(245,158,11,0.4);box-shadow:0 0 0 1px rgba(245,158,11,0.1)}
+.conn-card-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.conn-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.conn-name{font-weight:700;font-size:13px}
+.conn-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.conn-status{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600}
+.conn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.conn-dot-green{background:var(--green)}
+.conn-dot-amber{background:var(--amber)}
+.conn-dot-red{background:rgba(239,68,68,0.6)}
+.conn-input-row{display:flex;gap:6px;margin-bottom:8px}
+.conn-input-row input{flex:1;font-size:12px;padding:6px 8px}
+.conn-actions{display:flex;gap:4px;flex-wrap:wrap}
+.conn-action{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--muted);font-family:inherit;transition:all 0.15s;font-weight:500}
+.conn-action:hover{border-color:var(--purple);color:var(--purple);background:rgba(124,58,237,0.07)}
+.conn-tools-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px}
+.conn-oauth-btn{width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;color:var(--text);transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px}
+.conn-oauth-btn:hover{border-color:var(--purple);background:rgba(124,58,237,0.07)}
+.conn-oauth-btn.authorized{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.4);color:var(--green)}
+.tool-result{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;line-height:1.6;margin-top:8px;max-height:200px;overflow-y:auto}
+.conn-tool-log{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;font-family:'JetBrains Mono',monospace;max-height:160px;overflow-y:auto;color:var(--muted)}
+.conn-tool-entry{padding:2px 0;border-bottom:1px solid var(--border)}
+.conn-tool-entry:last-child{border:none}
+.conn-tool-ok{color:var(--green)}
+.conn-tool-err{color:var(--red)}
+.conn-tool-info{color:var(--blue)}
+
 /* ══ MISC ════════════════════════════════════════════════ */
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted);text-align:center;padding:40px}
 .empty-icon{font-size:48px;opacity:0.3;margin-bottom:8px}
@@ -604,6 +641,10 @@ a{color:inherit}
       <div class="nav-item" id="nav-agentes" onclick="showPage('agentes')"><span class="nav-icon">🤖</span>Agentes</div>
       <div class="nav-item" id="nav-lib" onclick="showPage('lib')"><span class="nav-icon">📚</span>Biblioteca</div>
       <div class="nav-item" id="nav-proj" onclick="showPage('proj')"><span class="nav-icon">💾</span>Projetos</div>
+      <div class="nav-item" id="nav-conn" onclick="showPage('conn')">
+        <span class="nav-icon">🔌</span>Conectores
+        <span class="nav-badge" id="conn-badge" style="display:none">0</span>
+      </div>
       <div class="nav-item" id="nav-cfg" onclick="showPage('cfg')">
         <span class="nav-icon">⚙️</span>Config
         <span class="nav-badge" id="cfg-badge" style="display:none">!</span>
@@ -959,6 +1000,331 @@ a{color:inherit}
       </div>
     </div>
 
+    <!-- PAGE: CONNECTORS -->
+    <div class="page" id="page-conn">
+      <div class="pg-hdr">
+        <h1>🔌 Conectores &amp; Integrações</h1>
+        <div class="pg-actions">
+          <span class="badge badge-green" id="conn-active-count">0 conectados</span>
+          <button class="btn btn-ghost btn-sm" onclick="saveConnKeys()">💾 Salvar</button>
+          <button class="btn btn-primary btn-sm" onclick="checkAllConns()">🔄 Verificar todos</button>
+        </div>
+      </div>
+      <div class="pg-body">
+
+        <!-- Hero -->
+        <div class="conn-hero">
+          <div class="conn-hero-icon">🔌</div>
+          <div>
+            <div style="font-weight:700;font-size:14px">Superpoderes para o Chat e Agentes</div>
+            <p>Conecte plataformas e a IA passará a ter acesso em tempo real: emails, agenda, arquivos, clima, notícias, GitHub e muito mais.</p>
+          </div>
+          <div id="conn-ai-badge" style="flex-shrink:0">
+            <span class="badge badge-purple" style="font-size:11px">🤖 IA usa automaticamente</span>
+          </div>
+        </div>
+
+        <!-- GOOGLE -->
+        <div class="conn-section">
+          <div class="conn-section-hdr">
+            <h3>🌐 Google Suite</h3>
+            <span class="badge badge-gray" id="badge-google">Não conectado</span>
+          </div>
+          <div class="conn-grid">
+            <!-- Google OAuth -->
+            <div class="conn-card" id="card-google-oauth">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(66,133,244,0.15)">🔑</div>
+                <div><div class="conn-name">Google OAuth 2.0</div><div class="conn-sub">Client ID do Google Cloud Console</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-google"></div><span id="status-google">Desconectado</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-google-client" placeholder="Google Client ID (…apps.googleusercontent.com)" style="font-size:11px"/>
+              </div>
+              <button class="conn-oauth-btn" id="btn-google-oauth" onclick="connectGoogle()">
+                <img src="https://www.google.com/favicon.ico" width="14" height="14" alt=""/> Conectar com Google
+              </button>
+              <div id="google-user-info" style="display:none;padding:6px;background:rgba(16,185,129,0.1);border-radius:6px;font-size:11px;margin-bottom:8px"></div>
+              <div class="conn-tools-label">Acesso disponível após login:</div>
+              <div class="conn-actions">
+                <span class="conn-action">📧 Gmail</span>
+                <span class="conn-action">📅 Calendar</span>
+                <span class="conn-action">📁 Drive</span>
+                <span class="conn-action">🎥 YouTube</span>
+                <span class="conn-action">🔍 Pesquisa</span>
+              </div>
+            </div>
+            <!-- Gmail -->
+            <div class="conn-card" id="card-gmail">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(234,67,53,0.15)">📧</div>
+                <div><div class="conn-name">Gmail</div><div class="conn-sub">Ler, buscar e resumir emails</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-gmail"></div><span id="status-gmail">Requer OAuth</span></div>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('gmail','inbox')">📥 Ver inbox</button>
+                <button class="conn-action" onclick="connTool('gmail','unread')">🔴 Não lidos</button>
+                <button class="conn-action" onclick="connTool('gmail','search')">🔍 Buscar email</button>
+                <button class="conn-action" onclick="connTool('gmail','summary')">📋 Resumir emails</button>
+              </div>
+            </div>
+            <!-- Google Calendar -->
+            <div class="conn-card" id="card-gcal">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(66,133,244,0.15)">📅</div>
+                <div><div class="conn-name">Google Calendar</div><div class="conn-sub">Agenda, eventos e lembretes</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-gcal"></div><span id="status-gcal">Requer OAuth</span></div>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('gcal','today')">📆 Hoje</button>
+                <button class="conn-action" onclick="connTool('gcal','week')">🗓 Semana</button>
+                <button class="conn-action" onclick="connTool('gcal','next')">➡ Próximo evento</button>
+              </div>
+            </div>
+            <!-- Google Drive -->
+            <div class="conn-card" id="card-gdrive">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(251,188,4,0.15)">📁</div>
+                <div><div class="conn-name">Google Drive</div><div class="conn-sub">Arquivos e documentos</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-gdrive"></div><span id="status-gdrive">Requer OAuth</span></div>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('gdrive','recent')">🕐 Recentes</button>
+                <button class="conn-action" onclick="connTool('gdrive','search')">🔍 Buscar arquivo</button>
+                <button class="conn-action" onclick="connTool('gdrive','shared')">👥 Compartilhados</button>
+              </div>
+            </div>
+            <!-- YouTube -->
+            <div class="conn-card" id="card-youtube">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(255,0,0,0.15)">🎥</div>
+                <div><div class="conn-name">YouTube Data API</div><div class="conn-sub">Buscar vídeos e canais</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-youtube"></div><span id="status-youtube">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-youtube" placeholder="API Key do Google Cloud (YT Data API v3)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('youtube')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('youtube','search')">🔍 Buscar vídeo</button>
+                <button class="conn-action" onclick="connTool('youtube','trending')">🔥 Trending</button>
+                <button class="conn-action" onclick="connTool('youtube','channel')">📺 Info canal</button>
+              </div>
+            </div>
+            <!-- Google Custom Search -->
+            <div class="conn-card" id="card-gsearch">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(66,133,244,0.15)">🔍</div>
+                <div><div class="conn-name">Google Custom Search</div><div class="conn-sub">Pesquisa real-time no Google</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-gsearch"></div><span id="status-gsearch">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-gsearch-key" placeholder="API Key"/>
+              </div>
+              <div class="conn-input-row">
+                <input type="text" id="k-gsearch-cx" placeholder="Search Engine ID (cx)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('gsearch')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('gsearch','search')">🔍 Pesquisar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DADOS & INFORMAÇÃO -->
+        <div class="conn-section">
+          <div class="conn-section-hdr">
+            <h3>📊 Dados &amp; Informação</h3>
+          </div>
+          <div class="conn-grid">
+            <!-- Wikipedia -->
+            <div class="conn-card connected" id="card-wikipedia">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(255,255,255,0.08)">📖</div>
+                <div><div class="conn-name">Wikipedia</div><div class="conn-sub">Grátis · sem chave necessária</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-green"></div><span style="color:var(--green)">Sempre ativo</span></div>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('wikipedia','search')">🔍 Buscar artigo</button>
+                <button class="conn-action" onclick="connTool('wikipedia','summary')">📋 Resumo</button>
+              </div>
+            </div>
+            <!-- Weather -->
+            <div class="conn-card" id="card-weather">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(59,130,246,0.15)">🌤</div>
+                <div><div class="conn-name">OpenWeatherMap</div><div class="conn-sub">Clima atual e previsão</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-weather"></div><span id="status-weather">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-weather" placeholder="API Key (openweathermap.org — grátis)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('weather');testWeather()">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('weather','now')">🌡 Agora</button>
+                <button class="conn-action" onclick="connTool('weather','forecast')">📅 Previsão 5 dias</button>
+                <button class="conn-action" onclick="connTool('weather','alerts')">⚠️ Alertas</button>
+              </div>
+            </div>
+            <!-- News -->
+            <div class="conn-card" id="card-news">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(245,158,11,0.15)">📰</div>
+                <div><div class="conn-name">GNews / NewsAPI</div><div class="conn-sub">Notícias em tempo real</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-news"></div><span id="status-news">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-gnews" placeholder="GNews API Key (gnews.io — 100/dia grátis)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('gnews')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('news','top')">🔥 Top notícias</button>
+                <button class="conn-action" onclick="connTool('news','search')">🔍 Buscar notícia</button>
+                <button class="conn-action" onclick="connTool('news','tech')">💻 Tecnologia</button>
+                <button class="conn-action" onclick="connTool('news','finance')">💰 Finanças</button>
+              </div>
+            </div>
+            <!-- Reddit -->
+            <div class="conn-card connected" id="card-reddit">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(255,69,0,0.15)">🔴</div>
+                <div><div class="conn-name">Reddit</div><div class="conn-sub">Posts públicos · sem chave</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-green"></div><span style="color:var(--green)">Sempre ativo</span></div>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('reddit','hot')">🔥 Hot posts</button>
+                <button class="conn-action" onclick="connTool('reddit','search')">🔍 Buscar</button>
+                <button class="conn-action" onclick="connTool('reddit','sub')">📂 Subreddit</button>
+              </div>
+            </div>
+            <!-- Alpha Vantage / Finance -->
+            <div class="conn-card" id="card-finance">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(16,185,129,0.15)">📈</div>
+                <div><div class="conn-name">Alpha Vantage</div><div class="conn-sub">Ações, Forex e Crypto</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-finance"></div><span id="status-finance">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-alphav" placeholder="API Key (alphavantage.co — grátis)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('alphav')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('finance','quote')">💹 Cotação</button>
+                <button class="conn-action" onclick="connTool('finance','forex')">💱 Forex</button>
+                <button class="conn-action" onclick="connTool('finance','crypto')">₿ Crypto</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PRODUTIVIDADE -->
+        <div class="conn-section">
+          <div class="conn-section-hdr">
+            <h3>💼 Produtividade &amp; Comunicação</h3>
+          </div>
+          <div class="conn-grid">
+            <!-- GitHub -->
+            <div class="conn-card" id="card-github">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(255,255,255,0.08)">🐙</div>
+                <div><div class="conn-name">GitHub</div><div class="conn-sub">Repos, issues, PRs, código</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-amber" id="dot-github"></div><span id="status-github">Público apenas</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-github" placeholder="Personal Access Token (opcional — repos privados)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('github')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('github','repos')">📂 Meus repos</button>
+                <button class="conn-action" onclick="connTool('github','issues')">🐛 Issues</button>
+                <button class="conn-action" onclick="connTool('github','search')">🔍 Buscar repo</button>
+                <button class="conn-action" onclick="connTool('github','trending')">🔥 Trending</button>
+              </div>
+            </div>
+            <!-- Notion -->
+            <div class="conn-card" id="card-notion">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(255,255,255,0.08)">📝</div>
+                <div><div class="conn-name">Notion</div><div class="conn-sub">Páginas e bancos de dados</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-notion-c"></div><span id="status-notion-c">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-notion-c" placeholder="Integration Token (secret_…)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('notion-c')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('notion','pages')">📄 Páginas</button>
+                <button class="conn-action" onclick="connTool('notion','databases')">🗃 Databases</button>
+                <button class="conn-action" onclick="connTool('notion','search')">🔍 Buscar</button>
+              </div>
+            </div>
+            <!-- Slack -->
+            <div class="conn-card" id="card-slack">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(74,21,75,0.3)">💬</div>
+                <div><div class="conn-name">Slack</div><div class="conn-sub">Mensagens e canais</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-slack-c"></div><span id="status-slack-c">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-slack-c" placeholder="Bot Token (xoxb-…)"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('slack-c')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('slack','channels')">📢 Canais</button>
+                <button class="conn-action" onclick="connTool('slack','messages')">💬 Mensagens</button>
+                <button class="conn-action" onclick="connTool('slack','send')">📤 Enviar msg</button>
+              </div>
+            </div>
+            <!-- Telegram -->
+            <div class="conn-card" id="card-telegram">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(0,136,204,0.15)">✈️</div>
+                <div><div class="conn-name">Telegram Bot</div><div class="conn-sub">Enviar mensagens via bot</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-telegram"></div><span id="status-telegram">Sem chave</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-telegram" placeholder="Bot Token (@BotFather)"/>
+              </div>
+              <div class="conn-input-row">
+                <input type="text" id="k-telegram-chat" placeholder="Chat ID do destinatário"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('telegram')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('telegram','send')">📤 Enviar msg</button>
+                <button class="conn-action" onclick="connTool('telegram','updates')">📥 Ver updates</button>
+              </div>
+            </div>
+            <!-- Discord -->
+            <div class="conn-card" id="card-discord">
+              <div class="conn-card-top">
+                <div class="conn-icon" style="background:rgba(88,101,242,0.15)">🎮</div>
+                <div><div class="conn-name">Discord Webhook</div><div class="conn-sub">Enviar mensagens ao servidor</div></div>
+                <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-discord"></div><span id="status-discord">Sem webhook</span></div>
+              </div>
+              <div class="conn-input-row">
+                <input type="password" id="k-discord" placeholder="Webhook URL"/>
+                <button class="btn btn-ghost btn-sm" onclick="saveConnKey('discord')">✓</button>
+              </div>
+              <div class="conn-actions">
+                <button class="conn-action" onclick="connTool('discord','send')">📤 Enviar msg</button>
+                <button class="conn-action" onclick="connTool('discord','embed')">📋 Enviar embed</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LOG -->
+        <div class="conn-section">
+          <div class="conn-section-hdr"><h3>📟 Log de Ferramentas</h3></div>
+          <div class="conn-tool-log" id="conn-tool-log">
+            <div class="conn-tool-entry conn-tool-info">Sistema de conectores inicializado. Wikipedia e Reddit sempre disponíveis.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- PAGE 8: CONFIG -->
     <div class="page" id="page-cfg">
       <div class="pg-hdr">
@@ -1232,6 +1598,7 @@ function showPage(page){
   if(page==='proj')renderProjects();
   if(page==='eco')updateEcoPage();
   if(page==='mgr')initMgr();
+  if(page==='conn'){loadConnKeys();checkAllConns();}
 }
 function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('open');
@@ -1563,15 +1930,21 @@ async function sendChat(){
     userContent=typeof userContent==='string'?userContent+ctx:[...userContent,{type:'text',text:ctx}];
   }
   addToHistory({role:'user',content:userContent});
+  // Auto-connectors (run before web search)
+  let connCtx='';
+  if(text){
+    const connResult=await runAutoConnectors(text);
+    if(connResult){connCtx='\n\n[DADOS EM TEMPO REAL VIA CONECTORES]\n'+connResult;}
+  }
   // Web search
   let searchCtx='';
-  if(text&&needsWebSearch(text)){
+  if(text&&!connCtx&&needsWebSearch(text)){
     document.getElementById('search-indicator').style.display='flex';
     searchCtx=await doWebSearch(text);
     document.getElementById('search-indicator').style.display='none';
   }
   // System prompt
-  const sysPrompt=[document.getElementById('sys-prompt').value.trim(),getPersonaPrompt(),getMemoryContext(),searchCtx].filter(Boolean).join('\n\n');
+  const sysPrompt=[document.getElementById('sys-prompt').value.trim(),getPersonaPrompt(),getMemoryContext(),searchCtx,connCtx].filter(Boolean).join('\n\n');
   // Clear uploads
   uploadedImages=[];uploadedDocs=[];renderImgStrip();renderDocStrip();
   renderMessages();
@@ -2162,6 +2535,511 @@ function delProjSession(id){
   renderProjects();
 }
 
+// ══ CONNECTORS SYSTEM ════════════════════════════════════
+const CK = {
+  weather:    ()=>localStorage.getItem('k_weather')||'',
+  gnews:      ()=>localStorage.getItem('k_gnews')||'',
+  github:     ()=>localStorage.getItem('k_github')||'',
+  youtube:    ()=>localStorage.getItem('k_youtube')||'',
+  gsearchKey: ()=>localStorage.getItem('k_gsearch_key')||'',
+  gsearchCx:  ()=>localStorage.getItem('k_gsearch_cx')||'',
+  alphav:     ()=>localStorage.getItem('k_alphav')||'',
+  notion_c:   ()=>localStorage.getItem('k_notion_c')||localStorage.getItem('k_notion')||'',
+  slack_c:    ()=>localStorage.getItem('k_slack_c')||localStorage.getItem('k_slack')||'',
+  telegram:   ()=>localStorage.getItem('k_telegram')||'',
+  telegramChat:()=>localStorage.getItem('k_telegram_chat')||'',
+  discord:    ()=>localStorage.getItem('k_discord')||'',
+  googleToken:()=>localStorage.getItem('g_access_token')||'',
+  googleClientId:()=>localStorage.getItem('k_google_client')||'',
+};
+let connToolLog = [];
+
+function connLog(msg, type='info'){
+  const ts=new Date().toLocaleTimeString('pt-BR');
+  connToolLog.unshift({ts,msg,type});
+  if(connToolLog.length>50)connToolLog.pop();
+  const el=document.getElementById('conn-tool-log');
+  if(el) el.innerHTML=connToolLog.map(e=>`<div class="conn-tool-entry conn-tool-${e.type}">[${e.ts}] ${e.msg}</div>`).join('');
+}
+
+function saveConnKey(id){
+  const map={
+    'weather':'k_weather','gnews':'k_gnews','github':'k_github',
+    'youtube':'k_youtube','gsearch':'both','alphav':'k_alphav',
+    'notion-c':'k_notion_c','slack-c':'k_slack_c',
+    'telegram':'both-telegram','discord':'k_discord',
+  };
+  if(id==='gsearch'){
+    localStorage.setItem('k_gsearch_key',document.getElementById('k-gsearch-key')?.value.trim()||'');
+    localStorage.setItem('k_gsearch_cx',document.getElementById('k-gsearch-cx')?.value.trim()||'');
+  } else if(id==='telegram'){
+    localStorage.setItem('k_telegram',document.getElementById('k-telegram')?.value.trim()||'');
+    localStorage.setItem('k_telegram_chat',document.getElementById('k-telegram-chat')?.value.trim()||'');
+  } else {
+    const key=map[id];if(!key)return;
+    const input=document.getElementById('k-'+id);
+    if(input)localStorage.setItem(key,input.value.trim());
+  }
+  checkAllConns();toast('Conector salvo!','ok');
+}
+
+function saveConnKeys(){
+  const pairs={
+    'k-weather':'k_weather','k-gnews':'k_gnews','k-github':'k_github',
+    'k-youtube':'k_youtube','k-alphav':'k_alphav',
+    'k-notion-c':'k_notion_c','k-slack-c':'k_slack_c',
+    'k-telegram':'k_telegram','k-telegram-chat':'k_telegram_chat',
+    'k-discord':'k_discord','k-google-client':'k_google_client',
+    'k-gsearch-key':'k_gsearch_key','k-gsearch-cx':'k_gsearch_cx',
+  };
+  for(const[id,key]of Object.entries(pairs)){
+    const el=document.getElementById(id);if(el&&el.value.trim())localStorage.setItem(key,el.value.trim());
+  }
+  checkAllConns();toast('Conectores salvos!','ok');
+}
+
+function loadConnKeys(){
+  const pairs={
+    'k-weather':'k_weather','k-gnews':'k_gnews','k-github':'k_github',
+    'k-youtube':'k_youtube','k-alphav':'k_alphav',
+    'k-notion-c':'k_notion_c','k-slack-c':'k_slack_c',
+    'k-telegram':'k_telegram','k-telegram-chat':'k_telegram_chat',
+    'k-discord':'k_discord','k-google-client':'k_google_client',
+    'k-gsearch-key':'k_gsearch_key','k-gsearch-cx':'k_gsearch_cx',
+  };
+  for(const[id,key]of Object.entries(pairs)){
+    const el=document.getElementById(id);if(el)el.value=localStorage.getItem(key)||'';
+  }
+}
+
+function setConnStatus(dotId, statusId, connected, label=''){
+  const dot=document.getElementById(dotId);const st=document.getElementById(statusId);
+  if(dot){dot.className='conn-dot '+(connected?'conn-dot-green':'conn-dot-red');}
+  if(st){st.textContent=label||(connected?'Conectado':'Sem chave');if(connected)st.style.color='var(--green)';else st.style.color='';}
+  const card=dot?.closest('.conn-card');
+  if(card){card.classList.toggle('connected',connected);card.classList.toggle('partial',false);}
+}
+
+function checkAllConns(){
+  let count=2; // wikipedia + reddit always
+  setConnStatus('dot-weather','status-weather',!!CK.weather());if(CK.weather())count++;
+  setConnStatus('dot-news','status-news',!!CK.gnews());if(CK.gnews())count++;
+  setConnStatus('dot-github','status-github',!!CK.github(),'Personal token ativo');
+  if(CK.github())count++;else{const d=document.getElementById('dot-github');if(d)d.className='conn-dot conn-dot-amber';const s=document.getElementById('status-github');if(s){s.textContent='Público apenas';s.style.color='var(--amber)';}}
+  setConnStatus('dot-youtube','status-youtube',!!CK.youtube());if(CK.youtube())count++;
+  setConnStatus('dot-gsearch','status-gsearch',!!(CK.gsearchKey()&&CK.gsearchCx()));if(CK.gsearchKey()&&CK.gsearchCx())count++;
+  setConnStatus('dot-finance','status-finance',!!CK.alphav());if(CK.alphav())count++;
+  setConnStatus('dot-notion-c','status-notion-c',!!CK.notion_c());if(CK.notion_c())count++;
+  setConnStatus('dot-slack-c','status-slack-c',!!CK.slack_c());if(CK.slack_c())count++;
+  setConnStatus('dot-telegram','status-telegram',!!CK.telegram());if(CK.telegram())count++;
+  setConnStatus('dot-discord','status-discord',!!CK.discord(),'Webhook ok');if(CK.discord())count++;
+  // Google
+  const gToken=CK.googleToken();
+  setConnStatus('dot-google','status-google',!!gToken,gToken?'Autenticado':'Desconectado');
+  setConnStatus('dot-gmail','status-gmail',!!gToken,gToken?'Pronto':'Requer OAuth');
+  setConnStatus('dot-gcal','status-gcal',!!gToken,gToken?'Pronto':'Requer OAuth');
+  setConnStatus('dot-gdrive','status-gdrive',!!gToken,gToken?'Pronto':'Requer OAuth');
+  if(gToken)count+=3;
+  const btn=document.getElementById('btn-google-oauth');
+  if(btn){btn.classList.toggle('authorized',!!gToken);btn.innerHTML=gToken?'✅ Google Conectado — Desconectar':'<img src="https://www.google.com/favicon.ico" width="14" height="14" alt=""/> Conectar com Google';}
+  const google=document.getElementById('badge-google');if(google)google.textContent=gToken?'✓ Conectado':'Não conectado';
+  const badge=document.getElementById('conn-badge');if(badge){badge.textContent=count;badge.style.display='inline';}
+  const cnt=document.getElementById('conn-active-count');if(cnt)cnt.textContent=count+' conectados';
+}
+
+async function testWeather(){
+  if(!CK.weather()){toast('Configure OpenWeatherMap primeiro','err');return;}
+  try{
+    const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?q=São+Paulo&appid=${CK.weather()}&units=metric&lang=pt_br`);
+    const d=await r.json();if(r.ok){toast('OpenWeatherMap conectado! '+d.weather[0].description,'ok');checkAllConns();}
+    else toast('Chave inválida: '+d.message,'err');
+  }catch(e){toast('Erro de conexão','err');}
+}
+
+// ─── GOOGLE OAUTH ─────────────────────────────────────────
+const GOOGLE_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/youtube.readonly',
+  'profile email',
+].join(' ');
+
+function connectGoogle(){
+  const gToken=CK.googleToken();
+  if(gToken){localStorage.removeItem('g_access_token');checkAllConns();toast('Google desconectado','info');return;}
+  const clientId=document.getElementById('k-google-client')?.value.trim()||CK.googleClientId();
+  if(!clientId){toast('Cole o Google Client ID primeiro','err');return;}
+  localStorage.setItem('k_google_client',clientId);
+  const redirect=window.location.origin+window.location.pathname;
+  const url=`https://accounts.google.com/o/oauth2/v2/auth?`+
+    `client_id=${encodeURIComponent(clientId)}&`+
+    `redirect_uri=${encodeURIComponent(redirect)}&`+
+    `response_type=token&`+
+    `scope=${encodeURIComponent(GOOGLE_SCOPES)}&`+
+    `include_granted_scopes=true&`+
+    `prompt=select_account`;
+  const popup=window.open(url,'google-oauth','width=520,height=600,scrollbars=yes');
+  const poll=setInterval(()=>{
+    try{
+      if(popup.closed){clearInterval(poll);checkAllConns();return;}
+      const hash=popup.location.hash;
+      if(hash&&hash.includes('access_token')){
+        const params=new URLSearchParams(hash.slice(1));
+        const token=params.get('access_token');
+        if(token){
+          localStorage.setItem('g_access_token',token);
+          popup.close();clearInterval(poll);
+          checkAllConns();toast('Google conectado com sucesso! 🎉','ok');
+          fetchGoogleProfile(token);
+        }
+      }
+    }catch(_){}
+  },500);
+}
+
+async function fetchGoogleProfile(token){
+  try{
+    const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{Authorization:'Bearer '+token}});
+    const d=await r.json();
+    const el=document.getElementById('google-user-info');
+    if(el&&d.email){el.style.display='block';el.innerHTML=`<img src="${d.picture}" style="width:20px;height:20px;border-radius:50%;margin-right:6px;vertical-align:middle"/>Conectado como <b>${d.email}</b>`;}
+  }catch(_){}
+}
+
+// ─── CONNECTOR TOOLS ──────────────────────────────────────
+async function connTool(connector, action, params={}){
+  connLog(`Executando ${connector}:${action}…`,'info');
+  let result='';
+  try{
+    switch(connector){
+      case 'wikipedia': result=await toolWikipedia(action,params);break;
+      case 'weather':   result=await toolWeather(action,params);break;
+      case 'news':      result=await toolNews(action,params);break;
+      case 'reddit':    result=await toolReddit(action,params);break;
+      case 'github':    result=await toolGitHub(action,params);break;
+      case 'youtube':   result=await toolYouTube(action,params);break;
+      case 'finance':   result=await toolFinance(action,params);break;
+      case 'gmail':     result=await toolGmail(action,params);break;
+      case 'gcal':      result=await toolGCal(action,params);break;
+      case 'gdrive':    result=await toolGDrive(action,params);break;
+      case 'notion':    result=await toolNotion(action,params);break;
+      case 'slack':     result=await toolSlack(action,params);break;
+      case 'telegram':  result=await toolTelegram(action,params);break;
+      case 'discord':   result=await toolDiscord(action,params);break;
+      case 'gsearch':   result=await toolGSearch(action,params);break;
+      default: result='Conector desconhecido: '+connector;
+    }
+    connLog(`✓ ${connector}:${action} OK`,'ok');
+    // Show result in chat
+    if(result){
+      showPage('chat');
+      document.getElementById('chat-empty').style.display='none';
+      addToHistory({role:'assistant',content:`**[${connector.toUpperCase()} — ${action}]**\n\n${result}`,modelVal:'tool'});
+      renderMessages();
+    }
+  }catch(err){
+    connLog(`✗ ${connector}:${action} — ${err.message}`,'err');
+    toast(`Erro ${connector}: ${err.message}`,'err');
+  }
+  return result;
+}
+
+// ─── WIKIPEDIA ────────────────────────────────────────────
+async function toolWikipedia(action, p={}){
+  const q=p.q||prompt('Buscar na Wikipedia:','Inteligência Artificial');if(!q)return'';
+  if(action==='search'){
+    const r=await fetch(`https://pt.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q)}`);
+    if(!r.ok)throw new Error('Artigo não encontrado');
+    const d=await r.json();
+    return`📖 **${d.title}**\n\n${d.extract}\n\n[Leia mais](${d.content_urls?.desktop?.page})`;
+  }
+  if(action==='summary'){
+    const r=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q)}`);
+    const d=await r.json();return`📖 **${d.title}**: ${d.description}\n\n${d.extract?.slice(0,800)}…`;
+  }
+  return'';
+}
+
+// ─── WEATHER ──────────────────────────────────────────────
+async function toolWeather(action, p={}){
+  if(!CK.weather()){toast('Configure OpenWeatherMap em 🔌 Conectores','err');showPage('conn');return'';}
+  const city=p.city||prompt('Cidade:','São Paulo');if(!city)return'';
+  if(action==='now'){
+    const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${CK.weather()}&units=metric&lang=pt_br`);
+    const d=await r.json();if(!r.ok)throw new Error(d.message);
+    return`🌤 **Clima em ${d.name}**\n🌡 Temperatura: **${d.main.temp.toFixed(1)}°C** (sensação ${d.main.feels_like.toFixed(1)}°C)\n💧 Umidade: ${d.main.humidity}%\n💨 Vento: ${(d.wind.speed*3.6).toFixed(1)} km/h\n⛅ Condição: ${d.weather[0].description}\n👁 Visibilidade: ${(d.visibility/1000).toFixed(1)} km`;
+  }
+  if(action==='forecast'){
+    const r=await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${CK.weather()}&units=metric&lang=pt_br&cnt=8`);
+    const d=await r.json();if(!r.ok)throw new Error(d.message);
+    const lines=d.list.map(f=>{const dt=new Date(f.dt*1000);return`**${dt.toLocaleDateString('pt-BR')} ${dt.getHours()}h** — ${f.main.temp.toFixed(1)}°C, ${f.weather[0].description}`;});
+    return`📅 **Previsão para ${d.city.name}**\n\n${lines.join('\n')}`;
+  }
+  return'';
+}
+
+// ─── NEWS ─────────────────────────────────────────────────
+async function toolNews(action, p={}){
+  if(!CK.gnews()){toast('Configure GNews em 🔌 Conectores','err');showPage('conn');return'';}
+  const base=`https://gnews.io/api/v4`;
+  let url='';
+  if(action==='top')    url=`${base}/top-headlines?lang=pt&max=5&token=${CK.gnews()}`;
+  if(action==='tech')   url=`${base}/top-headlines?lang=pt&topic=technology&max=5&token=${CK.gnews()}`;
+  if(action==='finance')url=`${base}/top-headlines?lang=pt&topic=business&max=5&token=${CK.gnews()}`;
+  if(action==='search'){const q=p.q||prompt('Buscar notícia:','');if(!q)return'';url=`${base}/search?q=${encodeURIComponent(q)}&lang=pt&max=5&token=${CK.gnews()}`;}
+  const r=await fetch(url);const d=await r.json();
+  if(!r.ok)throw new Error(d.errors?.[0]||'Erro GNews');
+  return`📰 **Notícias (${action})**\n\n`+(d.articles||[]).map((a,i)=>`${i+1}. **${a.title}**\n   ${a.description?.slice(0,120)||''}\n   [Ler]( ${a.url} ) — ${a.source.name}`).join('\n\n');
+}
+
+// ─── REDDIT ───────────────────────────────────────────────
+async function toolReddit(action, p={}){
+  let url='';
+  if(action==='hot')  url='https://www.reddit.com/r/popular.json?limit=10';
+  if(action==='search'){const q=p.q||prompt('Buscar no Reddit:','');if(!q)return'';url=`https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&limit=8&sort=relevance`;}
+  if(action==='sub')  {const s=p.sub||prompt('Subreddit:','programming');if(!s)return'';url=`https://www.reddit.com/r/${s}/hot.json?limit=8`;}
+  const r=await fetch(url,{headers:{Accept:'application/json'}});
+  const d=await r.json();
+  const posts=d.data?.children||[];
+  return`🔴 **Reddit — ${action}**\n\n`+posts.slice(0,8).map((c,i)=>{const p=c.data;return`${i+1}. **${p.title}** (r/${p.subreddit})\n   ⬆ ${p.ups} upvotes · 💬 ${p.num_comments} comments\n   [reddit.com${p.permalink}](https://reddit.com${p.permalink})`;}).join('\n\n');
+}
+
+// ─── GITHUB ───────────────────────────────────────────────
+async function toolGitHub(action, p={}){
+  const headers={'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  if(CK.github())headers['Authorization']='Bearer '+CK.github();
+  if(action==='repos'){
+    if(!CK.github()){const q=p.user||prompt('Usuário GitHub:','');if(!q)return'';const r=await fetch(`https://api.github.com/users/${q}/repos?sort=updated&per_page=10`,{headers});const d=await r.json();return`🐙 **Repos de ${q}**\n\n`+d.map(r=>`• **${r.full_name}** ⭐${r.stargazers_count}\n  ${r.description||'Sem descrição'} [${r.language||'?'}]`).join('\n');}
+    const r=await fetch('https://api.github.com/user/repos?sort=updated&per_page=10',{headers});const d=await r.json();
+    return`🐙 **Meus repositórios**\n\n`+d.map(r=>`• **${r.full_name}** ⭐${r.stargazers_count} — ${r.description||'Sem descrição'}`).join('\n');
+  }
+  if(action==='issues'){
+    if(!CK.github()){toast('Requer Personal Token para issues','err');return'';}
+    const r=await fetch('https://api.github.com/issues?filter=assigned&state=open&per_page=10',{headers});const d=await r.json();
+    return`🐛 **Issues atribuídas a mim**\n\n`+d.map(i=>`• [#${i.number}] **${i.title}** — ${i.repository_url.split('/').slice(-1)[0]}\n  [Abrir](${i.html_url})`).join('\n');
+  }
+  if(action==='search'){const q=p.q||prompt('Buscar repositório:','');if(!q)return'';const r=await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&per_page=6`,{headers});const d=await r.json();return`🔍 **GitHub Search: "${q}"**\n\n`+d.items?.map(r=>`• **${r.full_name}** ⭐${r.stargazers_count}\n  ${r.description||''}\n  🔗 ${r.html_url}`).join('\n\n');}
+  if(action==='trending'){const r=await fetch(`https://api.github.com/search/repositories?q=stars:>1000+pushed:>${new Date(Date.now()-7*86400000).toISOString().slice(0,10)}&sort=stars&per_page=8`,{headers});const d=await r.json();return`🔥 **GitHub Trending (semana)**\n\n`+d.items?.map((r,i)=>`${i+1}. **${r.full_name}** ⭐${r.stargazers_count}\n   ${r.description?.slice(0,100)||''} [${r.language||'?'}]`).join('\n\n');}
+  return'';
+}
+
+// ─── YOUTUBE ──────────────────────────────────────────────
+async function toolYouTube(action, p={}){
+  if(!CK.youtube()){toast('Configure YouTube API Key em 🔌 Conectores','err');showPage('conn');return'';}
+  if(action==='search'){
+    const q=p.q||prompt('Buscar vídeo:','');if(!q)return'';
+    const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&maxResults=5&type=video&key=${CK.youtube()}`);
+    const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Erro YT');
+    return`🎥 **YouTube: "${q}"**\n\n`+d.items?.map((v,i)=>`${i+1}. **${v.snippet.title}**\n   📺 ${v.snippet.channelTitle} · ${v.snippet.publishedAt.slice(0,10)}\n   🔗 https://youtube.com/watch?v=${v.id.videoId}`).join('\n\n');
+  }
+  if(action==='trending'){
+    const r=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=BR&maxResults=5&key=${CK.youtube()}`);
+    const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Erro YT');
+    return`🔥 **YouTube Trending BR**\n\n`+d.items?.map((v,i)=>`${i+1}. **${v.snippet.title}**\n   👁 ${(parseInt(v.statistics?.viewCount)||0).toLocaleString()} views · 👍 ${(parseInt(v.statistics?.likeCount)||0).toLocaleString()}\n   🔗 https://youtube.com/watch?v=${v.id}`).join('\n\n');
+  }
+  return'';
+}
+
+// ─── FINANCE ──────────────────────────────────────────────
+async function toolFinance(action, p={}){
+  if(!CK.alphav()){toast('Configure Alpha Vantage em 🔌 Conectores','err');showPage('conn');return'';}
+  if(action==='quote'){
+    const sym=p.symbol||prompt('Símbolo (ex: AAPL, PETR4.SAO):','AAPL');if(!sym)return'';
+    const r=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${sym}&apikey=${CK.alphav()}`);
+    const d=await r.json();const q=d['Global Quote'];if(!q||!q['01. symbol'])throw new Error('Símbolo não encontrado');
+    const chg=parseFloat(q['10. change percent']);
+    return`📈 **${q['01. symbol']}**\n💵 Preço: **$${parseFloat(q['05. price']).toFixed(2)}**\n📊 Variação: ${chg>=0?'▲':'▼'} ${q['10. change percent']}\n📦 Volume: ${parseInt(q['06. volume']).toLocaleString()}\n🕐 Abertura: $${parseFloat(q['02. open']).toFixed(2)} | Fechamento anterior: $${parseFloat(q['08. previous close']).toFixed(2)}`;
+  }
+  if(action==='forex'){
+    const pair=p.pair||prompt('Par de moedas (ex: USD/BRL):','USD/BRL');if(!pair)return'';
+    const[from,to]=pair.split('/');
+    const r=await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${from}&to_currency=${to}&apikey=${CK.alphav()}`);
+    const d=await r.json();const rate=d['Realtime Currency Exchange Rate'];if(!rate)throw new Error('Par não encontrado');
+    return`💱 **${from}/${to}**\nTaxa: **${parseFloat(rate['5. Exchange Rate']).toFixed(4)}**\nAtualizado: ${rate['6. Last Refreshed']}`;
+  }
+  if(action==='crypto'){
+    const sym=p.symbol||prompt('Crypto (ex: BTC, ETH):','BTC');if(!sym)return'';
+    const r=await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${sym}&to_currency=USD&apikey=${CK.alphav()}`);
+    const d=await r.json();const rate=d['Realtime Currency Exchange Rate'];if(!rate)throw new Error('Crypto não encontrada');
+    return`₿ **${sym}/USD**\nPreço: **$${parseFloat(rate['5. Exchange Rate']).toFixed(2)}**\nAtualizado: ${rate['6. Last Refreshed']}`;
+  }
+  return'';
+}
+
+// ─── GMAIL ────────────────────────────────────────────────
+async function toolGmail(action, p={}){
+  if(!CK.googleToken()){toast('Conecte o Google primeiro em 🔌 Conectores','err');showPage('conn');return'';}
+  const headers={Authorization:'Bearer '+CK.googleToken()};
+  if(action==='inbox'||action==='unread'){
+    const q=action==='unread'?'is:unread':'in:inbox';
+    const r=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=8`,{headers});
+    const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Erro Gmail');
+    const msgs=await Promise.all((d.messages||[]).slice(0,5).map(async m=>{
+      const mr=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,{headers});
+      const md=await mr.json();
+      const sub=md.payload?.headers?.find(h=>h.name==='Subject')?.value||'(sem assunto)';
+      const from=md.payload?.headers?.find(h=>h.name==='From')?.value||'';
+      return`• **${sub}**\n  De: ${from}`;
+    }));
+    return`📧 **Gmail — ${action==='unread'?'Não lidos':'Inbox'}** (${d.resultSizeEstimate||0} total)\n\n${msgs.join('\n\n')}`;
+  }
+  if(action==='search'){
+    const q=p.q||prompt('Buscar emails:','');if(!q)return'';
+    const r=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=5`,{headers});
+    const d=await r.json();
+    return`🔍 **Gmail Search: "${q}"** — ${d.resultSizeEstimate||0} resultados encontrados`;
+  }
+  if(action==='summary'){
+    const r=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread&maxResults=10`,{headers});
+    const d=await r.json();
+    return`📋 **Resumo Gmail**\n📬 Não lidos: ~${d.resultSizeEstimate||0}\n\nUse "Ver inbox" para ver as mensagens.`;
+  }
+  return'';
+}
+
+// ─── GOOGLE CALENDAR ──────────────────────────────────────
+async function toolGCal(action, p={}){
+  if(!CK.googleToken()){toast('Conecte o Google primeiro','err');showPage('conn');return'';}
+  const headers={Authorization:'Bearer '+CK.googleToken()};
+  const now=new Date().toISOString();
+  let timeMax='';
+  if(action==='today'){const d=new Date();d.setHours(23,59,59);timeMax=d.toISOString();}
+  if(action==='week'){const d=new Date();d.setDate(d.getDate()+7);timeMax=d.toISOString();}
+  if(action==='next')timeMax=new Date(Date.now()+30*86400000).toISOString();
+  const r=await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${now}&timeMax=${timeMax}&orderBy=startTime&singleEvents=true&maxResults=${action==='next'?1:10}`,{headers});
+  const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Erro Calendar');
+  if(!d.items?.length)return`📅 **Nenhum evento ${action==='today'?'hoje':action==='week'?'esta semana':'próximo'}**.`;
+  return`📅 **Agenda — ${action==='today'?'Hoje':action==='week'?'Próxima semana':'Próximo evento'}**\n\n`+d.items.map(e=>{const s=new Date(e.start?.dateTime||e.start?.date);return`• **${e.summary||'Sem título'}**\n  🕐 ${s.toLocaleString('pt-BR')}\n  📍 ${e.location||'Online/Sem local'}`}).join('\n\n');
+}
+
+// ─── GOOGLE DRIVE ─────────────────────────────────────────
+async function toolGDrive(action, p={}){
+  if(!CK.googleToken()){toast('Conecte o Google primeiro','err');showPage('conn');return'';}
+  const headers={Authorization:'Bearer '+CK.googleToken()};
+  let url='https://www.googleapis.com/drive/v3/files?pageSize=10&fields=files(id,name,mimeType,modifiedTime,owners)';
+  if(action==='recent')url+='&orderBy=modifiedTime+desc';
+  if(action==='shared')url+='&q=sharedWithMe=true';
+  if(action==='search'){const q=p.q||prompt('Buscar arquivo:','');if(!q)return'';url+=`&q=name+contains+'${q}'`;}
+  const r=await fetch(url,{headers});const d=await r.json();
+  if(!r.ok)throw new Error(d.error?.message||'Erro Drive');
+  const types={'application/vnd.google-apps.document':'📝','application/vnd.google-apps.spreadsheet':'📊','application/vnd.google-apps.presentation':'📊','application/pdf':'📄','image/jpeg':'🖼','image/png':'🖼'};
+  return`📁 **Google Drive — ${action}**\n\n`+(d.files||[]).map(f=>`${types[f.mimeType]||'📄'} **${f.name}**\n  Modificado: ${new Date(f.modifiedTime).toLocaleDateString('pt-BR')}`).join('\n\n');
+}
+
+// ─── NOTION ───────────────────────────────────────────────
+async function toolNotion(action, p={}){
+  if(!CK.notion_c()){toast('Configure Notion em 🔌 Conectores','err');showPage('conn');return'';}
+  const headers={'Authorization':'Bearer '+CK.notion_c(),'Notion-Version':'2022-06-28','Content-Type':'application/json'};
+  if(action==='search'){
+    const q=p.q||prompt('Buscar no Notion:','');if(!q)return'';
+    const r=await fetch('https://api.notion.com/v1/search',{method:'POST',headers,body:JSON.stringify({query:q,page_size:5})});
+    const d=await r.json();if(!r.ok)throw new Error(d.message||'Erro Notion');
+    return`📝 **Notion Search: "${q}"**\n\n`+(d.results||[]).map(p=>`• **${p.properties?.title?.title?.[0]?.plain_text||p.object}** (${p.object})\n  Editado: ${new Date(p.last_edited_time).toLocaleDateString('pt-BR')}`).join('\n');
+  }
+  if(action==='pages'||action==='databases'){
+    const r=await fetch('https://api.notion.com/v1/search',{method:'POST',headers,body:JSON.stringify({filter:{value:action==='databases'?'database':'page'},page_size:8})});
+    const d=await r.json();if(!r.ok)throw new Error(d.message||'Erro Notion');
+    return`📝 **Notion — ${action}**\n\n`+(d.results||[]).map(p=>`• **${p.properties?.title?.title?.[0]?.plain_text||p.object||'Sem título'}**\n  ${new Date(p.last_edited_time).toLocaleDateString('pt-BR')}`).join('\n');
+  }
+  return'';
+}
+
+// ─── SLACK ────────────────────────────────────────────────
+async function toolSlack(action, p={}){
+  if(!CK.slack_c()){toast('Configure Slack em 🔌 Conectores','err');showPage('conn');return'';}
+  const headers={Authorization:'Bearer '+CK.slack_c(),'Content-Type':'application/json'};
+  if(action==='channels'){
+    const r=await fetch('https://slack.com/api/conversations.list?limit=10&exclude_archived=true',{headers});
+    const d=await r.json();if(!d.ok)throw new Error(d.error||'Erro Slack');
+    return`💬 **Slack — Canais**\n\n`+(d.channels||[]).map(c=>`• **#${c.name}** — ${c.num_members||0} membros${c.topic?.value?'\n  '+c.topic.value:''}`).join('\n');
+  }
+  if(action==='messages'){
+    const ch=p.channel||prompt('ID do canal (ex: C1234):','');if(!ch)return'';
+    const r=await fetch(`https://slack.com/api/conversations.history?channel=${ch}&limit=5`,{headers});
+    const d=await r.json();if(!d.ok)throw new Error(d.error||'Erro Slack');
+    return`💬 **Mensagens do canal**\n\n`+(d.messages||[]).map(m=>`• [${new Date(m.ts*1000).toLocaleTimeString('pt-BR')}] ${m.text?.slice(0,200)}`).join('\n\n');
+  }
+  if(action==='send'){
+    const ch=p.channel||prompt('Canal (ex: #geral):','');const msg=p.msg||prompt('Mensagem:','');if(!ch||!msg)return'';
+    const r=await fetch('https://slack.com/api/chat.postMessage',{method:'POST',headers,body:JSON.stringify({channel:ch,text:msg})});
+    const d=await r.json();if(!d.ok)throw new Error(d.error);
+    return`✅ Mensagem enviada ao Slack canal ${ch}`;
+  }
+  return'';
+}
+
+// ─── TELEGRAM ─────────────────────────────────────────────
+async function toolTelegram(action, p={}){
+  if(!CK.telegram()){toast('Configure Telegram em 🔌 Conectores','err');showPage('conn');return'';}
+  const base=`https://api.telegram.org/bot${CK.telegram()}`;
+  if(action==='send'){
+    const chatId=p.chatId||CK.telegramChat()||prompt('Chat ID:','');const msg=p.msg||prompt('Mensagem:','');if(!chatId||!msg)return'';
+    const r=await fetch(`${base}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,text:msg,parse_mode:'Markdown'})});
+    const d=await r.json();if(!d.ok)throw new Error(d.description);
+    return`✅ Mensagem enviada via Telegram para ${chatId}`;
+  }
+  if(action==='updates'){
+    const r=await fetch(`${base}/getUpdates?limit=5`);const d=await r.json();if(!d.ok)throw new Error(d.description);
+    if(!d.result?.length)return`📥 Nenhuma mensagem nova no Telegram`;
+    return`📥 **Telegram Updates**\n\n`+d.result.map(u=>`• [${u.message?.from?.first_name}] ${u.message?.text?.slice(0,100)||'(mídia)'}\n  ${new Date(u.message?.date*1000).toLocaleString('pt-BR')}`).join('\n\n');
+  }
+  return'';
+}
+
+// ─── DISCORD ──────────────────────────────────────────────
+async function toolDiscord(action, p={}){
+  if(!CK.discord()){toast('Configure Discord Webhook em 🔌 Conectores','err');showPage('conn');return'';}
+  const msg=p.msg||prompt('Mensagem para o Discord:','');if(!msg)return'';
+  const body={content:msg};
+  if(action==='embed'){body.embeds=[{title:'AI Nexus Studio',description:msg,color:0x7c3aed,footer:{text:'Enviado via AI Nexus Studio'}}];delete body.content;}
+  const r=await fetch(CK.discord(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.ok)return`✅ Mensagem enviada ao Discord`;
+  throw new Error('Erro ao enviar para Discord: '+r.status);
+}
+
+// ─── GOOGLE CUSTOM SEARCH ─────────────────────────────────
+async function toolGSearch(action, p={}){
+  if(!CK.gsearchKey()||!CK.gsearchCx()){toast('Configure Google Search em 🔌 Conectores','err');showPage('conn');return'';}
+  const q=p.q||prompt('Pesquisar:','');if(!q)return'';
+  const r=await fetch(`https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(q)}&key=${CK.gsearchKey()}&cx=${CK.gsearchCx()}&num=5`);
+  const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Erro Google Search');
+  return`🔍 **Google Search: "${q}"**\n\n`+(d.items||[]).map((i,n)=>`${n+1}. **${i.title}**\n   ${i.snippet?.slice(0,120)}\n   🔗 ${i.link}`).join('\n\n');
+}
+
+// ─── AUTO-CONNECTOR DETECTION ─────────────────────────────
+// Intercepts chat messages and uses connectors when relevant
+const CONN_TRIGGERS = [
+  {regex:/clima|tempo|chuva|temperatura.{0,20}(em|de|no)\s+(\w+)/i, fn:async(m)=>{const city=m[2]||m[1];return toolWeather('now',{city});}},
+  {regex:/previsão.{0,20}(em|de|no)\s+(\w+)/i, fn:async(m)=>{const city=m[2]||m[1];return toolWeather('forecast',{city});}},
+  {regex:/busca?r?\s+(no\s+)?wikipedia\s+(.+)/i, fn:async(m)=>{return toolWikipedia('search',{q:m[2]});}},
+  {regex:/quem\s+(foi|é)\s+(.+)/i, fn:async(m)=>{return toolWikipedia('search',{q:m[2]});}},
+  {regex:/defin[ae]\s+(.+)/i, fn:async(m)=>{return toolWikipedia('summary',{q:m[1]});}},
+  {regex:/not[ií]cias?\s+(de\s+)?(hoje|recentes?|mais\s+recentes?)/i, fn:async()=>{return toolNews('top');}},
+  {regex:/busca?r?\s+not[ií]cias?\s+(sobre\s+)?(.+)/i, fn:async(m)=>{return toolNews('search',{q:m[2]});}},
+  {regex:/trending\s+(no\s+)?github/i, fn:async()=>{return toolGitHub('trending');}},
+  {regex:/busca?r?\s+(no\s+)?github\s+(.+)/i, fn:async(m)=>{return toolGitHub('search',{q:m[2]});}},
+  {regex:/meus?\s+emails?\s+(n[aã]o\s+lidos?)?/i, fn:async()=>{return toolGmail('unread');}},
+  {regex:/minha\s+agenda\s+(hoje|hj)/i, fn:async()=>{return toolGCal('today');}},
+  {regex:/minha\s+agenda\s+(da\s+)?semana/i, fn:async()=>{return toolGCal('week');}},
+  {regex:/cotação\s+(de\s+)?([A-Z]{1,5})/i, fn:async(m)=>{return toolFinance('quote',{symbol:m[2]});}},
+  {regex:/preço\s+(do\s+)?(bitcoin|btc)/i, fn:async()=>{return toolFinance('crypto',{symbol:'BTC'});}},
+  {regex:/preço\s+(do\s+)?(ethereum|eth)/i, fn:async()=>{return toolFinance('crypto',{symbol:'ETH'});}},
+  {regex:/dólar\s+(hoje|agora|atual)/i, fn:async()=>{return toolFinance('forex',{pair:'USD/BRL'});}},
+];
+
+async function runAutoConnectors(text){
+  const results=[];
+  for(const t of CONN_TRIGGERS){
+    const m=text.match(t.regex);
+    if(m){
+      try{const r=await t.fn(m);if(r)results.push(r);}catch(_){}
+      if(results.length>=2)break; // max 2 connectors per message
+    }
+  }
+  return results.join('\n\n---\n\n');
+}
+
 // ══ PWA ══════════════════════════════════════════════════
 let deferredInstallPrompt = null;
 
@@ -2271,13 +3149,16 @@ function initPwa() {
 
 // ══ INIT ══════════════════════════════════════════════════
 function init(){
-  initTheme();loadKeys();checkCfgBadge();updateMemBadge();
+  initTheme();loadKeys();loadConnKeys();checkCfgBadge();updateMemBadge();
   renderTabs();renderMessages();renderAgents();initLib();
   onModelChange();updateTokenBar();
+  checkAllConns();
   document.getElementById('web-btn').classList.toggle('active',webSearchAlways);
   if(webSearchAlways)document.getElementById('ws-status').textContent='🌐 Busca ativa';
   const su=localStorage.getItem('signals_url');
   if(su)document.getElementById('sinais-frame').src=su;
+  // Restore Google token display
+  if(CK.googleToken())fetchGoogleProfile(CK.googleToken());
   initPwa();
 }
 document.addEventListener('DOMContentLoaded',init);
