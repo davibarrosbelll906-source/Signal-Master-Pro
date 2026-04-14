@@ -1038,12 +1038,18 @@ a{color:inherit}
                 <div><div class="conn-name">Google OAuth 2.0</div><div class="conn-sub">Client ID do Google Cloud Console</div></div>
                 <div class="conn-status"><div class="conn-dot conn-dot-red" id="dot-google"></div><span id="status-google">Desconectado</span></div>
               </div>
-              <div class="conn-input-row">
-                <input type="password" id="k-google-client" placeholder="Google Client ID (…apps.googleusercontent.com)" style="font-size:11px"/>
+              <div class="conn-input-row" style="flex-direction:column;gap:6px">
+                <input type="text" id="k-google-client" placeholder="Cole aqui: xxxx.apps.googleusercontent.com" style="font-size:11px;font-family:monospace" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+                <div id="google-id-saved" style="font-size:10px;color:var(--green);display:none">✔ ID salvo no dispositivo</div>
+                <div style="display:flex;gap:6px">
+                  <button onclick="saveGoogleId()" style="flex:1;padding:6px 10px;background:rgba(66,133,244,0.15);border:1px solid rgba(66,133,244,0.3);border-radius:6px;color:#4285f4;font-size:12px;cursor:pointer;font-weight:600">💾 Salvar ID</button>
+                  <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="flex:1;padding:6px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#aaa;font-size:11px;cursor:pointer;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center">🔗 Abrir Console</a>
+                </div>
               </div>
               <button class="conn-oauth-btn" id="btn-google-oauth" onclick="connectGoogle()">
                 <img src="https://www.google.com/favicon.ico" width="14" height="14" alt=""/> Conectar com Google
               </button>
+              <div id="google-popup-warn" style="display:none;font-size:10px;color:var(--amber);padding:4px 0">⚠️ Popup bloqueado! Permita popups para este site e tente novamente.</div>
               <div id="google-user-info" style="display:none;padding:6px;background:rgba(16,185,129,0.1);border-radius:6px;font-size:11px;margin-bottom:8px"></div>
               <div class="conn-tools-label">Acesso disponível após login:</div>
               <div class="conn-actions">
@@ -2610,6 +2616,10 @@ function loadConnKeys(){
   for(const[id,key]of Object.entries(pairs)){
     const el=document.getElementById(id);if(el)el.value=localStorage.getItem(key)||'';
   }
+  // Show saved indicator if Google Client ID already stored
+  const savedId=localStorage.getItem('k_google_client');
+  const indicator=document.getElementById('google-id-saved');
+  if(indicator&&savedId){indicator.style.display='block';}
 }
 
 function setConnStatus(dotId, statusId, connected, label=''){
@@ -2665,12 +2675,31 @@ const GOOGLE_SCOPES = [
   'profile email',
 ].join(' ');
 
+function saveGoogleId(){
+  const input=document.getElementById('k-google-client');
+  const val=input?.value.trim();
+  if(!val){toast('Cole o Client ID no campo antes de salvar','err');return;}
+  if(!val.includes('googleusercontent.com')){
+    toast('ID inválido — deve terminar em .apps.googleusercontent.com','err');return;
+  }
+  localStorage.setItem('k_google_client',val);
+  const indicator=document.getElementById('google-id-saved');
+  if(indicator){indicator.style.display='block';}
+  checkAllConns();toast('Google Client ID salvo!','ok');
+}
+
 function connectGoogle(){
   const gToken=CK.googleToken();
   if(gToken){localStorage.removeItem('g_access_token');checkAllConns();toast('Google desconectado','info');return;}
-  const clientId=document.getElementById('k-google-client')?.value.trim()||CK.googleClientId();
-  if(!clientId){toast('Cole o Google Client ID primeiro','err');return;}
+  const inputVal=document.getElementById('k-google-client')?.value.trim();
+  const clientId=inputVal||CK.googleClientId();
+  if(!clientId){toast('Cole o Google Client ID e clique em Salvar ID primeiro','err');return;}
+  // Save before connecting
   localStorage.setItem('k_google_client',clientId);
+  const indicator=document.getElementById('google-id-saved');
+  if(indicator){indicator.style.display='block';}
+  const warnEl=document.getElementById('google-popup-warn');
+  if(warnEl){warnEl.style.display='none';}
   const redirect=window.location.origin+window.location.pathname;
   const url=`https://accounts.google.com/o/oauth2/v2/auth?`+
     `client_id=${encodeURIComponent(clientId)}&`+
@@ -2680,6 +2709,10 @@ function connectGoogle(){
     `include_granted_scopes=true&`+
     `prompt=select_account`;
   const popup=window.open(url,'google-oauth','width=520,height=600,scrollbars=yes');
+  if(!popup||popup.closed||typeof popup.closed==='undefined'){
+    if(warnEl){warnEl.style.display='block';}
+    toast('Popup bloqueado! Permita popups para este site','err');return;
+  }
   const poll=setInterval(()=>{
     try{
       if(popup.closed){clearInterval(poll);checkAllConns();return;}
