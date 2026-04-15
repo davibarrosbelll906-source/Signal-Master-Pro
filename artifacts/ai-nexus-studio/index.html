@@ -1704,30 +1704,43 @@ async function testKey(provider){
       const keyToTest=(inputEl?.value.trim())||K.claude();
       if(keyToTest&&inputEl&&inputEl.value.trim())localStorage.setItem('k_claude',inputEl.value.trim());
       if(!keyToTest){stEl.textContent='✗ Cole a chave no campo e tente novamente';stEl.className='cfg-status cfg-status-err';return;}
-      // Try models in order — newer accounts have haiku/sonnet, older may only have claude-2
-      const claudeModels=['claude-3-5-haiku-20241022','claude-3-haiku-20240307','claude-3-sonnet-20240229','claude-2.1'];
-      let claudeOk=false;let claudeFoundModel='';
-      for(const model of claudeModels){
-        const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':keyToTest,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model,max_tokens:10,messages:[{role:'user',content:'hi'}]})});
-        if(r.ok){claudeOk=true;claudeFoundModel=model;break;}
-        const j=await r.json().catch(()=>({}));
-        const status=r.status;
-        const apiMsg=j?.error?.message||'';
-        // 401 = bad key, stop immediately
-        if(status===401){stEl.textContent=`✗ Chave inválida${apiMsg?' — '+apiMsg.slice(0,60):''}`;stEl.className='cfg-status cfg-status-err';return;}
-        // 403 = auth ok but no billing
-        if(status===403){stEl.textContent='✗ Sem permissão — verifique créditos em console.anthropic.com/billing';stEl.className='cfg-status cfg-status-err';return;}
-        // 404 = model not available for this account, try next
-        if(status===404){continue;}
-        // 529 = overloaded but key is valid
-        if(status===529){claudeOk=true;claudeFoundModel='(serviço sobrecarregado)';break;}
-        // Other error
-        stEl.textContent=`✗ Erro ${status}: ${apiMsg.slice(0,60)||'desconhecido'}`;stEl.className='cfg-status cfg-status-err';return;
+      // Step 1: list models available for this key via /v1/models
+      const hdrs={'x-api-key':keyToTest,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+      const listR=await fetch('https://api.anthropic.com/v1/models',{headers:hdrs});
+      if(!listR.ok){
+        const j2=await listR.json().catch(()=>({}));
+        const apiMsg=j2?.error?.message||'';
+        if(listR.status===401){stEl.textContent=`✗ Chave inválida${apiMsg?' — '+apiMsg.slice(0,60):''}`;stEl.className='cfg-status cfg-status-err';return;}
+        if(listR.status===403){stEl.textContent='✗ Sem permissão — verifique créditos em console.anthropic.com/billing';stEl.className='cfg-status cfg-status-err';return;}
+        // If /v1/models not supported, fall back to trying messages directly
       }
-      if(!claudeOk){stEl.textContent='✗ Nenhum modelo disponível — conta pode precisar de upgrade';stEl.className='cfg-status cfg-status-err';return;}
-      // Save the working model for chat use
-      localStorage.setItem('claude_working_model',claudeFoundModel);
-      ok=true;
+      // Step 2: pick best available model from list (prefer haiku/cheapest, then sonnet, then opus)
+      let claudeFoundModel='';
+      if(listR.ok){
+        const jm=await listR.json().catch(()=>({}));
+        const ids=(jm?.data||[]).map(m=>m.id||m.name||'').filter(Boolean);
+        // Preference order: cheapest first
+        const pref=['haiku','sonnet','opus'];
+        for(const p of pref){const found=ids.find(id=>id.toLowerCase().includes(p));if(found){claudeFoundModel=found;break;}}
+        if(!claudeFoundModel&&ids.length)claudeFoundModel=ids[0];
+        if(claudeFoundModel){localStorage.setItem('claude_working_model',claudeFoundModel);ok=true;}
+        else{stEl.textContent='✗ Nenhum modelo disponível nesta conta';stEl.className='cfg-status cfg-status-err';return;}
+      } else {
+        // Fallback: try a known-good set of models
+        const fallbackModels=['claude-3-5-haiku-20241022','claude-3-7-sonnet-20250219','claude-3-5-sonnet-20241022','claude-3-haiku-20240307','claude-3-sonnet-20240229','claude-2.1'];
+        let claudeOk=false;
+        for(const model of fallbackModels){
+          const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{...hdrs,'content-type':'application/json'},body:JSON.stringify({model,max_tokens:10,messages:[{role:'user',content:'hi'}]})});
+          if(r.ok){claudeOk=true;claudeFoundModel=model;break;}
+          const j=await r.json().catch(()=>({}));const s=r.status;const m=j?.error?.message||'';
+          if(s===401){stEl.textContent=`✗ Chave inválida${m?' — '+m.slice(0,60):''}`;stEl.className='cfg-status cfg-status-err';return;}
+          if(s===403){stEl.textContent='✗ Sem permissão (billing)';stEl.className='cfg-status cfg-status-err';return;}
+          if(s===529){claudeOk=true;claudeFoundModel=model+'(sobrecarregado)';break;}
+        }
+        if(!claudeOk){stEl.textContent='✗ Nenhum modelo disponível — conta pode precisar de upgrade';stEl.className='cfg-status cfg-status-err';return;}
+        localStorage.setItem('claude_working_model',claudeFoundModel);
+        ok=true;
+      }
     }
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:`Bearer ${K.openai()}`}});ok=r.ok;}
     else if(provider==='openrouter'){const r=await fetch('https://openrouter.ai/api/v1/models',{headers:{Authorization:`Bearer ${K.openrouter()}`}});ok=r.ok;}
