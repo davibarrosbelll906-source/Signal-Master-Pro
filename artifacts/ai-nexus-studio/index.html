@@ -1992,7 +1992,12 @@ async function sendChat(){
   const temp=document.getElementById('temp-slider').value;
   const keyMap={claude:K.claude,openai:K.openai,openrouter:K.openrouter,groq:K.groq,gemini:K.gemini};
   if(!keyMap[provider]?.()){toast(`Configure a chave ${provider.toUpperCase()} em ⚙️ Config`,'err');showPage('cfg');return;}
+  // Lock immediately — prevents double-sends during async web search / connectors
+  isStreaming=true;
+  document.getElementById('send-btn').disabled=true;
   document.getElementById('chat-empty').style.display='none';
+  // Wrap entire async flow so isStreaming is always released on any error
+  try{
   // Build user content (with images for vision models)
   let userContent=text;
   if(uploadedImages.length&&(provider==='claude'||provider==='openai')){
@@ -2010,17 +2015,19 @@ async function sendChat(){
     userContent=typeof userContent==='string'?userContent+ctx:[...userContent,{type:'text',text:ctx}];
   }
   addToHistory({role:'user',content:userContent});
-  // Auto-connectors (run before web search)
+  renderMessages(); // show user message immediately
+  document.getElementById('chat-msgs').scrollTop=9999;
+  // Auto-connectors — with 3s timeout
   let connCtx='';
   if(text){
-    const connResult=await runAutoConnectors(text);
+    const connResult=await Promise.race([runAutoConnectors(text),new Promise(r=>setTimeout(()=>r(''),3000))]);
     if(connResult){connCtx='\n\n[DADOS EM TEMPO REAL VIA CONECTORES]\n'+connResult;}
   }
-  // Web search
+  // Web search — with 4s timeout so it never blocks the chat
   let searchCtx='';
   if(text&&!connCtx&&needsWebSearch(text)){
     document.getElementById('search-indicator').style.display='flex';
-    searchCtx=await doWebSearch(text);
+    searchCtx=await Promise.race([doWebSearch(text),new Promise(r=>setTimeout(()=>r(''),4000))]);
     document.getElementById('search-indicator').style.display='none';
   }
   // System prompt
@@ -2029,9 +2036,6 @@ async function sendChat(){
   uploadedImages=[];uploadedDocs=[];renderImgStrip();renderDocStrip();
   renderMessages();
   document.getElementById('chat-msgs').scrollTop=9999;
-  // Start streaming
-  isStreaming=true;
-  document.getElementById('send-btn').disabled=true;
   let assistantText='';
   const msgId='m'+Date.now();
   addToHistory({role:'assistant',content:'',modelVal:modelFull,_id:msgId});
@@ -2052,8 +2056,7 @@ async function sendChat(){
     renderMessages();autoSaveSession();updateTokenBar();
     if(ttsActive&&assistantText)speakText(assistantText);
   };
-  try{
-    // Build clean history: exclude error messages, ensure proper user/assistant alternation
+  // Build clean history: exclude error messages, ensure proper user/assistant alternation
     const rawHist=getCurrentHistory().slice(0,-1); // remove empty assistant placeholder
     const cleanHist=rawHist
       .filter(m=>!(m.role==='assistant'&&typeof m.content==='string'&&m.content.startsWith('❌')))
@@ -2072,7 +2075,9 @@ async function sendChat(){
     else if(provider==='gemini')await streamGemini(hist,modelFull,maxTokens,temp,onChunk,onDone);
     else if(provider==='openrouter')await fetchOpenRouter(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
   }catch(err){
-    isStreaming=false;document.getElementById('send-btn').disabled=false;
+    isStreaming=false;
+    document.getElementById('send-btn').disabled=false;
+    document.getElementById('search-indicator').style.display='none';
     // Remove the empty assistant placeholder so it doesn't pollute future API calls
     const h2=getCurrentHistory();
     if(h2.length&&h2[h2.length-1].role==='assistant'&&!h2[h2.length-1].content){
