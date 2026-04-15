@@ -1595,7 +1595,7 @@ const K={
 let currentPage='chat';
 let sessionTokens=0,sessionCost=0;
 let webSearchAlways=localStorage.getItem('web_search_always')==='1';
-let ttsActive=false,micActive=false,isStreaming=false;
+let ttsActive=false,micActive=false,isStreaming=false,_streamingStartTime=0;
 let currentPersona='default';
 let uploadedImages=[],uploadedDocs=[];
 let recognition=null;
@@ -1964,7 +1964,7 @@ async function streamClaude(messages,sysPrompt,model,maxTokens,temp,onChunk,onDo
       }
     }
   }finally{try{reader.cancel();}catch(_){}}
-  onDone();
+  try{onDone();}catch(_){}
 }
 async function streamOpenAI(messages,model,maxTokens,temp,onChunk,onDone){
   const resp=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${K.openai()}`,'Content-Type':'application/json'},body:JSON.stringify({model,stream:true,max_tokens:parseInt(maxTokens),temperature:parseFloat(temp),messages})});
@@ -1998,12 +1998,16 @@ async function fetchOpenRouter(messages,model,maxTokens,temp,onChunk,onDone){
 let _streamSafetyTimer=null;
 function _unlockStream(){
   if(_streamSafetyTimer){clearTimeout(_streamSafetyTimer);_streamSafetyTimer=null;}
-  isStreaming=false;
+  isStreaming=false;_streamingStartTime=0;
   const sb=document.getElementById('send-btn');if(sb)sb.disabled=false;
   const si=document.getElementById('search-indicator');if(si)si.style.display='none';
 }
 async function sendChat(){
-  if(isStreaming){toast('Aguarde a resposta terminar','warn');return;}
+  if(isStreaming){
+    // Auto-reset se travado há mais de 15 segundos
+    if(_streamingStartTime&&Date.now()-_streamingStartTime>15000){_unlockStream();}
+    else{toast('Aguarde a resposta terminar','warn');return;}
+  }
   const input=document.getElementById('chat-input');
   const text=(input?.value||'').trim();
   if(!text&&!uploadedImages.length)return;
@@ -2015,10 +2019,10 @@ async function sendChat(){
   const temp=document.getElementById('temp-slider')?.value||'0.7';
   const keyMap={claude:K.claude,openai:K.openai,openrouter:K.openrouter,groq:K.groq,gemini:K.gemini};
   if(!keyMap[provider]?.()){toast('Configure a chave '+provider.toUpperCase()+' em Config','err');showPage('cfg');return;}
-  isStreaming=true;
+  isStreaming=true;_streamingStartTime=Date.now();
   const sb=document.getElementById('send-btn');if(sb)sb.disabled=true;
   document.getElementById('chat-empty').style.display='none';
-  _streamSafetyTimer=setTimeout(()=>{_unlockStream();toast('Tempo esgotado — desbloqueado automaticamente','warn');},90000);
+  _streamSafetyTimer=setTimeout(()=>{_unlockStream();toast('Tempo esgotado — desbloqueado automaticamente','warn');},20000);
   try{
     let userContent=text;
     if(uploadedImages.length&&(provider==='claude'||provider==='openai')){
