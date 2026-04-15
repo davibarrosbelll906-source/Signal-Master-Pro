@@ -1704,20 +1704,40 @@ async function testKey(provider){
       const keyToTest=(inputEl?.value.trim())||K.claude();
       if(keyToTest&&inputEl&&inputEl.value.trim())localStorage.setItem('k_claude',inputEl.value.trim());
       if(!keyToTest){stEl.textContent='✗ Cole a chave no campo e tente novamente';stEl.className='cfg-status cfg-status-err';return;}
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':keyToTest,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:10,messages:[{role:'user',content:'hi'}]})});
-      if(!r.ok){
+      // Try models in order — newer accounts have haiku/sonnet, older may only have claude-2
+      const claudeModels=['claude-3-5-haiku-20241022','claude-3-haiku-20240307','claude-3-sonnet-20240229','claude-2.1'];
+      let claudeOk=false;let claudeFoundModel='';
+      for(const model of claudeModels){
+        const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':keyToTest,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},body:JSON.stringify({model,max_tokens:10,messages:[{role:'user',content:'hi'}]})});
+        if(r.ok){claudeOk=true;claudeFoundModel=model;break;}
         const j=await r.json().catch(()=>({}));
+        const status=r.status;
         const apiMsg=j?.error?.message||'';
-        const label=r.status===401?`Chave inválida${apiMsg?' — '+apiMsg.slice(0,60):''}`:r.status===403?'Sem permissão (verifique billing)':r.status===400?`Erro 400: ${apiMsg.slice(0,60)||'bad request'}`:r.status===529?'Anthropic sobrecarregado — tente de novo':`Erro ${r.status}: ${apiMsg.slice(0,60)||'desconhecido'}`;
-        stEl.textContent=`✗ ${label}`;stEl.className='cfg-status cfg-status-err';return;
+        // 401 = bad key, stop immediately
+        if(status===401){stEl.textContent=`✗ Chave inválida${apiMsg?' — '+apiMsg.slice(0,60):''}`;stEl.className='cfg-status cfg-status-err';return;}
+        // 403 = auth ok but no billing
+        if(status===403){stEl.textContent='✗ Sem permissão — verifique créditos em console.anthropic.com/billing';stEl.className='cfg-status cfg-status-err';return;}
+        // 404 = model not available for this account, try next
+        if(status===404){continue;}
+        // 529 = overloaded but key is valid
+        if(status===529){claudeOk=true;claudeFoundModel='(serviço sobrecarregado)';break;}
+        // Other error
+        stEl.textContent=`✗ Erro ${status}: ${apiMsg.slice(0,60)||'desconhecido'}`;stEl.className='cfg-status cfg-status-err';return;
       }
-      ok=r.ok;
+      if(!claudeOk){stEl.textContent='✗ Nenhum modelo disponível — conta pode precisar de upgrade';stEl.className='cfg-status cfg-status-err';return;}
+      // Save the working model for chat use
+      localStorage.setItem('claude_working_model',claudeFoundModel);
+      ok=true;
     }
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:`Bearer ${K.openai()}`}});ok=r.ok;}
     else if(provider==='openrouter'){const r=await fetch('https://openrouter.ai/api/v1/models',{headers:{Authorization:`Bearer ${K.openrouter()}`}});ok=r.ok;}
     else if(provider==='groq'){const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:`Bearer ${K.groq()}`}});ok=r.ok;}
     else if(provider==='gemini'){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${K.gemini()}`);ok=r.ok;}
-    stEl.textContent=ok?'✓ Conectado':'✗ Key inválida';
+    if(provider==='claude'&&ok&&typeof claudeFoundModel!=='undefined'&&claudeFoundModel&&claudeFoundModel!=='(serviço sobrecarregado)'){
+      stEl.textContent=`✓ Conectado — ${claudeFoundModel}`;
+    } else {
+      stEl.textContent=ok?'✓ Conectado':'✗ Key inválida';
+    }
     stEl.className=`cfg-status ${ok?'cfg-status-ok':'cfg-status-err'}`;
   }catch(e){stEl.textContent='✗ Erro';stEl.className='cfg-status cfg-status-err';}
 }
@@ -2372,7 +2392,8 @@ async function sendMgrChat(){
   const userDiv=document.createElement('div');userDiv.style.cssText='text-align:right;margin-bottom:6px';
   userDiv.innerHTML=`<span style="background:rgba(124,58,237,0.15);padding:6px 10px;border-radius:8px;font-size:12px">${text}</span>`;
   msgs.appendChild(userDiv);msgs.scrollTop=9999;
-  const modelFull=K.claude()?'claude:claude-3-5-haiku-20241022':K.openai()?'openai:gpt-4o-mini':K.groq()?'groq:llama-3.3-70b-versatile':null;
+  const _cwm1=localStorage.getItem('claude_working_model')||'claude-3-5-haiku-20241022';
+  const modelFull=K.claude()?`claude:${_cwm1}`:K.openai()?'openai:gpt-4o-mini':K.groq()?'groq:llama-3.3-70b-versatile':null;
   if(!modelFull){toast('Configure uma API em ⚙️ Config','err');return;}
   const[provider,modelName]=modelFull.split(':');
   const respDiv=document.createElement('div');respDiv.style.cssText='margin-bottom:6px';
@@ -2471,7 +2492,8 @@ async function sendTeamChat(){
   const respMsg=document.createElement('div');respMsg.className='team-msg';
   respMsg.innerHTML=`<div class="team-msg-avatar" style="background:var(--grad)">${agent.emoji}</div><div class="team-msg-body"><div class="team-msg-name">${agent.name}</div><div class="team-msg-text">⏳</div></div>`;
   msgs.appendChild(respMsg);const bubble=respMsg.querySelector('.team-msg-text');
-  const modelFull=K.claude()?'claude:claude-3-5-haiku-20241022':K.groq()?'groq:llama-3.3-70b-versatile':null;
+  const _cwm2=localStorage.getItem('claude_working_model')||'claude-3-5-haiku-20241022';
+  const modelFull=K.claude()?`claude:${_cwm2}`:K.groq()?'groq:llama-3.3-70b-versatile':null;
   if(!modelFull){bubble.textContent='⚙️ Configure uma API';return;}
   const[provider,modelName]=modelFull.split(':');
   let reply='';
