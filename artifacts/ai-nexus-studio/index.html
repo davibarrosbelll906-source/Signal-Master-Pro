@@ -340,6 +340,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 .toast-ok{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:var(--green)}
 .toast-err{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:var(--red)}
 .toast-info{background:var(--bg2);border:1px solid var(--border);color:var(--text)}
+.toast-warn{background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:var(--amber)}
 @keyframes slide-in{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
 
 /* ══ DRAG OVERLAY ════════════════════════════════════════ */
@@ -1978,13 +1979,15 @@ async function fetchOpenRouter(messages,model,maxTokens,temp,onChunk,onDone){
 
 // ─── SEND CHAT ────────────────────────────────────────────
 async function sendChat(){
-  if(isStreaming)return;
+  if(isStreaming){toast('Aguarde a resposta atual terminar antes de enviar outra mensagem','warn');return;}
   const input=document.getElementById('chat-input');
   const text=input.value.trim();
   if(!text&&!uploadedImages.length)return;
   input.value='';autoResize(input);
   const modelFull=document.getElementById('model-select').value;
-  const[provider,modelName]=modelFull.split(':',2);
+  const[provider,_mnRaw]=modelFull.split(':',2);
+  // Always use the detected working model for Claude (may differ from dropdown default)
+  const modelName=provider==='claude'?(localStorage.getItem('claude_working_model')||_mnRaw):_mnRaw;
   const maxTokens=document.getElementById('max-tokens-sel').value;
   const temp=document.getElementById('temp-slider').value;
   const keyMap={claude:K.claude,openai:K.openai,openrouter:K.openrouter,groq:K.groq,gemini:K.gemini};
@@ -2050,7 +2053,19 @@ async function sendChat(){
     if(ttsActive&&assistantText)speakText(assistantText);
   };
   try{
-    const hist=getCurrentHistory().slice(0,-1).map(m=>({role:m.role,content:m.content}));
+    // Build clean history: exclude error messages, ensure proper user/assistant alternation
+    const rawHist=getCurrentHistory().slice(0,-1); // remove empty assistant placeholder
+    const cleanHist=rawHist
+      .filter(m=>!(m.role==='assistant'&&typeof m.content==='string'&&m.content.startsWith('❌')))
+      .map(m=>({role:m.role,content:m.content||'…'}));
+    // Ensure alternation: trim leading assistants, collapse consecutive same-roles
+    const hist=[];
+    for(const m of cleanHist){
+      if(hist.length&&hist[hist.length-1].role===m.role)hist[hist.length-1].content+=' '+m.content;
+      else hist.push({...m});
+    }
+    // Must start with user
+    while(hist.length&&hist[0].role!=='user')hist.shift();
     if(provider==='claude')await streamClaude(hist,sysPrompt,modelName,maxTokens,temp,onChunk,onDone);
     else if(provider==='openai')await streamOpenAI(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
     else if(provider==='groq')await streamGroq(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
@@ -2058,9 +2073,14 @@ async function sendChat(){
     else if(provider==='openrouter')await fetchOpenRouter(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
   }catch(err){
     isStreaming=false;document.getElementById('send-btn').disabled=false;
-    const hist=getCurrentHistory();const last=hist[hist.length-1];
-    if(last.role==='assistant')last.content=`❌ Erro: ${err.message}`;
-    renderMessages();toast('Erro: '+err.message,'err');
+    // Remove the empty assistant placeholder so it doesn't pollute future API calls
+    const h2=getCurrentHistory();
+    if(h2.length&&h2[h2.length-1].role==='assistant'&&!h2[h2.length-1].content){
+      h2.pop();
+    } else if(h2.length&&h2[h2.length-1].role==='assistant'){
+      h2[h2.length-1].content=`❌ ${err.message}`;
+    }
+    renderMessages();toast(`Erro: ${err.message}`,'err');
   }
 }
 
