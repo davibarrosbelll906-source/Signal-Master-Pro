@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ai-nexus-v5';
+const CACHE_NAME = 'ai-nexus-v6';
 const STATIC_ASSETS = [
   '/ai-nexus-studio/icons/icon-192.png',
   '/ai-nexus-studio/icons/icon-512.png',

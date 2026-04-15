@@ -1995,114 +1995,100 @@ async function fetchOpenRouter(messages,model,maxTokens,temp,onChunk,onDone){
 }
 
 // ─── SEND CHAT ────────────────────────────────────────────
+let _streamSafetyTimer=null;
+function _unlockStream(){
+  if(_streamSafetyTimer){clearTimeout(_streamSafetyTimer);_streamSafetyTimer=null;}
+  isStreaming=false;
+  const sb=document.getElementById('send-btn');if(sb)sb.disabled=false;
+  const si=document.getElementById('search-indicator');if(si)si.style.display='none';
+}
 async function sendChat(){
-  if(isStreaming){toast('Aguarde a resposta atual terminar antes de enviar outra mensagem','warn');return;}
+  if(isStreaming){toast('Aguarde a resposta terminar','warn');return;}
   const input=document.getElementById('chat-input');
-  const text=input.value.trim();
+  const text=(input?.value||'').trim();
   if(!text&&!uploadedImages.length)return;
-  input.value='';autoResize(input);
-  const modelFull=document.getElementById('model-select').value;
-  const[provider,_mnRaw]=modelFull.split(':',2);
-  // Always use the detected working model for Claude (may differ from dropdown default)
-  const modelName=provider==='claude'?(localStorage.getItem('claude_working_model')||_mnRaw):_mnRaw;
-  const maxTokens=document.getElementById('max-tokens-sel').value;
-  const temp=document.getElementById('temp-slider').value;
+  if(input){input.value='';autoResize(input);}
+  const modelFull=(document.getElementById('model-select')?.value)||'claude:claude-3-5-haiku-20241022';
+  const[provider,_rawM]=(modelFull+':').split(':');
+  const modelName=provider==='claude'?(localStorage.getItem('claude_working_model')||_rawM):_rawM;
+  const maxTokens=document.getElementById('max-tokens-sel')?.value||'4096';
+  const temp=document.getElementById('temp-slider')?.value||'0.7';
   const keyMap={claude:K.claude,openai:K.openai,openrouter:K.openrouter,groq:K.groq,gemini:K.gemini};
-  if(!keyMap[provider]?.()){toast(`Configure a chave ${provider.toUpperCase()} em ⚙️ Config`,'err');showPage('cfg');return;}
-  // Lock immediately — prevents double-sends during async web search / connectors
+  if(!keyMap[provider]?.()){toast('Configure a chave '+provider.toUpperCase()+' em Config','err');showPage('cfg');return;}
   isStreaming=true;
-  document.getElementById('send-btn').disabled=true;
+  const sb=document.getElementById('send-btn');if(sb)sb.disabled=true;
   document.getElementById('chat-empty').style.display='none';
-  // Wrap entire async flow so isStreaming is always released on any error
+  _streamSafetyTimer=setTimeout(()=>{_unlockStream();toast('Tempo esgotado — desbloqueado automaticamente','warn');},90000);
   try{
-  // Build user content (with images for vision models)
-  let userContent=text;
-  if(uploadedImages.length&&(provider==='claude'||provider==='openai')){
-    const arr=[];
-    for(const img of uploadedImages){
-      if(provider==='claude')arr.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:img.b64}});
-      else arr.push({type:'image_url',image_url:{url:`data:image/jpeg;base64,${img.b64}`}});
+    let userContent=text;
+    if(uploadedImages.length&&(provider==='claude'||provider==='openai')){
+      const arr=[];
+      for(const img of uploadedImages){
+        if(provider==='claude')arr.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:img.b64}});
+        else arr.push({type:'image_url',image_url:{url:'data:image/jpeg;base64,'+img.b64}});
+      }
+      if(text)arr.push({type:'text',text});
+      userContent=arr;
     }
-    if(text)arr.push({type:'text',text});
-    userContent=arr;
-  }
-  // Add doc context
-  if(uploadedDocs.length){
-    const ctx=uploadedDocs.map(d=>`\n\n[Documento: ${d.name}]\n${d.content}`).join('');
-    userContent=typeof userContent==='string'?userContent+ctx:[...userContent,{type:'text',text:ctx}];
-  }
-  addToHistory({role:'user',content:userContent});
-  renderMessages(); // show user message immediately
-  document.getElementById('chat-msgs').scrollTop=9999;
-  // Auto-connectors — with 3s timeout
-  let connCtx='';
-  if(text){
-    const connResult=await Promise.race([runAutoConnectors(text),new Promise(r=>setTimeout(()=>r(''),3000))]);
-    if(connResult){connCtx='\n\n[DADOS EM TEMPO REAL VIA CONECTORES]\n'+connResult;}
-  }
-  // Web search — with 4s timeout so it never blocks the chat
-  let searchCtx='';
-  if(text&&!connCtx&&needsWebSearch(text)){
-    document.getElementById('search-indicator').style.display='flex';
-    searchCtx=await Promise.race([doWebSearch(text),new Promise(r=>setTimeout(()=>r(''),4000))]);
-    document.getElementById('search-indicator').style.display='none';
-  }
-  // System prompt
-  const sysPrompt=[document.getElementById('sys-prompt').value.trim(),getPersonaPrompt(),getMemoryContext(),searchCtx,connCtx].filter(Boolean).join('\n\n');
-  // Clear uploads
-  uploadedImages=[];uploadedDocs=[];renderImgStrip();renderDocStrip();
-  renderMessages();
-  document.getElementById('chat-msgs').scrollTop=9999;
-  let assistantText='';
-  const msgId='m'+Date.now();
-  addToHistory({role:'assistant',content:'',modelVal:modelFull,_id:msgId});
-  renderMessages();
-  const getBubble=()=>document.querySelector(`[data-id="${msgId}"] .msg-text-inner`);
-  const onChunk=chunk=>{
-    assistantText+=chunk;
-    const b=getBubble();
-    if(b)b.innerHTML=renderMarkdown(assistantText)+'<span class="stream-cursor"></span>';
-    document.getElementById('chat-msgs').scrollTop=9999;
-    sessionTokens+=chunk.length/4;updateTokenBar();
-  };
-  const onDone=()=>{
-    isStreaming=false;
-    document.getElementById('send-btn').disabled=false;
-    const hist=getCurrentHistory();const last=hist[hist.length-1];
-    if(last.role==='assistant')last.content=assistantText;
-    renderMessages();autoSaveSession();updateTokenBar();
-    if(ttsActive&&assistantText)speakText(assistantText);
-  };
-  // Build clean history: exclude error messages, ensure proper user/assistant alternation
-    const rawHist=getCurrentHistory().slice(0,-1); // remove empty assistant placeholder
+    if(uploadedDocs.length){
+      const ctx=uploadedDocs.map(d=>'\n\n[Documento: '+d.name+']\n'+d.content).join('');
+      userContent=typeof userContent==='string'?userContent+ctx:[...userContent,{type:'text',text:ctx}];
+    }
+    addToHistory({role:'user',content:userContent});
+    renderMessages();
+    const cm=document.getElementById('chat-msgs');if(cm)cm.scrollTop=9999;
+    let connCtx='';
+    if(text){
+      const cr=await Promise.race([runAutoConnectors(text),new Promise(r=>setTimeout(()=>r(''),3000))]);
+      if(cr)connCtx='\n\n[DADOS EM TEMPO REAL]\n'+cr;
+    }
+    let searchCtx='';
+    if(text&&!connCtx&&needsWebSearch(text)){
+      const si=document.getElementById('search-indicator');if(si)si.style.display='flex';
+      searchCtx=await Promise.race([doWebSearch(text),new Promise(r=>setTimeout(()=>r(''),4000))]);
+      const si2=document.getElementById('search-indicator');if(si2)si2.style.display='none';
+    }
+    const sysPrompt=[document.getElementById('sys-prompt')?.value.trim(),getPersonaPrompt(),getMemoryContext(),searchCtx,connCtx].filter(Boolean).join('\n\n');
+    uploadedImages=[];uploadedDocs=[];renderImgStrip();renderDocStrip();
+    let assistantText='';
+    const msgId='m'+Date.now();
+    addToHistory({role:'assistant',content:'',modelVal:modelFull,_id:msgId});
+    renderMessages();if(cm)cm.scrollTop=9999;
+    const getBubble=()=>document.querySelector('[data-id="'+msgId+'"] .msg-text-inner');
+    const onChunk=chunk=>{
+      assistantText+=chunk;
+      const b=getBubble();
+      if(b)b.innerHTML=renderMarkdown(assistantText)+'<span class="stream-cursor"></span>';
+      if(cm)cm.scrollTop=9999;
+      sessionTokens+=chunk.length/4;updateTokenBar();
+    };
+    const onDone=()=>{
+      _unlockStream();
+      const hh=getCurrentHistory();const last=hh[hh.length-1];
+      if(last&&last.role==='assistant')last.content=assistantText;
+      renderMessages();try{autoSaveSession();}catch(_){}updateTokenBar();
+      if(ttsActive&&assistantText)speakText(assistantText);
+    };
+    const rawHist=getCurrentHistory().slice(0,-1);
     const cleanHist=rawHist
-      .filter(m=>!(m.role==='assistant'&&typeof m.content==='string'&&m.content.startsWith('❌')))
+      .filter(m=>!(m.role==='assistant'&&typeof m.content==='string'&&(m.content.startsWith('❌')||m.content==='')))
       .map(m=>({role:m.role,content:m.content||'…'}));
-    // Ensure alternation: trim leading assistants, collapse consecutive same-roles
-    const hist=[];
+    const apiHist=[];
     for(const m of cleanHist){
-      if(hist.length&&hist[hist.length-1].role===m.role)hist[hist.length-1].content+=' '+m.content;
-      else hist.push({...m});
+      if(apiHist.length&&apiHist[apiHist.length-1].role===m.role)apiHist[apiHist.length-1].content+=' '+m.content;
+      else apiHist.push({...m});
     }
-    // Must start with user
-    while(hist.length&&hist[0].role!=='user')hist.shift();
-    if(provider==='claude')await streamClaude(hist,sysPrompt,modelName,maxTokens,temp,onChunk,onDone);
-    else if(provider==='openai')await streamOpenAI(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
-    else if(provider==='groq')await streamGroq(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
-    else if(provider==='gemini')await streamGemini(hist,modelFull,maxTokens,temp,onChunk,onDone);
-    else if(provider==='openrouter')await fetchOpenRouter(sysPrompt?[{role:'system',content:sysPrompt},...hist]:hist,modelName,maxTokens,temp,onChunk,onDone);
+    while(apiHist.length&&apiHist[0].role!=='user')apiHist.shift();
+    if(provider==='claude')await streamClaude(apiHist,sysPrompt,modelName,maxTokens,temp,onChunk,onDone);
+    else if(provider==='openai')await streamOpenAI(sysPrompt?[{role:'system',content:sysPrompt},...apiHist]:apiHist,modelName,maxTokens,temp,onChunk,onDone);
+    else if(provider==='groq')await streamGroq(sysPrompt?[{role:'system',content:sysPrompt},...apiHist]:apiHist,modelName,maxTokens,temp,onChunk,onDone);
+    else if(provider==='gemini')await streamGemini(apiHist,modelFull,maxTokens,temp,onChunk,onDone);
+    else if(provider==='openrouter')await fetchOpenRouter(sysPrompt?[{role:'system',content:sysPrompt},...apiHist]:apiHist,modelName,maxTokens,temp,onChunk,onDone);
   }catch(err){
-    isStreaming=false;
-    document.getElementById('send-btn').disabled=false;
-    document.getElementById('search-indicator').style.display='none';
-    // Remove the empty assistant placeholder so it doesn't pollute future API calls
-    const h2=getCurrentHistory();
-    if(h2.length&&h2[h2.length-1].role==='assistant'&&!h2[h2.length-1].content){
-      h2.pop();
-    } else if(h2.length&&h2[h2.length-1].role==='assistant'){
-      h2[h2.length-1].content=`❌ ${err.message}`;
-    }
-    renderMessages();toast(`Erro: ${err.message}`,'err');
+    _unlockStream();
+    const hh=getCurrentHistory();
+    if(hh.length&&hh[hh.length-1].role==='assistant'&&!hh[hh.length-1].content)hh.pop();
+    renderMessages();toast('Erro: '+err.message,'err');
   }
 }
 
